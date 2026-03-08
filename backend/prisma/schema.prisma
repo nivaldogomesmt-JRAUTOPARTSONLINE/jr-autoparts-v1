@@ -1,0 +1,231 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── USUÁRIOS ─────────────────────────────────────────────────────────────────
+model User {
+  id               String    @id @default(uuid())
+  name             String
+  email            String    @unique
+  passwordHash     String    @map("password_hash")
+  role             UserRole  @default(EMPLOYEE)
+  active           Boolean   @default(true)
+  mustChangePassword Boolean @default(true) @map("must_change_password")
+  failedLoginCount Int       @default(0) @map("failed_login_count")
+  lockedUntil      DateTime? @map("locked_until")
+  lastLoginAt      DateTime? @map("last_login_at")
+  clientId         String?   @unique @map("client_id")
+  client           Client?   @relation(fields: [clientId], references: [id])
+  statusLogs       SoStatusLog[]
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  EMPLOYEE
+  CLIENT
+}
+
+// ─── CLIENTES ─────────────────────────────────────────────────────────────────
+model Client {
+  id            String        @id @default(uuid())
+  name          String
+  cpfCnpj       String?       @unique @map("cpf_cnpj")
+  phone         String?
+  whatsapp      String?
+  email         String?       @unique
+  address       String?
+  city          String?
+  type          ClientType    @default(PERSONAL)
+  active        Boolean       @default(true)
+  user          User?
+  vehicles      Vehicle[]
+  serviceOrders ServiceOrder[]
+  messages      WhatsappMessage[]
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  @@map("clients")
+}
+
+enum ClientType {
+  PERSONAL
+  BUSINESS
+}
+
+// ─── VEÍCULOS ─────────────────────────────────────────────────────────────────
+model Vehicle {
+  id            String        @id @default(uuid())
+  clientId      String        @map("client_id")
+  plate         String        @unique
+  brand         String
+  model         String
+  year          Int?
+  color         String?
+  fuel          String?
+  currentKm     Int?          @map("current_km")
+  notes         String?
+  active        Boolean       @default(true)
+  client        Client        @relation(fields: [clientId], references: [id])
+  serviceOrders ServiceOrder[]
+  maintenances  PreventiveMaintenance[]
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  @@map("vehicles")
+}
+
+// ─── PRODUTOS ─────────────────────────────────────────────────────────────────
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  category    String?
+  price       Decimal  @db.Decimal(10, 2)
+  photoUrl    String?  @map("photo_url")
+  unit        String   @default("un")
+  stock       Int?     @default(0)
+  active      Boolean  @default(true)
+  soItems     SoItem[]
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("products")
+}
+
+// ─── SERVIÇOS ─────────────────────────────────────────────────────────────────
+model Service {
+  id            String   @id @default(uuid())
+  name          String
+  description   String?
+  price         Decimal  @db.Decimal(10, 2)
+  estimatedTime Int?     @map("estimated_time")
+  active        Boolean  @default(true)
+  soItems       SoItem[]
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("services")
+}
+
+// ─── ORDEM DE SERVIÇO ─────────────────────────────────────────────────────────
+model ServiceOrder {
+  id          String     @id @default(uuid())
+  number      Int        @unique @default(autoincrement())
+  clientId    String     @map("client_id")
+  vehicleId   String     @map("vehicle_id")
+  status      SoStatus   @default(QUOTE)
+  entryKm     Int?       @map("entry_km")
+  notes       String?
+  totalPrice  Decimal    @default(0) @db.Decimal(10, 2) @map("total_price")
+  createdById String?    @map("created_by_id")
+  client      Client     @relation(fields: [clientId], references: [id])
+  vehicle     Vehicle    @relation(fields: [vehicleId], references: [id])
+  items       SoItem[]
+  statusLogs  SoStatusLog[]
+  messages    WhatsappMessage[]
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  @@map("service_orders")
+}
+
+enum SoStatus {
+  QUOTE
+  APPROVED
+  STARTED
+  IN_PROGRESS
+  WAITING_PART
+  FINISHING
+  DONE
+  DELIVERED
+}
+
+// ─── ITENS DA OS ─────────────────────────────────────────────────────────────
+model SoItem {
+  id           String       @id @default(uuid())
+  soId         String       @map("so_id")
+  type         ItemType
+  productId    String?      @map("product_id")
+  serviceId    String?      @map("service_id")
+  itemName     String       @map("item_name")
+  quantity     Decimal      @db.Decimal(10, 3)
+  unitPrice    Decimal      @map("unit_price") @db.Decimal(10, 2)
+  serviceOrder ServiceOrder @relation(fields: [soId], references: [id], onDelete: Cascade)
+  product      Product?     @relation(fields: [productId], references: [id])
+  service      Service?     @relation(fields: [serviceId], references: [id])
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  @@map("so_items")
+}
+
+enum ItemType {
+  PRODUCT
+  SERVICE
+}
+
+// ─── LOG DE STATUS DA OS ──────────────────────────────────────────────────────
+model SoStatusLog {
+  id           String    @id @default(uuid())
+  soId         String    @map("so_id")
+  oldStatus    SoStatus? @map("old_status")
+  newStatus    SoStatus  @map("new_status")
+  userId       String?   @map("user_id")
+  serviceOrder ServiceOrder @relation(fields: [soId], references: [id])
+  user         User?     @relation(fields: [userId], references: [id])
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@map("so_status_logs")
+}
+
+// ─── MANUTENÇÃO PREVENTIVA ───────────────────────────────────────────────────
+model PreventiveMaintenance {
+  id             String    @id @default(uuid())
+  vehicleId      String    @map("vehicle_id")
+  type           String
+  label          String
+  intervalKm     Int?      @map("interval_km")
+  intervalMonths Int?      @map("interval_months")
+  lastDate       DateTime? @map("last_date")
+  lastKm         Int?      @map("last_km")
+  nextDate       DateTime? @map("next_date")
+  nextKm         Int?      @map("next_km")
+  vehicle        Vehicle   @relation(fields: [vehicleId], references: [id])
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@unique([vehicleId, type])
+  @@map("preventive_maintenances")
+}
+
+// ─── MENSAGENS WHATSAPP ───────────────────────────────────────────────────────
+model WhatsappMessage {
+  id           String        @id @default(uuid())
+  clientId     String        @map("client_id")
+  soId         String?       @map("so_id")
+  phone        String
+  content      String
+  status       MessageStatus @default(PENDING)
+  attempts     Int           @default(0)
+  errorMessage String?       @map("error_message")
+  sentAt       DateTime?     @map("sent_at")
+  client       Client        @relation(fields: [clientId], references: [id])
+  serviceOrder ServiceOrder? @relation(fields: [soId], references: [id])
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  @@map("whatsapp_messages")
+}
+
+enum MessageStatus {
+  PENDING
+  SENT
+  FAILED
+}
