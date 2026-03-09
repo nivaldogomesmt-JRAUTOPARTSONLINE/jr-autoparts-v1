@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const prisma = require('../lib/prisma');
+const XLSX = require('xlsx');
 
 // GET /api/clients
 const list = async (req, res) => {
@@ -142,4 +143,55 @@ const grantPortalAccess = async (req, res) => {
   }
 };
 
-module.exports = { list, get, create, update, remove, grantPortalAccess };
+// GET /api/clients/export
+const exportClients = async (req, res) => {
+  try {
+    const { search } = req.query;
+    const where = {
+      active: true,
+      ...(search && {
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { cpfCnpj: { contains: search } },
+          { phone: { contains: search } },
+          { email: { contains: search, mode: 'insensitive' } },
+        ],
+      }),
+    };
+
+    const clients = await prisma.client.findMany({
+      where,
+      orderBy: { name: 'asc' },
+    });
+
+    const rows = clients.map((c) => ({
+      name: c.name || '',
+      cpfCnpj: c.cpfCnpj || '',
+      phone: c.phone || '',
+      whatsapp: c.whatsapp || '',
+      email: c.email || '',
+      address: c.address || '',
+      city: c.city || '',
+      type: c.type || 'PERSONAL',
+      active: c.active !== false,
+    }));
+
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(rows, {
+      header: ['name', 'cpfCnpj', 'phone', 'whatsapp', 'email', 'address', 'city', 'type', 'active'],
+    });
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Clientes_Importar');
+
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    const now = new Date().toISOString().slice(0, 10);
+    const filename = `clientes_export_${now}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.send(buffer);
+  } catch (err) {
+    return res.status(500).json({ error: 'Erro ao exportar clientes.' });
+  }
+};
+
+module.exports = { list, get, create, update, remove, grantPortalAccess, exportClients };
