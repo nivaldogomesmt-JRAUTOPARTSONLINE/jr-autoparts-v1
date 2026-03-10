@@ -1,13 +1,13 @@
 const router = require('express').Router();
 const c = require('../controllers/companyAssetController');
-const { authenticate, requireEmployee, requireAction } = require('../middleware/auth');
+const { authenticate, requireAdmin } = require('../middleware/auth');
 
-router.use(authenticate, requireEmployee);
+router.use(authenticate, requireAdmin);
 
 router.get('/', c.list);
-router.post('/', requireAction('add'), c.create);
+router.post('/', c.create);
 router.get('/:id', c.get);
-router.put('/:id', requireAction('edit'), c.update);
-router.delete('/:id', requireAction('delete'), c.remove);
+router.put('/:id', c.update);
+router.delete('/:id', c.remove);
 
 module.exports = router;

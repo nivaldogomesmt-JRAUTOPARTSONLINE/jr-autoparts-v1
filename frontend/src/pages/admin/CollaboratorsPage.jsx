@@ -2,11 +2,43 @@ import { useEffect, useMemo, useState } from 'react';
 import { authAPI } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
+const PROFILE_PRESETS = {
+  SELLER: {
+    label: 'Vendedor',
+    permissions: { canAdd: true, canEdit: true, canDelete: false, canManageUsers: false },
+  },
+  MECHANIC: {
+    label: 'Mecanico',
+    permissions: { canAdd: true, canEdit: true, canDelete: false, canManageUsers: false },
+  },
+  FINANCIAL: {
+    label: 'Financeiro',
+    permissions: { canAdd: true, canEdit: true, canDelete: false, canManageUsers: false },
+  },
+  DRIVER: {
+    label: 'Entregador / Motorista',
+    permissions: { canAdd: true, canEdit: false, canDelete: false, canManageUsers: false },
+  },
+  RENTAL: {
+    label: 'Locacao',
+    permissions: { canAdd: true, canEdit: true, canDelete: false, canManageUsers: false },
+  },
+  MANAGER: {
+    label: 'Gestor',
+    permissions: { canAdd: true, canEdit: true, canDelete: true, canManageUsers: true },
+  },
+  CUSTOM: {
+    label: 'Personalizado',
+    permissions: null,
+  },
+};
+
 const DEFAULT_CREATE = {
   name: '',
   email: '',
   password: '',
   role: 'EMPLOYEE',
+  accessProfile: 'SELLER',
   canAdd: true,
   canEdit: true,
   canDelete: false,
@@ -17,6 +49,7 @@ const DEFAULT_EDIT = {
   name: '',
   role: 'EMPLOYEE',
   active: true,
+  accessProfile: 'CUSTOM',
   canAdd: true,
   canEdit: true,
   canDelete: false,
@@ -27,6 +60,38 @@ function toRoleLabel(role) {
   if (role === 'ADMIN') return 'Administrador';
   if (role === 'EMPLOYEE') return 'Colaborador';
   return role;
+}
+
+function profileFromPermissions(perms = {}) {
+  const keys = ['canAdd', 'canEdit', 'canDelete', 'canManageUsers'];
+  for (const [profileKey, profile] of Object.entries(PROFILE_PRESETS)) {
+    if (!profile.permissions) continue;
+    const same = keys.every((k) => !!profile.permissions[k] === !!perms[k]);
+    if (same) return profileKey;
+  }
+  return 'CUSTOM';
+}
+
+function applyPreset(form, profileKey, canCreateAdmin) {
+  const preset = PROFILE_PRESETS[profileKey];
+  if (!preset || !preset.permissions) {
+    return { ...form, accessProfile: 'CUSTOM' };
+  }
+
+  const next = {
+    ...form,
+    accessProfile: profileKey,
+    canAdd: !!preset.permissions.canAdd,
+    canEdit: !!preset.permissions.canEdit,
+    canDelete: !!preset.permissions.canDelete,
+    canManageUsers: canCreateAdmin ? !!preset.permissions.canManageUsers : false,
+  };
+
+  return next;
+}
+
+function permissionsLabel(item) {
+  return `${item.permissions?.canAdd ? 'A' : '-'} / ${item.permissions?.canEdit ? 'E' : '-'} / ${item.permissions?.canDelete ? 'D' : '-'} / ${item.permissions?.canManageUsers ? 'U' : '-'}`;
 }
 
 export default function CollaboratorsPage() {
@@ -52,6 +117,11 @@ export default function CollaboratorsPage() {
     return [{ value: 'EMPLOYEE', label: 'Colaborador' }];
   }, [canCreateAdmin]);
 
+  const profileOptions = useMemo(
+    () => Object.entries(PROFILE_PRESETS).map(([value, cfg]) => ({ value, label: cfg.label })),
+    []
+  );
+
   const load = async () => {
     setLoading(true);
     try {
@@ -69,6 +139,14 @@ export default function CollaboratorsPage() {
   }, []);
 
   const clearCreate = () => setCreateForm(DEFAULT_CREATE);
+
+  const handleCreateProfileChange = (profileKey) => {
+    setCreateForm((prev) => applyPreset(prev, profileKey, canCreateAdmin));
+  };
+
+  const handleEditProfileChange = (profileKey) => {
+    setEditForm((prev) => applyPreset(prev, profileKey, canCreateAdmin));
+  };
 
   const submitCreate = async (e) => {
     e.preventDefault();
@@ -89,7 +167,7 @@ export default function CollaboratorsPage() {
           canAdd: createForm.canAdd,
           canEdit: createForm.canEdit,
           canDelete: createForm.canDelete,
-          canManageUsers: createForm.canManageUsers,
+          canManageUsers: canCreateAdmin ? createForm.canManageUsers : false,
         },
       });
 
@@ -103,11 +181,13 @@ export default function CollaboratorsPage() {
   };
 
   const startEdit = (item) => {
+    const inferredProfile = profileFromPermissions(item.permissions || {});
     setEditingId(item.id);
     setEditForm({
       name: item.name || '',
       role: item.role || 'EMPLOYEE',
       active: item.active !== false,
+      accessProfile: inferredProfile,
       canAdd: item.permissions?.canAdd ?? true,
       canEdit: item.permissions?.canEdit ?? true,
       canDelete: item.permissions?.canDelete ?? false,
@@ -134,7 +214,7 @@ export default function CollaboratorsPage() {
           canAdd: editForm.canAdd,
           canEdit: editForm.canEdit,
           canDelete: editForm.canDelete,
-          canManageUsers: editForm.canManageUsers,
+          canManageUsers: canCreateAdmin ? editForm.canManageUsers : false,
         },
       });
 
@@ -163,7 +243,7 @@ export default function CollaboratorsPage() {
       <div className="page-header">
         <div>
           <div className="page-title">Colaboradores e Permissoes</div>
-          <div className="page-subtitle">Gerencie acesso de cadastro, edicao, exclusao e administracao de usuarios</div>
+          <div className="page-subtitle">Perfis sugeridos: vendedor, mecanico, financeiro, entregador/motorista, locacao e gestor</div>
         </div>
       </div>
 
@@ -203,13 +283,22 @@ export default function CollaboratorsPage() {
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
+            <select
+              className="form-control"
+              value={createForm.accessProfile}
+              onChange={(e) => handleCreateProfileChange(e.target.value)}
+            >
+              {profileOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
           </div>
 
           <div style={{ display: 'flex', gap: 16, marginTop: 12, flexWrap: 'wrap' }}>
-            <label><input type="checkbox" checked={createForm.canAdd} onChange={(e) => setCreateForm({ ...createForm, canAdd: e.target.checked })} /> Adicionar</label>
-            <label><input type="checkbox" checked={createForm.canEdit} onChange={(e) => setCreateForm({ ...createForm, canEdit: e.target.checked })} /> Editar</label>
-            <label><input type="checkbox" checked={createForm.canDelete} onChange={(e) => setCreateForm({ ...createForm, canDelete: e.target.checked })} /> Excluir</label>
-            <label><input type="checkbox" checked={createForm.canManageUsers} onChange={(e) => setCreateForm({ ...createForm, canManageUsers: e.target.checked })} /> Gerenciar usuarios</label>
+            <label><input type="checkbox" checked={createForm.canAdd} onChange={(e) => setCreateForm({ ...createForm, accessProfile: 'CUSTOM', canAdd: e.target.checked })} /> Adicionar</label>
+            <label><input type="checkbox" checked={createForm.canEdit} onChange={(e) => setCreateForm({ ...createForm, accessProfile: 'CUSTOM', canEdit: e.target.checked })} /> Editar</label>
+            <label><input type="checkbox" checked={createForm.canDelete} onChange={(e) => setCreateForm({ ...createForm, accessProfile: 'CUSTOM', canDelete: e.target.checked })} /> Excluir</label>
+            <label><input type="checkbox" checked={createForm.canManageUsers} disabled={!canCreateAdmin} onChange={(e) => setCreateForm({ ...createForm, accessProfile: 'CUSTOM', canManageUsers: e.target.checked })} /> Gerenciar usuarios</label>
           </div>
 
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
@@ -240,6 +329,15 @@ export default function CollaboratorsPage() {
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </select>
+              <select
+                className="form-control"
+                value={editForm.accessProfile}
+                onChange={(e) => handleEditProfileChange(e.target.value)}
+              >
+                {profileOptions.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <input
                   type="checkbox"
@@ -251,10 +349,10 @@ export default function CollaboratorsPage() {
             </div>
 
             <div style={{ display: 'flex', gap: 16, marginTop: 12, flexWrap: 'wrap' }}>
-              <label><input type="checkbox" checked={editForm.canAdd} onChange={(e) => setEditForm({ ...editForm, canAdd: e.target.checked })} /> Adicionar</label>
-              <label><input type="checkbox" checked={editForm.canEdit} onChange={(e) => setEditForm({ ...editForm, canEdit: e.target.checked })} /> Editar</label>
-              <label><input type="checkbox" checked={editForm.canDelete} onChange={(e) => setEditForm({ ...editForm, canDelete: e.target.checked })} /> Excluir</label>
-              <label><input type="checkbox" checked={editForm.canManageUsers} onChange={(e) => setEditForm({ ...editForm, canManageUsers: e.target.checked })} /> Gerenciar usuarios</label>
+              <label><input type="checkbox" checked={editForm.canAdd} onChange={(e) => setEditForm({ ...editForm, accessProfile: 'CUSTOM', canAdd: e.target.checked })} /> Adicionar</label>
+              <label><input type="checkbox" checked={editForm.canEdit} onChange={(e) => setEditForm({ ...editForm, accessProfile: 'CUSTOM', canEdit: e.target.checked })} /> Editar</label>
+              <label><input type="checkbox" checked={editForm.canDelete} onChange={(e) => setEditForm({ ...editForm, accessProfile: 'CUSTOM', canDelete: e.target.checked })} /> Excluir</label>
+              <label><input type="checkbox" checked={editForm.canManageUsers} disabled={!canCreateAdmin} onChange={(e) => setEditForm({ ...editForm, accessProfile: 'CUSTOM', canManageUsers: e.target.checked })} /> Gerenciar usuarios</label>
             </div>
 
             <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
@@ -290,9 +388,7 @@ export default function CollaboratorsPage() {
                   </td>
                   <td className="text-sm">{toRoleLabel(item.role)}</td>
                   <td className="text-sm">{item.active ? 'Ativo' : 'Inativo'}</td>
-                  <td className="text-sm">
-                    {item.permissions?.canAdd ? 'A' : '-'} / {item.permissions?.canEdit ? 'E' : '-'} / {item.permissions?.canDelete ? 'D' : '-'} / {item.permissions?.canManageUsers ? 'U' : '-'}
-                  </td>
+                  <td className="text-sm">{permissionsLabel(item)}</td>
                   <td>
                     <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                       <button className="btn btn-ghost btn-sm" onClick={() => startEdit(item)}>Editar</button>

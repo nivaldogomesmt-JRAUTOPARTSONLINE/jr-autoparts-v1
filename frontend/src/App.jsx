@@ -43,6 +43,13 @@ function PortalRoute({ children }) {
   return children;
 }
 
+function ActionRoute({ action, children }) {
+  const { loading, can } = useAuth();
+  if (loading) return <div className="loading"><div className="spinner" /></div>;
+  if (!can(action)) return <Navigate to="/dashboard" replace />;
+  return children;
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -74,9 +81,9 @@ function AppRoutes() {
         <Route path="os/:id/editar" element={<SOForm />} />
         <Route path="manutencao" element={<MaintenancePage />} />
         <Route path="mensagens" element={<MessagesPage />} />
-        <Route path="ativos" element={<CompanyAssetsPage />} />
-        <Route path="contas-digitais" element={<DigitalAccountsPage />} />
-        <Route path="colaboradores" element={<CollaboratorsPage />} />
+        <Route path="ativos" element={<ActionRoute action="adminOnly"><CompanyAssetsPage /></ActionRoute>} />
+        <Route path="contas-digitais" element={<ActionRoute action="adminOnly"><DigitalAccountsPage /></ActionRoute>} />
+        <Route path="colaboradores" element={<ActionRoute action="manageUsers"><CollaboratorsPage /></ActionRoute>} />
         <Route path="tracking" element={<TrackingPage />} />
       </Route>
 

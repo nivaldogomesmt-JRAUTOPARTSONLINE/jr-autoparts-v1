@@ -5,6 +5,8 @@ const AuthContext = createContext(null);
 
 function canByAction(user, action) {
   if (!user) return false;
+  if (action === 'adminOnly') return user.role === 'ADMIN';
+
   if (user.role === 'ADMIN') return true;
   if (user.role !== 'EMPLOYEE') return false;
 

@@ -31,8 +31,8 @@ const BASE_NAV = [
   {
     section: 'GESTAO',
     items: [
-      { to: '/ativos', icon: 'AT', label: 'Ativos' },
-      { to: '/contas-digitais', icon: 'CD', label: 'Contas Digitais' },
+      { to: '/ativos', icon: 'AT', label: 'Ativos', permission: 'adminOnly' },
+      { to: '/contas-digitais', icon: 'CD', label: 'Contas Digitais', permission: 'adminOnly' },
       { to: '/colaboradores', icon: 'US', label: 'Colaboradores', permission: 'manageUsers' },
     ],
   },
