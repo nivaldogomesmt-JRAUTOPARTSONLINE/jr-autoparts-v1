@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { messagesAPI, soAPI } from '../../services/api';
 
@@ -31,7 +31,12 @@ export default function SODetail() {
   const [loading, setLoading] = useState(true);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [resendingMap, setResendingMap] = useState({});
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [deletingPhotoMap, setDeletingPhotoMap] = useState({});
   const [error, setError] = useState('');
+  const [photoFiles, setPhotoFiles] = useState([]);
+  const [photoCategory, setPhotoCategory] = useState('GENERAL');
+  const [photoCaption, setPhotoCaption] = useState('');
 
   const load = async () => {
     setLoading(true);
@@ -74,6 +79,39 @@ export default function SODetail() {
       window.alert(err.response?.data?.error || 'Erro ao reenviar mensagem.');
     } finally {
       setResendingMap((prev) => ({ ...prev, [messageId]: false }));
+    }
+  };
+
+  const handleUploadPhotos = async () => {
+    if (!photoFiles.length) {
+      window.alert('Selecione pelo menos uma foto.');
+      return;
+    }
+
+    setUploadingPhotos(true);
+    try {
+      await soAPI.uploadPhotos(id, photoFiles, { category: photoCategory, caption: photoCaption });
+      setPhotoFiles([]);
+      setPhotoCaption('');
+      setPhotoCategory('GENERAL');
+      await load();
+    } catch (err) {
+      window.alert(err.response?.data?.error || 'Erro ao enviar fotos da OS.');
+    } finally {
+      setUploadingPhotos(false);
+    }
+  };
+
+  const handleDeletePhoto = async (photoId) => {
+    if (!window.confirm('Remover esta foto da OS?')) return;
+    setDeletingPhotoMap((prev) => ({ ...prev, [photoId]: true }));
+    try {
+      await soAPI.deletePhoto(id, photoId);
+      await load();
+    } catch (err) {
+      window.alert(err.response?.data?.error || 'Erro ao remover foto.');
+    } finally {
+      setDeletingPhotoMap((prev) => ({ ...prev, [photoId]: false }));
     }
   };
 
@@ -190,6 +228,62 @@ export default function SODetail() {
             )}
           </div>
 
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card-title">Fotos da Ordem de Servico</div>
+            <div className="form-row" style={{ marginBottom: 10 }}>
+              <div className="form-group">
+                <label className="form-label">Categoria</label>
+                <select className="form-control" value={photoCategory} onChange={(e) => setPhotoCategory(e.target.value)}>
+                  <option value="GENERAL">Geral</option>
+                  <option value="PART">Peca</option>
+                  <option value="BEFORE">Antes</option>
+                  <option value="AFTER">Depois</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Descricao curta</label>
+                <input className="form-control" value={photoCaption} onChange={(e) => setPhotoCaption(e.target.value)} placeholder="Ex: Pastilha nova instalada" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Fotos</label>
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  className="form-control"
+                  onChange={(e) => setPhotoFiles(Array.from(e.target.files || []))}
+                />
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+              <button className="btn btn-primary btn-sm" onClick={handleUploadPhotos} disabled={uploadingPhotos}>
+                {uploadingPhotos ? 'Enviando...' : 'Enviar fotos'}
+              </button>
+            </div>
+
+            {!os.photos?.length ? (
+              <div className="text-sm text-muted">Nenhuma foto cadastrada nesta OS.</div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
+                {os.photos.map((photo) => (
+                  <div key={photo.id} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 8 }}>
+                    <img src={photo.url} alt={photo.caption || 'Foto OS'} style={{ width: '100%', height: 140, objectFit: 'cover', borderRadius: 6 }} />
+                    <div style={{ marginTop: 6, fontSize: 12, fontWeight: 700 }}>{photo.category}</div>
+                    <div className="text-sm text-muted" style={{ minHeight: 32 }}>{photo.caption || '-'}</div>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => handleDeletePhoto(photo.id)}
+                      disabled={!!deletingPhotoMap[photo.id]}
+                    >
+                      {deletingPhotoMap[photo.id] ? 'Removendo...' : 'Remover'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="card">
             <div className="card-title">Linha do Tempo da OS</div>
             {timeline.length === 0 ? (
@@ -255,7 +349,7 @@ export default function SODetail() {
           <div className="card">
             <div className="card-title">Resumo WhatsApp</div>
             <div className="text-sm text-muted" style={{ marginBottom: 10 }}>
-              Envios automáticos por mudança de status.
+              Envios automaticos por mudanca de status.
             </div>
             <div style={{ display: 'grid', gap: 6 }}>
               {(os.messages || []).slice(0, 5).map((m) => (

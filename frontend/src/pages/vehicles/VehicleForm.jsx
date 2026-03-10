@@ -28,6 +28,8 @@ export default function VehicleForm() {
 
   const [maintenanceMode, setMaintenanceMode] = useState('STANDARD');
   const [maintenanceConfig, setMaintenanceConfig] = useState({ ...MAINTENANCE_PRESETS.STANDARD });
+  const [photoFile, setPhotoFile] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState('');
 
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -51,6 +53,8 @@ export default function VehicleForm() {
           notes: vehicle.notes || '',
         });
 
+        setPhotoPreview(vehicle.photoUrl || '');
+
         const oil = vehicle.maintenances?.find((m) => m.type === 'oil');
         const belt = vehicle.maintenances?.find((m) => m.type === 'belt');
         setMaintenanceMode('CUSTOM');
@@ -73,6 +77,13 @@ export default function VehicleForm() {
     }
   };
 
+  const onSelectPhoto = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoFile(file);
+    setPhotoPreview(URL.createObjectURL(file));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -84,13 +95,19 @@ export default function VehicleForm() {
     };
 
     try {
+      let vehicleId = id;
       if (isEdit) {
         await vehiclesAPI.update(id, payload);
-        navigate(`/veiculos/${id}`);
       } else {
         const response = await vehiclesAPI.create(payload);
-        navigate(`/veiculos/${response.data.id}`);
+        vehicleId = response.data.id;
       }
+
+      if (photoFile && vehicleId) {
+        await vehiclesAPI.uploadPhoto(vehicleId, photoFile);
+      }
+
+      navigate(`/veiculos/${vehicleId}`);
     } catch (err) {
       setError(err.response?.data?.error || 'Erro ao salvar.');
     } finally {
@@ -157,6 +174,16 @@ export default function VehicleForm() {
           </div>
 
           <div className="form-group">
+            <label className="form-label">Foto do veiculo</label>
+            <input type="file" accept="image/*" className="form-control" onChange={onSelectPhoto} />
+            {photoPreview ? (
+              <div style={{ marginTop: 8 }}>
+                <img src={photoPreview} alt="Preview" style={{ width: 220, maxWidth: '100%', borderRadius: 8, border: '1px solid #e2e8f0' }} />
+              </div>
+            ) : null}
+          </div>
+
+          <div className="form-group">
             <label className="form-label">Observacoes</label>
             <textarea className="form-control" rows={3} value={form.notes} onChange={(e) => setField('notes', e.target.value)} />
           </div>
@@ -211,4 +238,3 @@ export default function VehicleForm() {
     </div>
   );
 }
-

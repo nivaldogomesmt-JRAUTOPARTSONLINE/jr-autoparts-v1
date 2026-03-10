@@ -1,18 +1,34 @@
-﻿const prisma = require('../lib/prisma');
+const prisma = require('../lib/prisma');
 const { sendWhatsAppMessage } = require('../services/whatsappService');
+const { uploadToCloudinary, deleteFromCloudinary } = require('../services/uploadService');
 
 const STATUS_LABELS = {
-  QUOTE: 'OrÃ§amento',
+  QUOTE: 'Orcamento',
   APPROVED: 'Aprovado',
   STARTED: 'Iniciado',
-  IN_PROGRESS: 'Em ExecuÃ§Ã£o',
-  WAITING_PART: 'Aguardando PeÃ§a',
+  IN_PROGRESS: 'Em Execucao',
+  WAITING_PART: 'Aguardando Peca',
   FINISHING: 'Finalizando',
   DONE: 'Finalizado',
   DELIVERED: 'Entregue',
 };
 
 const NOTIFY_ON_STATUS = ['STARTED', 'IN_PROGRESS', 'WAITING_PART', 'FINISHING', 'DONE', 'DELIVERED'];
+
+function extractCloudinaryPublicId(url) {
+  if (!url || typeof url !== 'string') return null;
+  const uploadMarker = '/upload/';
+  const markerIndex = url.indexOf(uploadMarker);
+  if (markerIndex === -1) return null;
+
+  const pathAfterUpload = url.slice(markerIndex + uploadMarker.length);
+  const parts = pathAfterUpload.split('/');
+  if (parts[0] && /^v\d+$/.test(parts[0])) parts.shift();
+
+  const joined = parts.join('/');
+  const dotIndex = joined.lastIndexOf('.');
+  return dotIndex > -1 ? joined.slice(0, dotIndex) : joined;
+}
 
 const list = async (req, res) => {
   try {
@@ -53,7 +69,7 @@ const list = async (req, res) => {
       pages: Math.ceil(total / parseInt(limit, 10)),
     });
   } catch (err) {
-    return res.status(500).json({ error: 'Erro ao listar ordens de serviÃ§o.' });
+    return res.status(500).json({ error: 'Erro ao listar ordens de servico.' });
   }
 };
 
@@ -70,6 +86,7 @@ const get = async (req, res) => {
             service: { select: { id: true, name: true } },
           },
         },
+        photos: { orderBy: { createdAt: 'desc' } },
         statusLogs: {
           orderBy: { createdAt: 'asc' },
           include: { user: { select: { id: true, name: true } } },
@@ -77,7 +94,7 @@ const get = async (req, res) => {
         messages: { orderBy: { createdAt: 'desc' }, take: 10 },
       },
     });
-    if (!order) return res.status(404).json({ error: 'OS nÃ£o encontrada.' });
+    if (!order) return res.status(404).json({ error: 'OS nao encontrada.' });
     return res.json({ ...order, total: order.totalPrice });
   } catch (err) {
     return res.status(500).json({ error: 'Erro ao buscar OS.' });
@@ -135,14 +152,14 @@ const updateStatus = async (req, res) => {
   try {
     const { status, notes } = req.body;
     if (!status || !STATUS_LABELS[status]) {
-      return res.status(400).json({ error: 'Status invÃ¡lido.' });
+      return res.status(400).json({ error: 'Status invalido.' });
     }
 
     const current = await prisma.serviceOrder.findUnique({
       where: { id: req.params.id },
       include: { client: true, vehicle: true },
     });
-    if (!current) return res.status(404).json({ error: 'OS nÃ£o encontrada.' });
+    if (!current) return res.status(404).json({ error: 'OS nao encontrada.' });
 
     const order = await prisma.$transaction(async (tx) => tx.serviceOrder.update({
       where: { id: req.params.id },
@@ -184,7 +201,7 @@ const update = async (req, res) => {
       return res.status(400).json({ error: 'Quilometragem de entrada invalida.' });
     }
     const current = await prisma.serviceOrder.findUnique({ where: { id: req.params.id } });
-    if (!current) return res.status(404).json({ error: 'OS nÃ£o encontrada.' });
+    if (!current) return res.status(404).json({ error: 'OS nao encontrada.' });
 
     const order = await prisma.$transaction(async (tx) => {
       let total = current.totalPrice;
@@ -225,23 +242,74 @@ const update = async (req, res) => {
   }
 };
 
+const uploadPhotos = async (req, res) => {
+  try {
+    const order = await prisma.serviceOrder.findUnique({ where: { id: req.params.id }, select: { id: true } });
+    if (!order) return res.status(404).json({ error: 'OS nao encontrada.' });
+    if (!req.files || req.files.length === 0) return res.status(400).json({ error: 'Envie ao menos uma imagem.' });
+
+    const allowed = ['GENERAL', 'PART', 'BEFORE', 'AFTER'];
+    const category = allowed.includes(String(req.body.category || '').toUpperCase())
+      ? String(req.body.category).toUpperCase()
+      : 'GENERAL';
+
+    const caption = req.body.caption ? String(req.body.caption).slice(0, 300) : null;
+
+    const urls = await Promise.all(
+      req.files.map((file) => uploadToCloudinary(file, 'jr-autoparts/service-orders'))
+    );
+
+    const created = await prisma.$transaction(async (tx) => {
+      const rows = [];
+      for (const url of urls) {
+        const row = await tx.serviceOrderPhoto.create({
+          data: {
+            soId: req.params.id,
+            url,
+            category,
+            caption,
+          },
+        });
+        rows.push(row);
+      }
+      return rows;
+    });
+
+    return res.status(201).json(created);
+  } catch (err) {
+    return res.status(500).json({ error: 'Erro ao enviar fotos da OS.' });
+  }
+};
+
+const deletePhoto = async (req, res) => {
+  try {
+    const photo = await prisma.serviceOrderPhoto.findFirst({
+      where: { id: req.params.photoId, soId: req.params.id },
+    });
+    if (!photo) return res.status(404).json({ error: 'Foto nao encontrada.' });
+
+    const publicId = extractCloudinaryPublicId(photo.url);
+    if (publicId) await deleteFromCloudinary(publicId).catch(() => {});
+
+    await prisma.serviceOrderPhoto.delete({ where: { id: photo.id } });
+    return res.json({ message: 'Foto removida com sucesso.' });
+  } catch (err) {
+    return res.status(500).json({ error: 'Erro ao remover foto da OS.' });
+  }
+};
+
 function buildWhatsAppMessage(clientName, plate, brand, model, status, number) {
   const statusLabel = STATUS_LABELS[status];
   const portalUrl = `${process.env.FRONTEND_URL}/portal`;
   const msgs = {
-    STARTED: `OlÃ¡, ${clientName}! A manutenÃ§Ã£o do seu ${brand} ${model} (${plate}) foi iniciada. OS #${number}. Acompanhe pelo portal: ${portalUrl}`,
-    IN_PROGRESS: `OlÃ¡, ${clientName}! Seu ${brand} ${model} (${plate}) estÃ¡ em manutenÃ§Ã£o neste momento. OS #${number}. Status: ${statusLabel}.`,
-    WAITING_PART: `OlÃ¡, ${clientName}! Seu ${brand} ${model} (${plate}) estÃ¡ aguardando peÃ§a para continuidade do serviÃ§o. OS #${number}.`,
-    FINISHING: `OlÃ¡, ${clientName}! O serviÃ§o do seu ${brand} ${model} (${plate}) estÃ¡ em fase final. OS #${number}.`,
-    DONE: `OlÃ¡, ${clientName}! O serviÃ§o do seu ${brand} ${model} (${plate}) foi concluÃ­do. OS #${number}. Em breve faremos a liberaÃ§Ã£o/entrega.`,
-    DELIVERED: `OlÃ¡, ${clientName}! Seu ${brand} ${model} (${plate}) foi entregue. Obrigado pela preferÃªncia. Portal: ${portalUrl}`,
+    STARTED: `Ola, ${clientName}! A manutencao do seu ${brand} ${model} (${plate}) foi iniciada. OS #${number}. Acompanhe pelo portal: ${portalUrl}`,
+    IN_PROGRESS: `Ola, ${clientName}! Seu ${brand} ${model} (${plate}) esta em manutencao neste momento. OS #${number}. Status: ${statusLabel}.`,
+    WAITING_PART: `Ola, ${clientName}! Seu ${brand} ${model} (${plate}) esta aguardando peca para continuidade do servico. OS #${number}.`,
+    FINISHING: `Ola, ${clientName}! O servico do seu ${brand} ${model} (${plate}) esta em fase final. OS #${number}.`,
+    DONE: `Ola, ${clientName}! O servico do seu ${brand} ${model} (${plate}) foi concluido. OS #${number}. Em breve faremos a liberacao/entrega.`,
+    DELIVERED: `Ola, ${clientName}! Seu ${brand} ${model} (${plate}) foi entregue. Obrigado pela preferencia. Portal: ${portalUrl}`,
   };
-  return msgs[status] || `AtualizaÃ§Ã£o da OS #${number}: status alterado para ${statusLabel}.`;
+  return msgs[status] || `Atualizacao da OS #${number}: status alterado para ${statusLabel}.`;
 }
 
-module.exports = { list, get, create, update, updateStatus };
-
-
-
-
-
+module.exports = { list, get, create, update, updateStatus, uploadPhotos, deletePhoto };

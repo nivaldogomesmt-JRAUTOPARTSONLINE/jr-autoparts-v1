@@ -1,4 +1,5 @@
 const prisma = require('../lib/prisma');
+const { uploadToCloudinary, deleteFromCloudinary } = require('../services/uploadService');
 
 const MAINTENANCE_DEFAULTS = [
   { type: 'oil',         label: 'Troca de Oleo',             intervalKm: 10000, intervalMonths: 6  },
@@ -16,6 +17,31 @@ function intOrNull(value) {
   if (value === null || value === undefined || value === '') return null;
   const n = parseInt(value, 10);
   return Number.isNaN(n) ? null : n;
+}
+
+function parseMaintenanceConfig(value) {
+  if (!value) return {};
+  if (typeof value === 'object') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
+  }
+}
+
+function extractCloudinaryPublicId(url) {
+  if (!url || typeof url !== 'string') return null;
+  const uploadMarker = '/upload/';
+  const markerIndex = url.indexOf(uploadMarker);
+  if (markerIndex === -1) return null;
+
+  const pathAfterUpload = url.slice(markerIndex + uploadMarker.length);
+  const parts = pathAfterUpload.split('/');
+  if (parts[0] && /^v\d+$/.test(parts[0])) parts.shift();
+
+  const joined = parts.join('/');
+  const dotIndex = joined.lastIndexOf('.');
+  return dotIndex > -1 ? joined.slice(0, dotIndex) : joined;
 }
 
 function buildMaintenanceDefaults(config = {}) {
@@ -166,7 +192,9 @@ const get = async (req, res) => {
 
 const create = async (req, res) => {
   try {
-    const { clientId, plate, brand, model, year, color, fuel, currentKm, notes, maintenanceConfig } = req.body;
+    const { clientId, plate, brand, model, year, color, fuel, currentKm, notes } = req.body;
+    const maintenanceConfig = parseMaintenanceConfig(req.body.maintenanceConfig);
+
     if (!clientId || !plate || !brand || !model) {
       return res.status(400).json({ error: 'Cliente, placa, marca e modelo sao obrigatorios.' });
     }
@@ -204,7 +232,8 @@ const create = async (req, res) => {
 
 const update = async (req, res) => {
   try {
-    const { plate, brand, model, year, color, fuel, currentKm, notes, maintenanceConfig } = req.body;
+    const { plate, brand, model, year, color, fuel, currentKm, notes } = req.body;
+    const maintenanceConfig = parseMaintenanceConfig(req.body.maintenanceConfig);
 
     const vehicle = await prisma.$transaction(async (tx) => {
       const updated = await tx.vehicle.update({
@@ -221,7 +250,7 @@ const update = async (req, res) => {
         },
       });
 
-      if (maintenanceConfig) {
+      if (maintenanceConfig && Object.keys(maintenanceConfig).length) {
         await applyMaintenanceConfig(tx, req.params.id, maintenanceConfig);
       }
 
@@ -231,6 +260,32 @@ const update = async (req, res) => {
     res.json(vehicle);
   } catch (err) {
     res.status(500).json({ error: 'Erro ao atualizar veiculo.' });
+  }
+};
+
+const uploadPhoto = async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Envie uma imagem do veiculo.' });
+
+    const current = await prisma.vehicle.findUnique({ where: { id: req.params.id }, select: { id: true, photoUrl: true } });
+    if (!current) return res.status(404).json({ error: 'Veiculo nao encontrado.' });
+
+    const photoUrl = await uploadToCloudinary(req.file, 'jr-autoparts/vehicles');
+
+    if (current.photoUrl) {
+      const publicId = extractCloudinaryPublicId(current.photoUrl);
+      if (publicId) await deleteFromCloudinary(publicId).catch(() => {});
+    }
+
+    const vehicle = await prisma.vehicle.update({
+      where: { id: req.params.id },
+      data: { photoUrl },
+      select: { id: true, photoUrl: true },
+    });
+
+    return res.json(vehicle);
+  } catch (err) {
+    return res.status(500).json({ error: 'Erro ao enviar foto do veiculo.' });
   }
 };
 
@@ -256,4 +311,4 @@ const history = async (req, res) => {
   }
 };
 
-module.exports = { list, get, create, update, remove, history };
+module.exports = { list, get, create, update, uploadPhoto, remove, history };

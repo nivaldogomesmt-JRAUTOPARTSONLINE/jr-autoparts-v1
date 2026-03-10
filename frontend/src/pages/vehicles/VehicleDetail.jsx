@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { maintenanceAPI, vehiclesAPI } from '../../services/api';
 
@@ -258,6 +258,11 @@ export default function VehicleDetail() {
 
         <div className="card">
           <div className="card-title">Dados do Veiculo</div>
+          {vehicle.photoUrl ? (
+            <div style={{ marginBottom: 12 }}>
+              <img src={vehicle.photoUrl} alt={`Veiculo ${vehicle.plate}`} style={{ width: '100%', borderRadius: 8, border: '1px solid #e2e8f0' }} />
+            </div>
+          ) : null}
           {[
             ['Placa', vehicle.plate],
             ['Marca', vehicle.brand],
@@ -283,3 +288,5 @@ export default function VehicleDetail() {
     </div>
   );
 }
+
+
