@@ -28,6 +28,7 @@ import PortalLogin from './pages/portal/PortalLogin';
 import PortalDashboard from './pages/portal/PortalDashboard';
 import PortalVehicle from './pages/portal/PortalVehicle';
 import PortalTracking from './pages/portal/PortalTracking';
+import PortalSODetail from './pages/portal/PortalSODetail';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -59,6 +60,7 @@ function AppRoutes() {
       <Route path="/portal" element={<PortalRoute><PortalDashboard /></PortalRoute>} />
       <Route path="/portal/veiculo/:id" element={<PortalRoute><PortalVehicle /></PortalRoute>} />
       <Route path="/portal/rastreamento" element={<PortalRoute><PortalTracking /></PortalRoute>} />
+      <Route path="/portal/os/:id" element={<PortalRoute><PortalSODetail /></PortalRoute>} />
 
       <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
         <Route index element={<Navigate to="/dashboard" replace />} />
