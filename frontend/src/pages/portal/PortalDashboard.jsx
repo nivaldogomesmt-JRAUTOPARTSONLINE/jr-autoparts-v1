@@ -199,6 +199,39 @@ export default function PortalDashboard() {
   const overdueAlerts = useMemo(() => data?.maintenances?.filter((m) => m.alertLevel === 'OVERDUE') || [], [data]);
   const dueSoonAlerts = useMemo(() => data?.maintenances?.filter((m) => m.alertLevel === 'DUE_SOON') || [], [data]);
 
+  const criticalPairs = useMemo(() => {
+    const vehicles = Array.isArray(data?.vehicles) ? data.vehicles : [];
+
+    return vehicles
+      .map((v) => {
+        const oil = findMaintenanceByKeywords(v.maintenances, ['OLEO']);
+        const belt = findMaintenanceByKeywords(v.maintenances, ['CORREIA', 'DENTADA']);
+
+        const oilCritical = oil && ['OVERDUE', 'DUE_SOON'].includes(oil.alertLevel);
+        const beltCritical = belt && ['OVERDUE', 'DUE_SOON'].includes(belt.alertLevel);
+
+        if (!oilCritical || !beltCritical) return null;
+
+        const hasOverdue = oil?.alertLevel === 'OVERDUE' || belt?.alertLevel === 'OVERDUE';
+
+        return {
+          vehicleId: v.id,
+          plate: v.plate,
+          model: `${v.brand || ''} ${v.model || ''}`.trim(),
+          oil,
+          belt,
+          level: hasOverdue ? 'OVERDUE' : 'DUE_SOON',
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => {
+        if (a.level !== b.level) return a.level === 'OVERDUE' ? -1 : 1;
+        const ad = a.oil?.nextDate ? new Date(a.oil.nextDate).getTime() : Number.MAX_SAFE_INTEGER;
+        const bd = b.oil?.nextDate ? new Date(b.oil.nextDate).getTime() : Number.MAX_SAFE_INTEGER;
+        return ad - bd;
+      });
+  }, [data]);
+
   const nextReview = useMemo(() => {
     const list = Array.isArray(data?.maintenances) ? [...data.maintenances] : [];
     if (!list.length) return null;
@@ -294,6 +327,28 @@ export default function PortalDashboard() {
         </div>
 
 
+
+        {criticalPairs.length > 0 ? (
+          <div
+            className="card"
+            style={{
+              marginBottom: 16,
+              border: criticalPairs[0].level === 'OVERDUE' ? '1px solid #fca5a5' : '1px solid #fde68a',
+              background: criticalPairs[0].level === 'OVERDUE' ? '#fff5f5' : '#fffbeb',
+            }}
+          >
+            <div style={{ fontSize: 13, fontWeight: 800, color: criticalPairs[0].level === 'OVERDUE' ? '#b91c1c' : '#92400e' }}>
+              Atencao: revisoes criticas em conjunto (oleo + correia)
+            </div>
+            <div style={{ marginTop: 8, display: 'grid', gap: 6 }}>
+              {criticalPairs.slice(0, 6).map((item) => (
+                <Link key={item.vehicleId} to={`/portal/veiculo/${item.vehicleId}`} style={{ textDecoration: 'none', color: '#1f2937', fontSize: 13 }}>
+                  <b>{item.plate}</b> - {item.model || 'Veiculo'} | Oleo: {formatDate(item.oil?.nextDate)} / {formatKm(item.oil?.nextKm)} | Correia: {formatDate(item.belt?.nextDate)} / {formatKm(item.belt?.nextKm)}
+                </Link>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         {nextReview ? (
           <div
