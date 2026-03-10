@@ -1,6 +1,21 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+function resolveApiBaseUrl() {
+  const raw = String(import.meta.env.VITE_API_URL || '/api').trim();
+  if (!raw) return '/api';
+
+  if (raw.startsWith('/')) {
+    return raw === '/' ? '/api' : raw.replace(/\/$/, '');
+  }
+
+  if (/\/api\/?$/i.test(raw)) {
+    return raw.replace(/\/$/, '');
+  }
+
+  return `${raw.replace(/\/$/, '')}/api`;
+}
+
+const API_URL = resolveApiBaseUrl();
 
 const api = axios.create({ baseURL: API_URL });
 
@@ -178,6 +193,7 @@ export const trackingAPI = {
   runCollect: () => api.post('/tracking/jobs/collect'),
 };
 export default api;
+
 
 
 

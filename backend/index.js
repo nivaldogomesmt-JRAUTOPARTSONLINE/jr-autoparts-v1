@@ -25,20 +25,43 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString(), app: 'JR Auto Parts API' });
 });
 
-app.use('/api/auth',         require('./src/routes/authRoutes'));
-app.use('/api/clients',      require('./src/routes/clientRoutes'));
-app.use('/api/vehicles',     require('./src/routes/vehicleRoutes'));
-app.use('/api/products',     require('./src/routes/productRoutes'));
-app.use('/api/services',     require('./src/routes/serviceRoutes'));
-app.use('/api/so',           require('./src/routes/soRoutes'));
-app.use('/api/maintenance',  require('./src/routes/maintenanceRoutes'));
-app.use('/api/messages',     require('./src/routes/messageRoutes'));
-app.use('/api/bot',          require('./src/routes/botRoutes'));
-app.use('/api/portal',       require('./src/routes/portalRoutes'));
-app.use('/api/dashboard',    require('./src/routes/dashboardRoutes'));
-app.use('/api/company-assets', require('./src/routes/companyAssetRoutes'));
-app.use('/api/digital-accounts', require('./src/routes/digitalAccountRoutes'));
-app.use('/api/tracking', require('./src/routes/trackingRoutes'));
+// Compatibilidade: aceita rotas com e sem prefixo /api.
+const routes = {
+  auth: require('./src/routes/authRoutes'),
+  clients: require('./src/routes/clientRoutes'),
+  vehicles: require('./src/routes/vehicleRoutes'),
+  products: require('./src/routes/productRoutes'),
+  services: require('./src/routes/serviceRoutes'),
+  so: require('./src/routes/soRoutes'),
+  maintenance: require('./src/routes/maintenanceRoutes'),
+  messages: require('./src/routes/messageRoutes'),
+  bot: require('./src/routes/botRoutes'),
+  portal: require('./src/routes/portalRoutes'),
+  dashboard: require('./src/routes/dashboardRoutes'),
+  companyAssets: require('./src/routes/companyAssetRoutes'),
+  digitalAccounts: require('./src/routes/digitalAccountRoutes'),
+  tracking: require('./src/routes/trackingRoutes'),
+};
+
+function mount(path, handler) {
+  app.use(`/api/${path}`, handler);
+  app.use(`/${path}`, handler);
+}
+
+mount('auth', routes.auth);
+mount('clients', routes.clients);
+mount('vehicles', routes.vehicles);
+mount('products', routes.products);
+mount('services', routes.services);
+mount('so', routes.so);
+mount('maintenance', routes.maintenance);
+mount('messages', routes.messages);
+mount('bot', routes.bot);
+mount('portal', routes.portal);
+mount('dashboard', routes.dashboard);
+mount('company-assets', routes.companyAssets);
+mount('digital-accounts', routes.digitalAccounts);
+mount('tracking', routes.tracking);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Rota não encontrada' });
@@ -77,5 +100,3 @@ async function shutdown() {
 
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
-
-
