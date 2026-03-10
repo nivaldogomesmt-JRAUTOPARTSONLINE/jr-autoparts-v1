@@ -1,6 +1,14 @@
 const prisma = require('../lib/prisma');
 const { sendWhatsAppMessage } = require('./whatsappService');
 
+const MESSAGE_TEMPLATES = {
+  UPCOMING: 'Olá, {clientName}. A mensalidade de rastreamento {referenceMonth} do veículo {plate} vence em {dueDate}. Valor: R$ {amount}.',
+  LIGHT: 'Olá, {clientName}. Mensalidade {referenceMonth} do veículo {plate} está em atraso ({daysOverdue} dia(s)). Valor: R$ {amount}. Vencimento: {dueDate}.',
+  INTENSIVE: 'Olá, {clientName}. Atenção: mensalidade {referenceMonth} do veículo {plate} segue em aberto ({daysOverdue} dias). Valor: R$ {amount}. Regularize com a JR Auto Parts.',
+  CRITICAL: 'Olá, {clientName}. Seu contrato de rastreamento do veículo {plate} está em atraso crítico ({daysOverdue} dias). Valor pendente: R$ {amount}.',
+  RECOVERY: 'Olá, {clientName}. Contrato de rastreamento do veículo {plate} com atraso superior a 90 dias ({daysOverdue} dias). Entre em contato para evitar medidas de retirada do equipamento.',
+};
+
 function pad2(v) {
   return String(v).padStart(2, '0');
 }
@@ -24,10 +32,6 @@ async function generateInvoicesForReference(referenceMonth) {
 
   const contracts = await prisma.trackingContract.findMany({
     where: { status: 'ACTIVE' },
-    include: {
-      client: { select: { id: true, name: true, whatsapp: true, phone: true } },
-      vehicle: { select: { plate: true, brand: true, model: true } },
-    },
   });
 
   let created = 0;
@@ -67,26 +71,62 @@ function daysOverdueFromDueDate(dueDate) {
   return Math.floor(diff / (1000 * 60 * 60 * 24));
 }
 
+function getCollectionStage(daysOverdue) {
+  if (daysOverdue <= 0) return 'UPCOMING';
+  if (daysOverdue <= 30) return 'LIGHT';
+  if (daysOverdue <= 60) return 'INTENSIVE';
+  if (daysOverdue <= 90) return 'CRITICAL';
+  return 'RECOVERY';
+}
+
 function shouldSendCollection(daysOverdue) {
-  return [1, 3, 7, 15, 30, 45, 60, 90].includes(daysOverdue);
+  return [0, 1, 3, 7, 15, 30, 45, 60, 90].includes(daysOverdue);
+}
+
+function renderTemplate(template, data) {
+  return template
+    .replaceAll('{clientName}', data.clientName)
+    .replaceAll('{plate}', data.plate)
+    .replaceAll('{amount}', data.amount)
+    .replaceAll('{referenceMonth}', data.referenceMonth)
+    .replaceAll('{dueDate}', data.dueDate)
+    .replaceAll('{daysOverdue}', String(data.daysOverdue));
+}
+
+async function wasRecentlySent(clientId, content) {
+  const recent = new Date(Date.now() - 20 * 60 * 60 * 1000);
+  const found = await prisma.whatsappMessage.findFirst({
+    where: {
+      clientId,
+      content,
+      createdAt: { gte: recent },
+      status: { in: ['PENDING', 'SENT'] },
+    },
+    select: { id: true },
+  });
+  return !!found;
 }
 
 function buildCollectionMessage({ clientName, plate, amount, referenceMonth, dueDate, daysOverdue }) {
-  const due = new Date(dueDate).toLocaleDateString('pt-BR');
-  const val = Number(amount).toFixed(2).replace('.', ',');
+  const stage = getCollectionStage(daysOverdue);
+  const template = MESSAGE_TEMPLATES[stage] || MESSAGE_TEMPLATES.LIGHT;
 
-  if (daysOverdue <= 0) {
-    return `Olá, ${clientName}. Mensalidade de rastreamento ${referenceMonth} no valor de R$ ${val} vence em ${due}. Qualquer dúvida, fale com a JR Auto Parts.`;
-  }
-
-  return `Olá, ${clientName}. Identificamos a mensalidade de rastreamento ${referenceMonth} do veículo ${plate} em aberto (${daysOverdue} dia(s) de atraso). Valor: R$ ${val}. Vencimento: ${due}. Entre em contato para regularização.`;
+  return {
+    stage,
+    content: renderTemplate(template, {
+      clientName,
+      plate,
+      amount: Number(amount).toFixed(2).replace('.', ','),
+      referenceMonth,
+      dueDate: new Date(dueDate).toLocaleDateString('pt-BR'),
+      daysOverdue,
+    }),
+  };
 }
 
 async function sendCollectionNotices() {
   const invoices = await prisma.trackingInvoice.findMany({
-    where: {
-      status: { in: ['PENDING', 'OVERDUE'] },
-    },
+    where: { status: { in: ['PENDING', 'OVERDUE'] } },
     include: {
       contract: {
         include: {
@@ -114,7 +154,7 @@ async function sendCollectionNotices() {
       continue;
     }
 
-    const content = buildCollectionMessage({
+    const message = buildCollectionMessage({
       clientName: invoice.contract.client.name,
       plate: invoice.contract.vehicle.plate,
       amount: invoice.amount,
@@ -123,11 +163,17 @@ async function sendCollectionNotices() {
       daysOverdue,
     });
 
+    const duplicate = await wasRecentlySent(invoice.contract.client.id, message.content);
+    if (duplicate) {
+      skipped += 1;
+      continue;
+    }
+
     await sendWhatsAppMessage({
       clientId: invoice.contract.client.id,
       soId: null,
       phone,
-      content,
+      content: message.content,
     });
 
     sent += 1;
@@ -146,12 +192,13 @@ async function sendCollectionNotices() {
 async function runTrackingDailyJobs(referenceMonth = getReferenceMonth(new Date())) {
   const invoiceResult = await generateInvoicesForReference(referenceMonth);
   const collectionResult = await sendCollectionNotices();
-
   return { invoiceResult, collectionResult };
 }
 
 module.exports = {
+  MESSAGE_TEMPLATES,
   getReferenceMonth,
+  getCollectionStage,
   generateInvoicesForReference,
   sendCollectionNotices,
   runTrackingDailyJobs,
