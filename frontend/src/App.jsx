@@ -28,6 +28,7 @@ import DigitalAccountsPage from './pages/admin/DigitalAccountsPage';
 import PortalLogin from './pages/portal/PortalLogin';
 import PortalDashboard from './pages/portal/PortalDashboard';
 import PortalVehicle from './pages/portal/PortalVehicle';
+import PortalTracking from './pages/portal/PortalTracking';
 
 // ─── GUARDS ───────────────────────────────────────────────────────────────────
 function PrivateRoute({ children }) {
@@ -55,6 +56,7 @@ function AppRoutes() {
       <Route path="/portal/login" element={<PortalLogin />} />
       <Route path="/portal" element={<PortalRoute><PortalDashboard /></PortalRoute>} />
       <Route path="/portal/veiculo/:id" element={<PortalRoute><PortalVehicle /></PortalRoute>} />
+      <Route path="/portal/rastreamento" element={<PortalRoute><PortalTracking /></PortalRoute>} />
 
       {/* ÁREA INTERNA */}
       <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
@@ -96,3 +98,5 @@ export default function App() {
     </BrowserRouter>
   );
 }
+
+

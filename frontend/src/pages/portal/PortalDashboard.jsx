@@ -79,6 +79,20 @@ export default function PortalDashboard() {
           <div style={{ color: '#718096', fontSize: 14 }}>Acompanhe seus veículos e serviços aqui.</div>
         </div>
 
+        <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #1A3C5E' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontWeight: 700, color: '#1A3C5E' }}>Central de Rastreamento</div>
+              <div style={{ color: '#718096', fontSize: 13 }}>
+                Acesse rapidamente seu painel de rastreamento e acompanhe veiculos com mais facilidade.
+              </div>
+            </div>
+            <Link to="/portal/rastreamento" className="btn btn-primary" style={{ textDecoration: 'none' }}>
+              Abrir rastreamento
+            </Link>
+          </div>
+        </div>
+
         {/* Maintenance Alerts */}
         {(overdueAlerts.length > 0 || dueSoonAlerts.length > 0) && (
           <div style={{ background: overdueAlerts.length > 0 ? '#fff5f5' : '#fffbeb', border: `1px solid ${overdueAlerts.length > 0 ? '#fc8181' : '#f6e05e'}`, borderRadius: 12, padding: 16, marginBottom: 20 }}>
@@ -189,3 +203,4 @@ export default function PortalDashboard() {
     </div>
   );
 }
+
