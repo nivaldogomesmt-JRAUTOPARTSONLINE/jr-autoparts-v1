@@ -53,6 +53,12 @@ function normalizeLabel(value) {
     .toUpperCase();
 }
 
+function getMaintenancePriorityScore(maintenance) {
+  if (maintenance?.alertLevel === 'OVERDUE') return 0;
+  if (maintenance?.alertLevel === 'DUE_SOON') return 1;
+  return 2;
+}
+
 function findMaintenanceByKeywords(maintenances, keywords) {
   if (!Array.isArray(maintenances)) return null;
 
@@ -164,6 +170,27 @@ export default function PortalDashboard() {
   const overdueAlerts = useMemo(() => data?.maintenances?.filter((m) => m.alertLevel === 'OVERDUE') || [], [data]);
   const dueSoonAlerts = useMemo(() => data?.maintenances?.filter((m) => m.alertLevel === 'DUE_SOON') || [], [data]);
 
+  const nextReview = useMemo(() => {
+    const list = Array.isArray(data?.maintenances) ? [...data.maintenances] : [];
+    if (!list.length) return null;
+
+    list.sort((a, b) => {
+      const pa = getMaintenancePriorityScore(a);
+      const pb = getMaintenancePriorityScore(b);
+      if (pa !== pb) return pa - pb;
+
+      const ad = a?.nextDate ? new Date(a.nextDate).getTime() : Number.MAX_SAFE_INTEGER;
+      const bd = b?.nextDate ? new Date(b.nextDate).getTime() : Number.MAX_SAFE_INTEGER;
+      if (ad !== bd) return ad - bd;
+
+      const ak = a?.nextKm ?? Number.MAX_SAFE_INTEGER;
+      const bk = b?.nextKm ?? Number.MAX_SAFE_INTEGER;
+      return ak - bk;
+    });
+
+    return list[0] || null;
+  }, [data]);
+
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -236,6 +263,44 @@ export default function PortalDashboard() {
             Veja suas placas e acompanhe as proximas trocas com rapidez.
           </div>
         </div>
+
+
+
+        {nextReview ? (
+          <div
+            className="card"
+            style={{
+              marginBottom: 16,
+              border: nextReview.alertLevel === 'OVERDUE' ? '1px solid #fca5a5' : '1px solid #dbeafe',
+              background: nextReview.alertLevel === 'OVERDUE' ? '#fff5f5' : '#f8fbff',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Proxima revisao geral</div>
+                <div style={{ marginTop: 4, fontSize: 18, fontWeight: 800, color: '#1A3C5E' }}>
+                  {nextReview.label} - {nextReview.vehicle?.plate || '-'}
+                </div>
+                <div style={{ marginTop: 6, fontSize: 13, color: '#334155' }}>
+                  Data prevista: <b>{formatDate(nextReview.nextDate)}</b> | KM previsto: <b>{formatKm(nextReview.nextKm)}</b>
+                </div>
+              </div>
+              <span
+                style={{
+                  alignSelf: 'flex-start',
+                  background: (LEVEL_STYLE[nextReview.alertLevel] || LEVEL_STYLE.OK).bg,
+                  color: (LEVEL_STYLE[nextReview.alertLevel] || LEVEL_STYLE.OK).color,
+                  padding: '4px 10px',
+                  borderRadius: 999,
+                  fontSize: 12,
+                  fontWeight: 700,
+                }}
+              >
+                {(LEVEL_STYLE[nextReview.alertLevel] || LEVEL_STYLE.OK).label}
+              </span>
+            </div>
+          </div>
+        ) : null}
 
         {(overdueAlerts.length > 0 || dueSoonAlerts.length > 0) ? (
           <div style={{ background: overdueAlerts.length > 0 ? '#fff5f5' : '#fffbeb', border: `1px solid ${overdueAlerts.length > 0 ? '#fc8181' : '#f6e05e'}`, borderRadius: 12, padding: 16, marginBottom: 20 }}>
