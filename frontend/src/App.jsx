@@ -1,10 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
-// Layout
 import Layout from './components/Layout';
 
-// Páginas internas
 import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
 import ClientsPage from './pages/clients/ClientsPage';
@@ -23,15 +21,14 @@ import MaintenancePage from './pages/maintenance/MaintenancePage';
 import MessagesPage from './pages/messages/MessagesPage';
 import CompanyAssetsPage from './pages/admin/CompanyAssetsPage';
 import DigitalAccountsPage from './pages/admin/DigitalAccountsPage';
+import CollaboratorsPage from './pages/admin/CollaboratorsPage';
 import TrackingPage from './pages/tracking/TrackingPage';
 
-// Portal do cliente
 import PortalLogin from './pages/portal/PortalLogin';
 import PortalDashboard from './pages/portal/PortalDashboard';
 import PortalVehicle from './pages/portal/PortalVehicle';
 import PortalTracking from './pages/portal/PortalTracking';
 
-// ─── GUARDS ───────────────────────────────────────────────────────────────────
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="loading"><div className="spinner" /></div>;
@@ -46,20 +43,16 @@ function PortalRoute({ children }) {
   return children;
 }
 
-// ─── APP ──────────────────────────────────────────────────────────────────────
 function AppRoutes() {
   return (
     <Routes>
-      {/* AUTH */}
       <Route path="/login" element={<LoginPage />} />
 
-      {/* PORTAL DO CLIENTE */}
       <Route path="/portal/login" element={<PortalLogin />} />
       <Route path="/portal" element={<PortalRoute><PortalDashboard /></PortalRoute>} />
       <Route path="/portal/veiculo/:id" element={<PortalRoute><PortalVehicle /></PortalRoute>} />
       <Route path="/portal/rastreamento" element={<PortalRoute><PortalTracking /></PortalRoute>} />
 
-      {/* ÁREA INTERNA */}
       <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
@@ -83,6 +76,7 @@ function AppRoutes() {
         <Route path="mensagens" element={<MessagesPage />} />
         <Route path="ativos" element={<CompanyAssetsPage />} />
         <Route path="contas-digitais" element={<DigitalAccountsPage />} />
+        <Route path="colaboradores" element={<CollaboratorsPage />} />
         <Route path="tracking" element={<TrackingPage />} />
       </Route>
 
@@ -100,7 +94,3 @@ export default function App() {
     </BrowserRouter>
   );
 }
-
-
-
-

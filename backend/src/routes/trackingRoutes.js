@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const c = require('../controllers/trackingController');
-const { authenticate, requireEmployee } = require('../middleware/auth');
+const { authenticate, requireEmployee, requireAction } = require('../middleware/auth');
 const { safeCompare } = require('../utils/security');
 const {
   runTrackingDailyJobs,
@@ -54,14 +54,14 @@ router.use(authenticate, requireEmployee);
 router.get('/summary', c.summary);
 
 router.get('/devices', c.listDevices);
-router.post('/devices', c.createDevice);
-router.put('/devices/:id', c.updateDevice);
+router.post('/devices', requireAction('add'), c.createDevice);
+router.put('/devices/:id', requireAction('edit'), c.updateDevice);
 
 router.get('/contracts', c.listContracts);
-router.post('/contracts', c.createContract);
+router.post('/contracts', requireAction('add'), c.createContract);
 
 router.get('/invoices', c.listInvoices);
-router.post('/invoices', c.createInvoice);
-router.post('/invoices/:id/pay', c.markInvoicePaid);
+router.post('/invoices', requireAction('add'), c.createInvoice);
+router.post('/invoices/:id/pay', requireAction('edit'), c.markInvoicePaid);
 
 module.exports = router;

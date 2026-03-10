@@ -1,4 +1,4 @@
-﻿import axios from 'axios';
+import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -32,7 +32,9 @@ export const authAPI = {
   me:             ()     => api.get('/auth/me'),
   changePassword: (data) => api.put('/auth/change-password', data),
   createUser:     (data) => api.post('/auth/users', data),
-  listUsers:      ()     => api.get('/auth/users'),
+  listUsers:      (params) => api.get('/auth/users', { params }),
+  updateUser:     (id, data) => api.put(`/auth/users/${id}`, data),
+  removeUser:     (id) => api.delete(`/auth/users/${id}`),
 };
 
 // â”€â”€â”€ CLIENTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -163,6 +165,7 @@ export const trackingAPI = {
   runCollect: () => api.post('/tracking/jobs/collect'),
 };
 export default api;
+
 
 
 

@@ -1,6 +1,6 @@
 const router = require('express').Router();
-const { login, me, changePassword, createUser, listUsers } = require('../controllers/authController');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { login, me, changePassword, createUser, updateUser, removeUser, listUsers } = require('../controllers/authController');
+const { authenticate, requireManageUsers } = require('../middleware/auth');
 const { createRateLimit } = require('../middleware/rateLimit');
 
 router.post('/login', createRateLimit({
@@ -9,9 +9,13 @@ router.post('/login', createRateLimit({
   keyPrefix: 'auth-login',
   message: 'Muitas tentativas de login. Aguarde alguns minutos e tente novamente.',
 }), login);
+
 router.get('/me', authenticate, me);
 router.put('/change-password', authenticate, changePassword);
-router.post('/users', authenticate, requireAdmin, createUser);
-router.get('/users', authenticate, requireAdmin, listUsers);
+
+router.post('/users', authenticate, requireManageUsers, createUser);
+router.get('/users', authenticate, requireManageUsers, listUsers);
+router.put('/users/:id', authenticate, requireManageUsers, updateUser);
+router.delete('/users/:id', authenticate, requireManageUsers, removeUser);
 
 module.exports = router;
