@@ -8,16 +8,20 @@ const NAV = [
   ]},
   { section: 'CADASTROS', items: [
     { to: '/clientes', icon: '👥', label: 'Clientes' },
-    { to: '/veiculos', icon: '🚗', label: 'Veículos' },
+    { to: '/veiculos', icon: '🚗', label: 'Veiculos' },
     { to: '/produtos', icon: '📦', label: 'Produtos' },
-    { to: '/servicos', icon: '🔧', label: 'Serviços' },
+    { to: '/servicos', icon: '🔧', label: 'Servicos' },
   ]},
   { section: 'OPERACIONAL', items: [
-    { to: '/os', icon: '📋', label: 'Ordens de Serviço' },
-    { to: '/manutencao', icon: '⚙️', label: 'Manutenção Prev.' },
+    { to: '/os', icon: '📋', label: 'Ordens de Servico' },
+    { to: '/manutencao', icon: '⚙', label: 'Manutencao Prev.' },
   ]},
-  { section: 'COMUNICAÇÃO', items: [
+  { section: 'COMUNICACAO', items: [
     { to: '/mensagens', icon: '💬', label: 'Mensagens WhatsApp' },
+  ]},
+  { section: 'GESTAO', items: [
+    { to: '/ativos', icon: '🛠', label: 'Ativos' },
+    { to: '/contas-digitais', icon: '🌐', label: 'Contas Digitais' },
   ]},
 ];
 

@@ -1,4 +1,4 @@
-const XLSX = require('xlsx');
+﻿const XLSX = require('xlsx');
 const prisma = require('../lib/prisma');
 
 function clean(v) {
@@ -119,9 +119,7 @@ async function importClients(req, res) {
       const row = rows[i];
 
       const name = clean(pickValue(row, ['name', 'Name', 'nome', 'Nome']));
-      const cpfCnpj = normalizeCpfCnpj(
-        pickValue(row, ['cpfCnpj', 'cpf_cnpj', 'cpfcnpj', 'CNPJ / CPF', 'CNPJ/CPF', 'CPF/CNPJ'])
-      );
+      const cpfCnpj = normalizeCpfCnpj(pickValue(row, ['cpfCnpj', 'cpf_cnpj', 'cpfcnpj', 'CNPJ / CPF', 'CNPJ/CPF', 'CPF/CNPJ']));
       const phone = normalizePhone(pickValue(row, ['phone', 'telefone', 'fone', 'Fone']));
       const whatsapp = normalizePhone(pickValue(row, ['whatsapp', 'celular', 'cellphone', 'Celular']));
       const email = clean(pickValue(row, ['email', 'e-mail', 'E-mail'])).toLowerCase();
@@ -235,4 +233,3 @@ function downloadImportTemplate(req, res) {
 }
 
 module.exports = { importClients, downloadImportTemplate };
-

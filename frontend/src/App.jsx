@@ -21,6 +21,8 @@ import SOForm from './pages/so/SOForm';
 import SODetail from './pages/so/SODetail';
 import MaintenancePage from './pages/maintenance/MaintenancePage';
 import MessagesPage from './pages/messages/MessagesPage';
+import CompanyAssetsPage from './pages/admin/CompanyAssetsPage';
+import DigitalAccountsPage from './pages/admin/DigitalAccountsPage';
 
 // Portal do cliente
 import PortalLogin from './pages/portal/PortalLogin';
@@ -76,6 +78,8 @@ function AppRoutes() {
         <Route path="os/:id/editar" element={<SOForm />} />
         <Route path="manutencao" element={<MaintenancePage />} />
         <Route path="mensagens" element={<MessagesPage />} />
+        <Route path="ativos" element={<CompanyAssetsPage />} />
+        <Route path="contas-digitais" element={<DigitalAccountsPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

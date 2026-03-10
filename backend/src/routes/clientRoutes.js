@@ -7,17 +7,15 @@ const { importClients, downloadImportTemplate } = require('../controllers/client
 const upload = multer({ storage: multer.memoryStorage() });
 
 router.use(authenticate, requireEmployee);
-
 router.get('/', c.list);
 router.post('/', c.create);
-
 router.get('/import/template', downloadImportTemplate);
 router.post('/import', upload.single('file'), importClients);
 router.get('/export', c.exportClients);
-
 router.get('/:id', c.get);
 router.put('/:id', c.update);
 router.delete('/:id', c.remove);
 router.post('/:id/portal-access', c.grantPortalAccess);
 
 module.exports = router;
+

@@ -3,12 +3,11 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
-// ─── USUÁRIOS ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ USUÃRIOS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 model User {
   id               String    @id @default(uuid())
   name             String
@@ -35,7 +34,7 @@ enum UserRole {
   CLIENT
 }
 
-// ─── CLIENTES ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ CLIENTES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 model Client {
   id            String        @id @default(uuid())
   name          String
@@ -62,7 +61,7 @@ enum ClientType {
   BUSINESS
 }
 
-// ─── VEÍCULOS ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ VEÃCULOS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 model Vehicle {
   id            String        @id @default(uuid())
   clientId      String        @map("client_id")
@@ -84,7 +83,7 @@ model Vehicle {
   @@map("vehicles")
 }
 
-// ─── PRODUTOS ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ PRODUTOS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 model Product {
   id          String   @id @default(uuid())
   name        String
@@ -102,7 +101,7 @@ model Product {
   @@map("products")
 }
 
-// ─── SERVIÇOS ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ SERVIÃ‡OS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 model Service {
   id            String   @id @default(uuid())
   name          String
@@ -117,7 +116,7 @@ model Service {
   @@map("services")
 }
 
-// ─── ORDEM DE SERVIÇO ─────────────────────────────────────────────────────────
+// â”€â”€â”€ ORDEM DE SERVIÃ‡O â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 model ServiceOrder {
   id          String     @id @default(uuid())
   number      Int        @unique @default(autoincrement())
@@ -150,7 +149,7 @@ enum SoStatus {
   DELIVERED
 }
 
-// ─── ITENS DA OS ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ ITENS DA OS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 model SoItem {
   id           String       @id @default(uuid())
   soId         String       @map("so_id")
@@ -173,7 +172,7 @@ enum ItemType {
   SERVICE
 }
 
-// ─── LOG DE STATUS DA OS ──────────────────────────────────────────────────────
+// â”€â”€â”€ LOG DE STATUS DA OS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 model SoStatusLog {
   id           String    @id @default(uuid())
   soId         String    @map("so_id")
@@ -187,7 +186,7 @@ model SoStatusLog {
   @@map("so_status_logs")
 }
 
-// ─── MANUTENÇÃO PREVENTIVA ───────────────────────────────────────────────────
+// â”€â”€â”€ MANUTENÃ‡ÃƒO PREVENTIVA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 model PreventiveMaintenance {
   id             String    @id @default(uuid())
   vehicleId      String    @map("vehicle_id")
@@ -207,7 +206,7 @@ model PreventiveMaintenance {
   @@map("preventive_maintenances")
 }
 
-// ─── MENSAGENS WHATSAPP ───────────────────────────────────────────────────────
+// â”€â”€â”€ MENSAGENS WHATSAPP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 model WhatsappMessage {
   id           String        @id @default(uuid())
   clientId     String        @map("client_id")
@@ -229,4 +228,81 @@ enum MessageStatus {
   PENDING
   SENT
   FAILED
+}
+
+// —— ATIVOS DA EMPRESA ————————————————————————————————————————————————————————————————
+model CompanyAsset {
+  id          String      @id @default(uuid())
+  code        String?     @unique
+  name        String
+  category    AssetCategory
+  plate       String?     @unique
+  identifier  String?
+  intendedUse String?     @map("intended_use")
+  description String?
+  status      AssetStatus @default(ACTIVE)
+  notes       String?
+  active      Boolean     @default(true)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  @@index([category])
+  @@index([status])
+  @@map("company_assets")
+}
+
+enum AssetCategory {
+  TOW_TRUCK
+  CAR
+  MOTORCYCLE
+  EQUIPMENT
+  DEVICE
+  OTHER
+}
+
+enum AssetStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+  FOR_SALE
+  FOR_RENT
+}
+
+// —— CONTAS E CANAIS DIGITAIS ———————————————————————————————————————————————————————
+model DigitalAccount {
+  id          String               @id @default(uuid())
+  code        String?              @unique
+  platform    DigitalAccountType
+  label       String
+  contact     String?
+  plan        String?
+  status      DigitalAccountStatus @default(ACTIVE)
+  verified    Boolean              @default(false)
+  notes       String?
+  active      Boolean              @default(true)
+  createdAt   DateTime             @default(now()) @map("created_at")
+  updatedAt   DateTime             @updatedAt @map("updated_at")
+
+  @@index([platform])
+  @@index([status])
+  @@map("digital_accounts")
+}
+
+enum DigitalAccountType {
+  WHATSAPP_BUSINESS
+  OLX
+  BOTCONVERSA
+  INSTAGRAM
+  FACEBOOK
+  CHATGPT
+  CLAUDE
+  MAKE
+  GMAIL_WORKSPACE
+  OTHER
+}
+
+enum DigitalAccountStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
 }

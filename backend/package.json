@@ -10,7 +10,8 @@
     "db:migrate": "prisma migrate deploy",
     "db:push": "prisma db push",
     "db:seed": "node prisma/seed.js",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "db:seed:assets": "node scripts/seed_company_assets.js"
   },
   "dependencies": {
     "@prisma/client": "^5.10.0",
