@@ -46,6 +46,28 @@ function formatKm(value) {
   return `${Number(value).toLocaleString('pt-BR')} km`;
 }
 
+function formatRemainingCompact(maintenance) {
+  if (!maintenance) return 'Sem previsao';
+
+  const parts = [];
+  const hasDays = maintenance.daysUntil !== null && maintenance.daysUntil !== undefined && Number.isFinite(Number(maintenance.daysUntil));
+  const hasKm = maintenance.remainingKm !== null && maintenance.remainingKm !== undefined && Number.isFinite(Number(maintenance.remainingKm));
+
+  if (hasDays) {
+    const d = Number(maintenance.daysUntil);
+    if (d < 0) parts.push(`${Math.abs(d)}d atraso`);
+    else parts.push(`${d}d`);
+  }
+
+  if (hasKm) {
+    const km = Math.round(Number(maintenance.remainingKm));
+    if (km < 0) parts.push(`${Math.abs(km).toLocaleString('pt-BR')}km atraso`);
+    else parts.push(`${km.toLocaleString('pt-BR')}km`);
+  }
+
+  return parts.length ? parts.join(' | ') : 'Sem previsao';
+}
+
 function normalizeLabel(value) {
   return String(value || '')
     .normalize('NFD')
@@ -78,15 +100,22 @@ function findMaintenanceByKeywords(maintenances, keywords) {
 }
 
 function MaintenanceLine({ title, maintenance }) {
+  const style = LEVEL_STYLE[maintenance?.alertLevel || 'OK'] || LEVEL_STYLE.OK;
+
   return (
     <div style={{ marginTop: 8 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: 0.3 }}>
         {title}
       </div>
       {maintenance ? (
-        <div style={{ fontSize: 12, color: '#475569', marginTop: 2 }}>
-          {formatDate(maintenance.nextDate)} | {formatKm(maintenance.nextKm)}
-        </div>
+        <>
+          <div style={{ fontSize: 12, color: '#475569', marginTop: 2 }}>
+            {formatDate(maintenance.nextDate)} | {formatKm(maintenance.nextKm)}
+          </div>
+          <div style={{ fontSize: 11, color: style.color, marginTop: 2, fontWeight: 700 }}>
+            {formatRemainingCompact(maintenance)}
+          </div>
+        </>
       ) : (
         <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>Nao configurado</div>
       )}
