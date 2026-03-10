@@ -1,12 +1,14 @@
-﻿const bcrypt = require('bcryptjs');
+const bcrypt = require('bcryptjs');
 const prisma = require('../lib/prisma');
 const XLSX = require('xlsx');
 
 // GET /api/clients
 const list = async (req, res) => {
   try {
-    const { search, page = 1, limit = 20 } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const { search } = req.query;
+    const pageNumber = Math.max(parseInt(req.query.page || '1', 10) || 1, 1);
+    const limitNumber = Math.min(Math.max(parseInt(req.query.limit || '20', 10) || 20, 1), 5000);
+    const skip = (pageNumber - 1) * limitNumber;
     const where = {
       active: true,
       ...(search && {
@@ -25,12 +27,12 @@ const list = async (req, res) => {
         include: { _count: { select: { vehicles: true, serviceOrders: true } } },
         orderBy: { name: 'asc' },
         skip,
-        take: parseInt(limit),
+        take: limitNumber,
       }),
       prisma.client.count({ where }),
     ]);
 
-    res.json({ data: clients, total, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)) });
+    res.json({ data: clients, total, page: pageNumber, pages: Math.ceil(total / limitNumber) });
   } catch (err) {
     res.status(500).json({ error: 'Erro ao listar clientes.' });
   }
@@ -51,7 +53,7 @@ const get = async (req, res) => {
         user: { select: { id: true, email: true, role: true } },
       },
     });
-    if (!client) return res.status(404).json({ error: 'Cliente nÃ£o encontrado.' });
+    if (!client) return res.status(404).json({ error: 'Cliente não encontrado.' });
     res.json(client);
   } catch (err) {
     res.status(500).json({ error: 'Erro ao buscar cliente.' });
@@ -62,7 +64,7 @@ const get = async (req, res) => {
 const create = async (req, res) => {
   try {
     const { name, cpfCnpj, phone, whatsapp, email, address, city, type, createPortalAccess, password } = req.body;
-    if (!name) return res.status(400).json({ error: 'Nome Ã© obrigatÃ³rio.' });
+    if (!name) return res.status(400).json({ error: 'Nome é obrigatório.' });
 
     const client = await prisma.client.create({
       data: { name, cpfCnpj, phone, whatsapp, email, address, city, type: type || 'PERSONAL' },
@@ -84,7 +86,7 @@ const create = async (req, res) => {
 
     res.status(201).json(client);
   } catch (err) {
-    if (err.code === 'P2002') return res.status(409).json({ error: 'CPF/CNPJ ou email jÃ¡ cadastrado.' });
+    if (err.code === 'P2002') return res.status(409).json({ error: 'CPF/CNPJ ou email já cadastrado.' });
     res.status(500).json({ error: 'Erro ao criar cliente.' });
   }
 };
@@ -99,7 +101,7 @@ const update = async (req, res) => {
     });
     res.json(client);
   } catch (err) {
-    if (err.code === 'P2025') return res.status(404).json({ error: 'Cliente nÃ£o encontrado.' });
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Cliente não encontrado.' });
     res.status(500).json({ error: 'Erro ao atualizar cliente.' });
   }
 };
@@ -124,7 +126,7 @@ const grantPortalAccess = async (req, res) => {
     }
 
     const exists = await prisma.user.findFirst({ where: { clientId: client.id } });
-    if (exists) return res.status(409).json({ error: 'Cliente jÃ¡ tem acesso ao portal.' });
+    if (exists) return res.status(409).json({ error: 'Cliente já tem acesso ao portal.' });
 
     const passwordHash = await bcrypt.hash(password || 'JR@2024', 10);
     await prisma.user.create({
@@ -254,6 +256,7 @@ const exportClientsConsolidated = async (req, res) => {
   }
 };
 module.exports = { list, get, create, update, remove, grantPortalAccess, exportClients, exportClientsConsolidated };
+
 
 
 

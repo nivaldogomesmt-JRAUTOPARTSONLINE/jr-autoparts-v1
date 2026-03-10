@@ -38,8 +38,8 @@ export default function TrackingPage() {
         trackingAPI.listDevices(),
         trackingAPI.listContracts(),
         trackingAPI.listInvoices(),
-        clientsAPI.list({ limit: 500 }),
-        vehiclesAPI.list({ limit: 500 }),
+        clientsAPI.list({ page: 1, limit: 5000 }),
+        vehiclesAPI.list({ page: 1, limit: 5000 }),
       ]);
       setSummary(s.data);
       setDevices(d.data || []);
@@ -216,3 +216,4 @@ export default function TrackingPage() {
     </div>
   );
 }
+

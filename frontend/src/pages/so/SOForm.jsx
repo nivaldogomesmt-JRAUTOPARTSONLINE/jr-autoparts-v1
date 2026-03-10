@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { clientsAPI, productsAPI, servicesAPI, soAPI, vehiclesAPI } from '../../services/api';
 
@@ -18,7 +18,7 @@ export default function SOForm() {
 
   useEffect(() => {
     Promise.all([
-      clientsAPI.list({ limit: 200 }),
+      clientsAPI.list({ page: 1, limit: 5000 }),
       productsAPI.list({ limit: 500 }),
       servicesAPI.list(),
     ]).then(([c, p, s]) => {
@@ -285,3 +285,4 @@ export default function SOForm() {
     </div>
   );
 }
+

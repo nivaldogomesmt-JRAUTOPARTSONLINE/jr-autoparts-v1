@@ -34,7 +34,7 @@ export default function VehicleForm() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    clientsAPI.list({ limit: 200 }).then((r) => setClients(r.data.data));
+    clientsAPI.list({ page: 1, limit: 5000 }).then((r) => setClients(r.data.data));
 
     if (isEdit) {
       vehiclesAPI.get(id).then((r) => {
@@ -211,3 +211,4 @@ export default function VehicleForm() {
     </div>
   );
 }
+
