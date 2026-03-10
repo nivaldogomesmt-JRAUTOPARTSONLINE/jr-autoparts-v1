@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { messagesAPI, soAPI } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 const STATUS_LIST = [
   { value: 'QUOTE', label: 'Orcamento', badge: 'badge-gray' },
@@ -27,6 +28,7 @@ function formatDateTime(value) {
 export default function SODetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { can } = useAuth();
   const [os, setOs] = useState(null);
   const [loading, setLoading] = useState(true);
   const [updatingStatus, setUpdatingStatus] = useState(false);
@@ -37,6 +39,10 @@ export default function SODetail() {
   const [photoFiles, setPhotoFiles] = useState([]);
   const [photoCategory, setPhotoCategory] = useState('GENERAL');
   const [photoCaption, setPhotoCaption] = useState('');
+  const [deliveryStatus, setDeliveryStatus] = useState('AWAITING_DISPATCH');
+  const [deliveryLocationUrl, setDeliveryLocationUrl] = useState('');
+  const [deliveryNote, setDeliveryNote] = useState('');
+  const [sendingDelivery, setSendingDelivery] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -54,6 +60,13 @@ export default function SODetail() {
   useEffect(() => {
     load();
   }, [id]);
+
+  useEffect(() => {
+    if (!os?.deliveryMeta) return;
+    setDeliveryStatus(os.deliveryMeta.status || 'AWAITING_DISPATCH');
+    setDeliveryLocationUrl(os.deliveryMeta.locationUrl || '');
+    setDeliveryNote(os.deliveryMeta.note || '');
+  }, [os]);
 
   const handleStatusChange = async (newStatus) => {
     const label = STATUS_LIST.find((s) => s.value === newStatus)?.label;
@@ -115,6 +128,35 @@ export default function SODetail() {
     }
   };
 
+  const handleDeliveryUpdate = async () => {
+    setSendingDelivery(true);
+    try {
+      await soAPI.updateDelivery(id, {
+        deliveryStatus,
+        locationUrl: deliveryLocationUrl || null,
+        note: deliveryNote || null,
+      });
+      await load();
+      window.alert('Atualizacao de entrega enviada ao cliente.');
+    } catch (err) {
+      window.alert(err.response?.data?.error || 'Erro ao atualizar entrega.');
+    } finally {
+      setSendingDelivery(false);
+    }
+  };
+
+  const handleDeleteOrder = async () => {
+    if (!window.confirm('Deseja realmente excluir esta OS? Esta acao nao pode ser desfeita.')) return;
+    try {
+      await soAPI.remove(id);
+      window.alert('OS excluida com sucesso.');
+      navigate('/os');
+    } catch (err) {
+      window.alert(err.response?.data?.error || 'Erro ao excluir OS.');
+    }
+  };
+
+
   const timeline = useMemo(() => {
     if (!os) return [];
 
@@ -161,6 +203,9 @@ export default function SODetail() {
         <div style={{ display: 'flex', gap: 8 }}>
           <Link to="/os" className="btn btn-ghost btn-sm">Voltar</Link>
           <Link to={`/os/${id}/editar`} className="btn btn-outline btn-sm">Editar</Link>
+          {can('delete') ? (
+            <button type="button" className="btn btn-danger btn-sm" onClick={handleDeleteOrder}>Excluir</button>
+          ) : null}
         </div>
       </div>
 
@@ -350,6 +395,37 @@ export default function SODetail() {
               ))}
             </div>
             {updatingStatus ? <div className="text-sm text-muted" style={{ marginTop: 8 }}>Atualizando...</div> : null}
+          </div>
+
+
+
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card-title">Campo de Entrega</div>
+            <div className="form-group">
+              <label className="form-label">Status da entrega</label>
+              <select className="form-control" value={deliveryStatus} onChange={(e) => setDeliveryStatus(e.target.value)}>
+                <option value="AWAITING_DISPATCH">Aguardando envio</option>
+                <option value="OUT_FOR_DELIVERY">Saiu para entrega</option>
+                <option value="DELIVERED">Entregue</option>
+                <option value="DELIVERY_FAILED">Tentativa sem sucesso</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Link de localizacao (opcional)</label>
+              <input className="form-control" placeholder="https://maps.google.com/..." value={deliveryLocationUrl} onChange={(e) => setDeliveryLocationUrl(e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Observacao da entrega</label>
+              <textarea className="form-control" rows={2} value={deliveryNote} onChange={(e) => setDeliveryNote(e.target.value)} />
+            </div>
+            <button type="button" className="btn btn-primary btn-sm" onClick={handleDeliveryUpdate} disabled={sendingDelivery}>
+              {sendingDelivery ? 'Enviando...' : 'Enviar atualizacao via WhatsApp'}
+            </button>
+            {os.deliveryMeta?.updatedAt ? (
+              <div className="text-sm text-muted" style={{ marginTop: 8 }}>
+                Ultima atualizacao: {formatDateTime(os.deliveryMeta.updatedAt)}
+              </div>
+            ) : null}
           </div>
 
           <div className="card">

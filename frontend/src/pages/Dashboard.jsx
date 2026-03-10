@@ -3,15 +3,19 @@ import { Link } from 'react-router-dom';
 import { dashboardAPI } from '../services/api';
 
 const SO_STATUS_BADGE = {
-  QUOTE: { label: 'Orçamento', cls: 'badge-gray' },
+  QUOTE: { label: 'Orcamento', cls: 'badge-gray' },
   APPROVED: { label: 'Aprovado', cls: 'badge-blue' },
   STARTED: { label: 'Iniciado', cls: 'badge-purple' },
-  IN_PROGRESS: { label: 'Em Execução', cls: 'badge-purple' },
-  WAITING_PART: { label: 'Ag. Peça', cls: 'badge-orange' },
+  IN_PROGRESS: { label: 'Em Execucao', cls: 'badge-purple' },
+  WAITING_PART: { label: 'Ag. Peca', cls: 'badge-orange' },
   FINISHING: { label: 'Finalizando', cls: 'badge-yellow' },
   DONE: { label: 'Finalizado', cls: 'badge-green' },
   DELIVERED: { label: 'Entregue', cls: 'badge-green' },
 };
+
+function formatMoney(value) {
+  return `R$ ${Number(value || 0).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
+}
 
 function StatCard({ icon, label, value, color, to }) {
   const content = (
@@ -29,13 +33,47 @@ function StatCard({ icon, label, value, color, to }) {
   return content;
 }
 
+function RankingCard({ title, rows }) {
+  return (
+    <div className="card">
+      <div className="card-title" style={{ marginBottom: 12 }}>{title}</div>
+      {!rows?.length ? (
+        <div className="text-sm text-muted">Sem dados suficientes ainda.</div>
+      ) : (
+        <div className="table-container">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Item</th>
+                <th>Qtd</th>
+                <th>Faturamento</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((item) => (
+                <tr key={`${title}-${item.rank}-${item.name}`}>
+                  <td><strong>{item.rank}</strong></td>
+                  <td>{item.name}</td>
+                  <td>{Number(item.quantity || 0).toLocaleString('pt-BR')}</td>
+                  <td>{formatMoney(item.revenue)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     dashboardAPI.get()
-      .then(res => setData(res.data))
+      .then((res) => setData(res.data))
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
@@ -43,43 +81,41 @@ export default function Dashboard() {
   if (loading) return <div className="loading"><div className="spinner" /></div>;
   if (!data) return <div className="alert alert-error">Erro ao carregar dashboard.</div>;
 
-  const { stats, recentOS } = data;
+  const { stats, recentOS, rankings } = data;
 
   return (
     <div>
       <div className="page-header">
         <div>
           <div className="page-title">Dashboard</div>
-          <div className="page-subtitle">Visão geral da JR Auto Parts</div>
+          <div className="page-subtitle">Visao geral da JR Auto Parts</div>
         </div>
         <Link to="/os/nova" className="btn btn-primary">+ Nova OS</Link>
       </div>
 
-      {/* Stats */}
       <div className="grid-3" style={{ marginBottom: 24 }}>
-        <StatCard icon="👥" label="Clientes" value={stats.totalClients} color="#1A3C5E" to="/clientes" />
-        <StatCard icon="🚗" label="Veículos" value={stats.totalVehicles} color="#2563a8" to="/veiculos" />
-        <StatCard icon="📋" label="OS em Aberto" value={stats.activeOS} color="#F0A500" to="/os" />
-        <StatCard icon="🗓️" label="OS este Mês" value={stats.monthlyOS} color="#16a34a" />
-        <StatCard icon="⚙️" label="Manutenções Pendentes" value={stats.overdueMaintenances} color="#dc2626" to="/manutencao" />
-        <StatCard
-          icon="💰"
-          label="Faturamento (mês)"
-          value={`R$ ${stats.monthlyRevenue.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`}
-          color="#16a34a"
-        />
+        <StatCard icon="Clientes" label="Clientes" value={stats.totalClients} color="#1A3C5E" to="/clientes" />
+        <StatCard icon="Veiculos" label="Veiculos" value={stats.totalVehicles} color="#2563a8" to="/veiculos" />
+        <StatCard icon="OS" label="OS em Aberto" value={stats.activeOS} color="#F0A500" to="/os" />
+        <StatCard icon="Mes" label="OS este Mes" value={stats.monthlyOS} color="#16a34a" />
+        <StatCard icon="Alertas" label="Manutencoes Pendentes" value={stats.overdueMaintenances} color="#dc2626" to="/manutencao" />
+        <StatCard icon="R$" label="Faturamento (mes)" value={formatMoney(stats.monthlyRevenue)} color="#16a34a" />
       </div>
 
-      {/* OS Recentes */}
+      <div className="grid-2" style={{ marginBottom: 24 }}>
+        <RankingCard title="Ranking: Servicos mais executados" rows={rankings?.topServices || []} />
+        <RankingCard title="Ranking: Pecas mais vendidas" rows={rankings?.topProducts || []} />
+      </div>
+
       <div className="card">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <div className="card-title" style={{ marginBottom: 0 }}>📋 OS em Andamento</div>
-          <Link to="/os" className="btn btn-ghost btn-sm">Ver todas →</Link>
+          <div className="card-title" style={{ marginBottom: 0 }}>OS em andamento</div>
+          <Link to="/os" className="btn btn-ghost btn-sm">Ver todas</Link>
         </div>
 
         {recentOS.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-state-icon">📋</div>
+            <div className="empty-state-icon">OS</div>
             <div className="empty-state-text">Nenhuma OS em andamento</div>
             <div className="empty-state-sub">
               <Link to="/os/nova" className="btn btn-primary btn-sm" style={{ marginTop: 12 }}>+ Criar primeira OS</Link>
@@ -90,16 +126,16 @@ export default function Dashboard() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>Nº OS</th>
+                  <th>No OS</th>
                   <th>Cliente</th>
-                  <th>Veículo</th>
+                  <th>Veiculo</th>
                   <th>Status</th>
                   <th>Total</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
-                {recentOS.map(os => {
+                {recentOS.map((os) => {
                   const badge = SO_STATUS_BADGE[os.status] || { label: os.status, cls: 'badge-gray' };
                   return (
                     <tr key={os.id}>
@@ -111,7 +147,7 @@ export default function Dashboard() {
                         <span className="text-muted text-sm">{os.vehicle.brand} {os.vehicle.model}</span>
                       </td>
                       <td><span className={`badge ${badge.cls}`}>{badge.label}</span></td>
-                      <td>R$ {parseFloat(os.totalPrice || 0).toFixed(2).replace('.', ',')}</td>
+                      <td>{formatMoney(os.totalPrice || 0)}</td>
                       <td>
                         <Link to={`/os/${os.id}`} className="btn btn-ghost btn-sm">Ver</Link>
                       </td>

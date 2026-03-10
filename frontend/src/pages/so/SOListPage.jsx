@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { soAPI } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'Todos os status' },
@@ -21,6 +22,7 @@ const BADGE = {
 };
 
 export default function SOListPage() {
+  const { can } = useAuth();
   const [orders, setOrders] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -39,6 +41,19 @@ export default function SOListPage() {
   };
 
   useEffect(() => { load(); }, [search, status, page]);
+
+  const removeOrder = async (id) => {
+    if (!can('delete')) return;
+    if (!window.confirm('Excluir esta OS/Orcamento definitivamente?')) return;
+
+    try {
+      await soAPI.remove(id);
+      await load();
+    } catch (err) {
+      window.alert(err.response?.data?.error || 'Erro ao excluir OS.');
+    }
+  };
+
 
   return (
     <div>
@@ -114,7 +129,12 @@ export default function SOListPage() {
                       {new Date(os.createdAt).toLocaleDateString('pt-BR')}
                     </td>
                     <td>
-                      <Link to={`/os/${os.id}`} className="btn btn-outline btn-sm">Abrir</Link>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <Link to={`/os/${os.id}`} className="btn btn-outline btn-sm">Abrir</Link>
+                        {can('delete') ? (
+                          <button type="button" className="btn btn-danger btn-sm" onClick={() => removeOrder(os.id)}>Excluir</button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))}

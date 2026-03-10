@@ -23,6 +23,7 @@ const BASE_NAV = [
       { to: '/os', icon: 'OS', label: 'Ordens de Servico' },
       { to: '/manutencao', icon: 'MN', label: 'Manutencao Prev.' },
       { to: '/tracking', icon: 'TR', label: 'Rastreamento' },
+      { to: '/entregas', icon: 'EN', label: 'Entregas' },
     ],
   },
   {

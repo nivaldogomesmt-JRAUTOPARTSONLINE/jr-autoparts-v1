@@ -1,18 +1,48 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { clientsAPI } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function ClientDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { can, user } = useAuth();
   const [client, setClient] = useState(null);
   const [loading, setLoading] = useState(true);
   const [portalModal, setPortalModal] = useState(false);
   const [portalPassword, setPortalPassword] = useState('JR@2024');
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     clientsAPI.get(id).then(res => setClient(res.data)).finally(() => setLoading(false));
   }, [id]);
+
+
+
+  const removeClient = async () => {
+    if (!can('delete')) return;
+
+    const hardDelete = user?.role === 'ADMIN'
+      ? window.confirm('Exclusao definitiva? OK = definitiva | Cancelar = apenas desativar')
+      : false;
+
+    const question = hardDelete
+      ? 'Confirmar EXCLUSAO DEFINITIVA do cliente? Esta acao nao pode ser desfeita.'
+      : 'Confirmar desativacao do cliente?';
+
+    if (!window.confirm(question)) return;
+
+    setDeleting(true);
+    try {
+      await clientsAPI.remove(id, hardDelete ? { hard: true } : undefined);
+      window.alert(hardDelete ? 'Cliente excluido definitivamente.' : 'Cliente desativado com sucesso.');
+      navigate('/clientes');
+    } catch (err) {
+      window.alert(err.response?.data?.error || 'Erro ao excluir cliente.');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const grantAccess = async () => {
     try {

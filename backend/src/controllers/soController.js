@@ -1,4 +1,4 @@
-﻿const prisma = require('../lib/prisma');
+const prisma = require('../lib/prisma');
 const { sendWhatsAppMessage } = require('../services/whatsappService');
 const { uploadToCloudinary, deleteFromCloudinary } = require('../services/uploadService');
 
@@ -15,6 +15,13 @@ const STATUS_LABELS = {
 
 const NOTIFY_ON_STATUS = ['STARTED', 'IN_PROGRESS', 'WAITING_PART', 'FINISHING', 'DONE', 'DELIVERED'];
 const STATUS_CLOSE_FLOW = ['DONE', 'DELIVERED'];
+const DELIVERY_META_PREFIX = '[DELIVERY_META]';
+const DELIVERY_STATUS_LABELS = {
+  AWAITING_DISPATCH: 'Aguardando envio',
+  OUT_FOR_DELIVERY: 'Saiu para entrega',
+  DELIVERED: 'Entregue',
+  DELIVERY_FAILED: 'Tentativa sem sucesso',
+};
 
 const MAINTENANCE_RULES = [
   {
@@ -40,6 +47,25 @@ function normalizeText(value) {
     .toUpperCase();
 }
 
+function parseDeliveryMetaFromNotes(notes) {
+  const text = String(notes || '');
+  const idx = text.lastIndexOf(DELIVERY_META_PREFIX);
+  if (idx === -1) return null;
+  const raw = text.slice(idx + DELIVERY_META_PREFIX.length).trim();
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+function mergeDeliveryMetaIntoNotes(notes, deliveryMeta) {
+  const text = String(notes || '');
+  const idx = text.lastIndexOf(DELIVERY_META_PREFIX);
+  const cleanNotes = idx === -1 ? text.trimEnd() : text.slice(0, idx).trimEnd();
+  const payload = DELIVERY_META_PREFIX + JSON.stringify(deliveryMeta);
+  return cleanNotes ? (cleanNotes + '\n' + payload) : payload;
+}
 function recalcNextMaintenance({ doneDate, doneKm, intervalMonths, intervalKm, currentNextDate, currentNextKm }) {
   let nextDate = currentNextDate || null;
   let nextKm = currentNextKm || null;
@@ -141,7 +167,7 @@ function extractCloudinaryPublicId(url) {
 
 const list = async (req, res) => {
   try {
-    const { status, clientId, vehicleId, search, page = 1, limit = 20 } = req.query;
+    const { status, clientId, vehicleId, search, sort = 'created', page = 1, limit = 20 } = req.query;
     const skip = (parseInt(page, 10) - 1) * parseInt(limit, 10);
     const where = {
       ...(status && { status }),
@@ -156,6 +182,8 @@ const list = async (req, res) => {
       }),
     };
 
+    const orderBy = sort === 'updated' ? { updatedAt: 'desc' } : { createdAt: 'desc' };
+
     const [orders, total] = await Promise.all([
       prisma.serviceOrder.findMany({
         where,
@@ -164,7 +192,7 @@ const list = async (req, res) => {
           vehicle: { select: { id: true, plate: true, brand: true, model: true } },
           _count: { select: { items: true } },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         skip,
         take: parseInt(limit, 10),
       }),
@@ -172,7 +200,7 @@ const list = async (req, res) => {
     ]);
 
     return res.json({
-      data: orders.map((o) => ({ ...o, total: o.totalPrice })),
+      data: orders.map((o) => ({ ...o, total: o.totalPrice, deliveryMeta: parseDeliveryMetaFromNotes(o.notes) })),
       total,
       page: parseInt(page, 10),
       pages: Math.ceil(total / parseInt(limit, 10)),
@@ -204,7 +232,7 @@ const get = async (req, res) => {
       },
     });
     if (!order) return res.status(404).json({ error: 'OS nao encontrada.' });
-    return res.json({ ...order, total: order.totalPrice });
+    return res.json({ ...order, total: order.totalPrice, deliveryMeta: parseDeliveryMetaFromNotes(order.notes) });
   } catch (err) {
     return res.status(500).json({ error: 'Erro ao buscar OS.' });
   }
@@ -270,12 +298,25 @@ const updateStatus = async (req, res) => {
     });
     if (!current) return res.status(404).json({ error: 'OS nao encontrada.' });
 
+    const deliveryAutoMeta = status === 'DELIVERED' ? {
+      status: 'DELIVERED',
+      statusLabel: DELIVERY_STATUS_LABELS.DELIVERED,
+      locationUrl: null,
+      note: 'Entrega confirmada no fechamento da OS.',
+      updatedAt: new Date().toISOString(),
+      updatedBy: req.user?.name || 'Sistema',
+    } : null;
+
+    const nextNotes = deliveryAutoMeta
+      ? mergeDeliveryMetaIntoNotes(notes !== undefined ? notes : current.notes, deliveryAutoMeta)
+      : (notes !== undefined ? notes : undefined);
+
     const order = await prisma.$transaction(async (tx) => {
       const updatedOrder = await tx.serviceOrder.update({
         where: { id: req.params.id },
         data: {
           status,
-          ...(notes && { notes }),
+          ...(nextNotes !== undefined && { notes: nextNotes }),
           statusLogs: {
             create: {
               oldStatus: current.status,
@@ -430,7 +471,95 @@ function buildWhatsAppMessage(clientName, plate, brand, model, status, number) {
   return msgs[status] || `Atualizacao da OS #${number}: status alterado para ${statusLabel}.`;
 }
 
-module.exports = { list, get, create, update, updateStatus, uploadPhotos, deletePhoto };
+
+const sendDeliveryUpdate = async (req, res) => {
+  try {
+    const { deliveryStatus, locationUrl, note } = req.body;
+
+    if (!deliveryStatus || !DELIVERY_STATUS_LABELS[deliveryStatus]) {
+      return res.status(400).json({ error: 'Status de entrega invalido.' });
+    }
+
+    if (locationUrl && !/^https?:\/\//i.test(String(locationUrl))) {
+      return res.status(400).json({ error: 'URL de localizacao invalida. Use http(s)://...' });
+    }
+
+    const order = await prisma.serviceOrder.findUnique({
+      where: { id: req.params.id },
+      include: { client: true, vehicle: true },
+    });
+
+    if (!order) return res.status(404).json({ error: 'OS nao encontrada.' });
+
+    const deliveryMeta = {
+      status: deliveryStatus,
+      statusLabel: DELIVERY_STATUS_LABELS[deliveryStatus],
+      locationUrl: locationUrl ? String(locationUrl).trim() : null,
+      note: note ? String(note).trim() : null,
+      updatedAt: new Date().toISOString(),
+      updatedBy: req.user?.name || 'Sistema',
+    };
+
+    const nextNotes = mergeDeliveryMetaIntoNotes(order.notes, deliveryMeta);
+
+    await prisma.serviceOrder.update({
+      where: { id: order.id },
+      data: { notes: nextNotes },
+    });
+
+    const phone = order.client.whatsapp || order.client.phone;
+    if (phone) {
+      const locationText = deliveryMeta.locationUrl ? ('\nLocalizacao da entrega: ' + deliveryMeta.locationUrl) : '';
+      const noteText = deliveryMeta.note ? ('\nObs: ' + deliveryMeta.note) : '';
+      const msg = 'Ola, ' + order.client.name + '! Atualizacao de entrega da OS #' + order.number + ' (' + order.vehicle.plate + '): ' + deliveryMeta.statusLabel + '.' + locationText + noteText;
+
+      await sendWhatsAppMessage({
+        clientId: order.clientId,
+        soId: order.id,
+        phone,
+        content: msg,
+      }).catch((error) => {
+        console.error('WhatsApp delivery error:', error.message);
+      });
+    }
+
+    return res.json({
+      message: 'Atualizacao de entrega registrada com sucesso.',
+      deliveryMeta,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: 'Erro ao atualizar entrega.' });
+  }
+};
+
+const remove = async (req, res) => {
+  try {
+    const order = await prisma.serviceOrder.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, number: true },
+    });
+
+    if (!order) return res.status(404).json({ error: 'OS nao encontrada.' });
+
+    await prisma.$transaction(async (tx) => {
+      await tx.soStatusLog.deleteMany({ where: { soId: order.id } });
+      await tx.whatsappMessage.deleteMany({ where: { soId: order.id } });
+      await tx.soItem.deleteMany({ where: { soId: order.id } });
+      await tx.serviceOrderPhoto.deleteMany({ where: { soId: order.id } });
+      await tx.serviceOrder.delete({ where: { id: order.id } });
+    });
+
+    return res.json({ message: 'OS #' + order.number + ' excluida com sucesso.' });
+  } catch (err) {
+    return res.status(500).json({ error: 'Erro ao excluir OS.' });
+  }
+};
+
+module.exports = { list, get, create, update, updateStatus, sendDeliveryUpdate, remove, uploadPhotos, deletePhoto };
+
+
+
+
 
 
 

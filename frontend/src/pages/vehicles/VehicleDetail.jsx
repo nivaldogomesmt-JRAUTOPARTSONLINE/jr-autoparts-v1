@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { maintenanceAPI, vehiclesAPI } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 const ALERT_COLOR = { OVERDUE: '#dc2626', DUE_SOON: '#f59e0b', OK: '#16a34a' };
 const ALERT_LABEL = { OVERDUE: 'Vencido', DUE_SOON: 'Proximo', OK: 'Ok' };
@@ -20,6 +21,7 @@ function asNumberOrEmpty(value) {
 export default function VehicleDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { can, user } = useAuth();
 
   const [vehicle, setVehicle] = useState(null);
   const [maint, setMaint] = useState(null);
@@ -28,6 +30,7 @@ export default function VehicleDetail() {
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [forms, setForms] = useState({});
+  const [deleting, setDeleting] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -103,6 +106,33 @@ export default function VehicleDetail() {
     }
   };
 
+
+
+  const removeVehicle = async () => {
+    if (!can('delete')) return;
+
+    const hardDelete = user?.role === 'ADMIN'
+      ? window.confirm('Exclusao definitiva? OK = definitiva | Cancelar = apenas desativar')
+      : false;
+
+    const question = hardDelete
+      ? 'Confirmar EXCLUSAO DEFINITIVA do veiculo? Esta acao nao pode ser desfeita.'
+      : 'Confirmar desativacao do veiculo?';
+
+    if (!window.confirm(question)) return;
+
+    setDeleting(true);
+    try {
+      await vehiclesAPI.remove(id, hardDelete ? { hard: true } : undefined);
+      window.alert(hardDelete ? 'Veiculo excluido definitivamente.' : 'Veiculo desativado.');
+      navigate('/veiculos');
+    } catch (err) {
+      window.alert(err.response?.data?.error || 'Erro ao excluir veiculo.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const initializeMaintenances = async () => {
     setError('');
     setInfo('');
@@ -138,6 +168,11 @@ export default function VehicleDetail() {
           </button>
           <Link to={`/veiculos/${id}/editar`} className="btn btn-outline btn-sm">Editar</Link>
           <Link to={`/os/nova?vehicleId=${id}`} className="btn btn-primary btn-sm">+ Nova OS</Link>
+          {can('delete') ? (
+            <button className="btn btn-danger btn-sm" onClick={removeVehicle} disabled={deleting}>
+              {deleting ? 'Excluindo...' : 'Excluir'}
+            </button>
+          ) : null}
         </div>
       </div>
 

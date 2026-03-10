@@ -291,10 +291,46 @@ const uploadPhoto = async (req, res) => {
 
 const remove = async (req, res) => {
   try {
-    await prisma.vehicle.update({ where: { id: req.params.id }, data: { active: false } });
-    res.json({ message: 'Veiculo desativado.' });
+    const hardDelete = String(req.query.hard || '').toLowerCase() === 'true';
+
+    const vehicle = await prisma.vehicle.findUnique({
+      where: { id: req.params.id },
+      include: {
+        _count: {
+          select: {
+            serviceOrders: true,
+            trackingContracts: true,
+          },
+        },
+      },
+    });
+
+    if (!vehicle) return res.status(404).json({ error: 'Veiculo nao encontrado.' });
+
+    if (!hardDelete) {
+      await prisma.vehicle.update({ where: { id: req.params.id }, data: { active: false } });
+      return res.json({ message: 'Veiculo desativado.' });
+    }
+
+    if (req.user?.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Exclusao definitiva permitida apenas para ADMIN.' });
+    }
+
+    if (vehicle._count.serviceOrders > 0 || vehicle._count.trackingContracts > 0) {
+      return res.status(409).json({
+        error: 'Veiculo possui vinculos (OS/contratos). Remova os vinculos antes da exclusao definitiva.',
+      });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.preventiveMaintenance.deleteMany({ where: { vehicleId: vehicle.id } });
+      await tx.trackingDevice.updateMany({ where: { vehicleId: vehicle.id }, data: { vehicleId: null } });
+      await tx.vehicle.delete({ where: { id: vehicle.id } });
+    });
+
+    return res.json({ message: 'Veiculo excluido definitivamente.' });
   } catch (err) {
-    res.status(500).json({ error: 'Erro ao desativar veiculo.' });
+    return res.status(500).json({ error: 'Erro ao excluir veiculo.' });
   }
 };
 

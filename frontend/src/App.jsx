@@ -23,6 +23,7 @@ import CompanyAssetsPage from './pages/admin/CompanyAssetsPage';
 import DigitalAccountsPage from './pages/admin/DigitalAccountsPage';
 import CollaboratorsPage from './pages/admin/CollaboratorsPage';
 import TrackingPage from './pages/tracking/TrackingPage';
+import DeliveriesPage from './pages/deliveries/DeliveriesPage';
 
 import PortalLogin from './pages/portal/PortalLogin';
 import PortalDashboard from './pages/portal/PortalDashboard';
@@ -87,6 +88,7 @@ function AppRoutes() {
         <Route path="contas-digitais" element={<ActionRoute action="adminOnly"><DigitalAccountsPage /></ActionRoute>} />
         <Route path="colaboradores" element={<ActionRoute action="manageUsers"><CollaboratorsPage /></ActionRoute>} />
         <Route path="tracking" element={<TrackingPage />} />
+        <Route path="entregas" element={<DeliveriesPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

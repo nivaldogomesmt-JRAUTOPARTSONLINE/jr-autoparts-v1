@@ -106,13 +106,50 @@ const update = async (req, res) => {
   }
 };
 
-// DELETE /api/clients/:id (soft delete)
+// DELETE /api/clients/:id
 const remove = async (req, res) => {
   try {
-    await prisma.client.update({ where: { id: req.params.id }, data: { active: false } });
-    res.json({ message: 'Cliente desativado com sucesso.' });
+    const hardDelete = String(req.query.hard || '').toLowerCase() === 'true';
+
+    const client = await prisma.client.findUnique({
+      where: { id: req.params.id },
+      include: {
+        _count: {
+          select: {
+            vehicles: true,
+            serviceOrders: true,
+            trackingContracts: true,
+          },
+        },
+      },
+    });
+
+    if (!client) return res.status(404).json({ error: 'Cliente nao encontrado.' });
+
+    if (!hardDelete) {
+      await prisma.client.update({ where: { id: req.params.id }, data: { active: false } });
+      return res.json({ message: 'Cliente desativado com sucesso.' });
+    }
+
+    if (req.user?.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Exclusao definitiva permitida apenas para ADMIN.' });
+    }
+
+    if (client._count.vehicles > 0 || client._count.serviceOrders > 0 || client._count.trackingContracts > 0) {
+      return res.status(409).json({
+        error: 'Cliente possui vinculos (veiculos/OS/contratos). Remova os vinculos antes da exclusao definitiva.',
+      });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.whatsappMessage.deleteMany({ where: { clientId: client.id, soId: null } });
+      await tx.user.deleteMany({ where: { clientId: client.id } });
+      await tx.client.delete({ where: { id: client.id } });
+    });
+
+    return res.json({ message: 'Cliente excluido definitivamente.' });
   } catch (err) {
-    res.status(500).json({ error: 'Erro ao desativar cliente.' });
+    return res.status(500).json({ error: 'Erro ao excluir cliente.' });
   }
 };
 
