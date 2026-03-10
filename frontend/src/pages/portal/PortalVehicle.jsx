@@ -60,6 +60,34 @@ function formatKm(value) {
   return `${Number(value).toLocaleString('pt-BR')} km`;
 }
 
+function formatRemainingCompact(maintenance) {
+  if (!maintenance) return 'Sem previsao';
+
+  const parts = [];
+  const hasDays = maintenance.daysUntil !== null && maintenance.daysUntil !== undefined && Number.isFinite(Number(maintenance.daysUntil));
+  const hasKm = maintenance.remainingKm !== null && maintenance.remainingKm !== undefined && Number.isFinite(Number(maintenance.remainingKm));
+
+  if (hasDays) {
+    const d = Number(maintenance.daysUntil);
+    if (d < 0) parts.push(`${Math.abs(d)}d atraso`);
+    else parts.push(`${d}d`);
+  }
+
+  if (hasKm) {
+    const km = Math.round(Number(maintenance.remainingKm));
+    if (km < 0) parts.push(`${Math.abs(km).toLocaleString('pt-BR')}km atraso`);
+    else parts.push(`${km.toLocaleString('pt-BR')}km`);
+  }
+
+  return parts.length ? parts.join(' | ') : 'Sem previsao';
+}
+
+function getMaintPriority(item) {
+  if (item?.alertLevel === 'OVERDUE') return 0;
+  if (item?.alertLevel === 'DUE_SOON') return 1;
+  return 2;
+}
+
 export default function PortalVehicle() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -93,6 +121,20 @@ export default function PortalVehicle() {
   }
 
   const { vehicle, maintenances = [], upcomingMaintenances = [], trackingDevices = [], serviceOrders = [] } = data;
+
+  const nextReview = [...(upcomingMaintenances || maintenances || [])].sort((a, b) => {
+    const pa = getMaintPriority(a);
+    const pb = getMaintPriority(b);
+    if (pa !== pb) return pa - pb;
+
+    const ad = a?.nextDate ? new Date(a.nextDate).getTime() : Number.MAX_SAFE_INTEGER;
+    const bd = b?.nextDate ? new Date(b.nextDate).getTime() : Number.MAX_SAFE_INTEGER;
+    if (ad !== bd) return ad - bd;
+
+    const ak = a?.nextKm ?? Number.MAX_SAFE_INTEGER;
+    const bk = b?.nextKm ?? Number.MAX_SAFE_INTEGER;
+    return ak - bk;
+  })[0] || null;
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
@@ -133,6 +175,7 @@ export default function PortalVehicle() {
                     <div style={{ fontWeight: 700, color: MAINT_COLOR[m.alertLevel || 'OK'] }}>{m.label}</div>
                     <div style={{ fontSize: 12, color: '#718096' }}>Próxima data: {formatDate(m.nextDate)} | Próximo km: {formatKm(m.nextKm)}</div>
                     <div style={{ fontSize: 12, color: '#4b5563', marginTop: 4 }}>{DUE_BY_LABEL[m.dueBy || 'NONE']}</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: MAINT_COLOR[m.alertLevel || 'OK'], marginTop: 2 }}>{formatRemainingCompact(m)}</div>
                   </div>
                   <div style={{ fontSize: 12, fontWeight: 700, color: MAINT_COLOR[m.alertLevel || 'OK'] }}>
                     {MAINT_ICON[m.alertLevel || 'OK']} {m.statusLabel || 'Em dia'}
