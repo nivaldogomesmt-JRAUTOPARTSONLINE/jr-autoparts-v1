@@ -14,6 +14,14 @@ function normalizeKey(key) {
     .replace(/[^a-z0-9]/g, '');
 }
 
+function normalizeText(value) {
+  return clean(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .toUpperCase();
+}
+
 function onlyDigits(v) {
   return clean(v).replace(/\D/g, '');
 }
@@ -26,6 +34,22 @@ function normalizeCpfCnpj(v) {
 function normalizePhone(v) {
   const digits = onlyDigits(v);
   return digits || '';
+}
+
+function normalizePlate(v) {
+  return clean(v).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7);
+}
+
+function firstPhone(raw) {
+  const parts = clean(raw)
+    .split(/\n|,|;|\//)
+    .map((p) => onlyDigits(p))
+    .filter(Boolean);
+  if (!parts.length) return null;
+
+  let phone = parts[0];
+  if (phone.length === 10 || phone.length === 11) phone = `55${phone}`;
+  return phone;
 }
 
 function normalizeType(v) {
@@ -52,9 +76,7 @@ function isTruthy(v) {
 
 function pickValue(row, aliases) {
   const normalizedMap = {};
-  for (const key of Object.keys(row)) {
-    normalizedMap[normalizeKey(key)] = row[key];
-  }
+  for (const key of Object.keys(row)) normalizedMap[normalizeKey(key)] = row[key];
 
   for (const alias of aliases) {
     const normalizedAlias = normalizeKey(alias);
@@ -64,6 +86,36 @@ function pickValue(row, aliases) {
   }
 
   return '';
+}
+
+function parseActive(situacao) {
+  const normalized = normalizeText(situacao);
+  if (!normalized) return true;
+  return !normalized.includes('INATIVO');
+}
+
+function safeEmail(value) {
+  const v = clean(value).toLowerCase();
+  if (!v || !v.includes('@')) return null;
+  return v;
+}
+
+function readRowsFromBuffer(buffer, preferredSheetName) {
+  const workbook = XLSX.read(buffer, { type: 'buffer' });
+  const fallbackSheet = workbook.SheetNames[1] || workbook.SheetNames[0];
+  const sheetName = preferredSheetName && workbook.SheetNames.includes(preferredSheetName)
+    ? preferredSheetName
+    : (workbook.SheetNames.includes('Sheet2') ? 'Sheet2' : fallbackSheet);
+  const sheet = workbook.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+  return { rows, sheetName };
+}
+
+function isUniqueViolation(error, fieldName) {
+  if (!error || error.code !== 'P2002') return false;
+  const target = error.meta?.target;
+  if (Array.isArray(target)) return target.includes(fieldName);
+  return String(target || '').includes(fieldName);
 }
 
 async function findExistingClient({ cpfCnpj, email, phone, whatsapp }) {
@@ -97,14 +149,7 @@ async function importClients(req, res) {
     }
 
     const dryRun = isTruthy(req.query.dryRun) || isTruthy(req.body?.dryRun);
-
-    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
-    const sheetName = workbook.SheetNames.includes('Clientes_Importar')
-      ? 'Clientes_Importar'
-      : workbook.SheetNames[0];
-
-    const sheet = workbook.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    const { rows, sheetName } = readRowsFromBuffer(req.file.buffer, 'Clientes_Importar');
 
     if (!rows.length) {
       return res.status(400).json({ error: 'A planilha está vazia.' });
@@ -147,10 +192,7 @@ async function importClients(req, res) {
       const existing = await findExistingClient({ cpfCnpj, email, phone, whatsapp });
       if (existing) {
         skipped++;
-        errors.push({
-          line: lineNumber,
-          error: `Cliente já existe (${existing.name}).`,
-        });
+        errors.push({ line: lineNumber, error: `Cliente já existe (${existing.name}).` });
         continue;
       }
 
@@ -176,10 +218,7 @@ async function importClients(req, res) {
         imported++;
       } catch (err) {
         skipped++;
-        errors.push({
-          line: lineNumber,
-          error: err.message || 'Erro ao salvar cliente.',
-        });
+        errors.push({ line: lineNumber, error: err.message || 'Erro ao salvar cliente.' });
       }
     }
 
@@ -193,10 +232,295 @@ async function importClients(req, res) {
       errors,
     });
   } catch (err) {
-    return res.status(500).json({
-      error: 'Erro ao importar clientes.',
-      details: err.message,
+    return res.status(500).json({ error: 'Erro ao importar clientes.', details: err.message });
+  }
+}
+
+async function importRastrek(req, res) {
+  try {
+    const clientsFile = req.files?.clients?.[0];
+    const vehiclesFile = req.files?.vehicles?.[0];
+
+    if (!clientsFile || !vehiclesFile) {
+      return res.status(400).json({
+        error: 'Envie os dois arquivos: clients (Relação de Clientes) e vehicles (Relação de Veículos).',
+      });
+    }
+
+    const dryRun = isTruthy(req.query.dryRun) || isTruthy(req.body?.dryRun);
+
+    const clientsSheet = readRowsFromBuffer(clientsFile.buffer, 'Sheet2');
+    const vehiclesSheet = readRowsFromBuffer(vehiclesFile.buffer, 'Sheet2');
+
+    const clientRows = clientsSheet.rows;
+    const vehicleRows = vehiclesSheet.rows;
+
+    if (!clientRows.length) {
+      return res.status(400).json({ error: 'Planilha de clientes vazia.' });
+    }
+    if (!vehicleRows.length) {
+      return res.status(400).json({ error: 'Planilha de veículos vazia.' });
+    }
+
+    const existingClients = await prisma.client.findMany({
+      select: { id: true, name: true, email: true, phone: true, whatsapp: true, active: true },
     });
+    const existingVehicles = await prisma.vehicle.findMany({
+      select: { id: true, plate: true, clientId: true, brand: true, model: true },
+    });
+    const existingDevices = await prisma.trackingDevice.findMany({
+      select: { id: true, imei: true, vehicleId: true, clientId: true },
+    });
+
+    const clientByEmail = new Map();
+    const clientByName = new Map();
+    for (const c of existingClients) {
+      if (c.email) clientByEmail.set(c.email.toLowerCase(), c);
+      clientByName.set(normalizeText(c.name), c);
+    }
+
+    const vehicleByPlate = new Map();
+    for (const v of existingVehicles) vehicleByPlate.set(normalizePlate(v.plate), v);
+
+    const deviceByImei = new Map();
+    for (const d of existingDevices) deviceByImei.set(String(d.imei), d);
+
+    const stats = {
+      clientsCreated: 0,
+      clientsUpdated: 0,
+      vehiclesCreated: 0,
+      vehiclesUpdated: 0,
+      devicesCreated: 0,
+      devicesUpdated: 0,
+      skippedVehicles: 0,
+    };
+
+    const nameToClient = new Map();
+
+    for (const row of clientRows) {
+      const name = clean(row['Nome']);
+      if (!name) continue;
+
+      const email = safeEmail(row['E-mail']);
+      const phone = firstPhone(row['Telefones']);
+      const active = parseActive(row['Situação']);
+
+      let match = null;
+      if (email && clientByEmail.has(email)) match = clientByEmail.get(email);
+      if (!match) match = clientByName.get(normalizeText(name));
+
+      if (!dryRun && match) {
+        const data = {};
+        if (!match.email && email) data.email = email;
+        if (!match.phone && phone) data.phone = phone;
+        if (!match.whatsapp && phone) data.whatsapp = phone;
+        if (match.active !== active) data.active = active;
+
+        if (Object.keys(data).length) {
+          const updated = await prisma.client.update({ where: { id: match.id }, data });
+          match = { ...match, ...updated };
+        }
+      }
+
+      if (match) {
+        stats.clientsUpdated += 1;
+        nameToClient.set(normalizeText(name), match);
+        clientByName.set(normalizeText(name), match);
+        if (email) clientByEmail.set(email, match);
+        continue;
+      }
+
+      if (dryRun) {
+        stats.clientsCreated += 1;
+        nameToClient.set(normalizeText(name), { id: `dry-${normalizeText(name)}`, name });
+        continue;
+      }
+
+      let created;
+      try {
+        created = await prisma.client.create({
+          data: {
+            name,
+            email,
+            phone,
+            whatsapp: phone,
+            active,
+            type: 'PERSONAL',
+          },
+        });
+        stats.clientsCreated += 1;
+      } catch (error) {
+        if (!isUniqueViolation(error, 'email') || !email) throw error;
+        const existingByEmail = await prisma.client.findUnique({ where: { email } });
+        if (!existingByEmail) throw error;
+        created = existingByEmail;
+        stats.clientsUpdated += 1;
+      }
+
+      nameToClient.set(normalizeText(name), created);
+      clientByName.set(normalizeText(name), created);
+      if (email) clientByEmail.set(email, created);
+    }
+
+    for (const row of vehicleRows) {
+      const clientName = clean(row['Cliente']);
+      const normalizedClientName = normalizeText(clientName);
+      const plate = normalizePlate(row['Placa']);
+      const imei = onlyDigits(row['IMEI']);
+      const trackerModel = clean(row['Rastreador']);
+      const chip = firstPhone(row['Chip']);
+
+      if (!plate) {
+        stats.skippedVehicles += 1;
+        continue;
+      }
+
+      let client = nameToClient.get(normalizedClientName) || clientByName.get(normalizedClientName);
+      if (!client) {
+        if (dryRun) {
+          stats.clientsCreated += 1;
+          client = { id: `dry-${normalizedClientName}`, name: clientName || 'Cliente sem nome' };
+        } else {
+          client = await prisma.client.create({
+            data: {
+              name: clientName || `Cliente ${plate}`,
+              type: 'PERSONAL',
+              active: true,
+            },
+          });
+          stats.clientsCreated += 1;
+          clientByName.set(normalizedClientName, client);
+        }
+        nameToClient.set(normalizedClientName, client);
+      }
+
+      const currentVehicle = vehicleByPlate.get(plate);
+      let vehicle;
+
+      if (currentVehicle) {
+        if (!dryRun) {
+          vehicle = await prisma.vehicle.update({
+            where: { id: currentVehicle.id },
+            data: {
+              clientId: client.id,
+              active: true,
+              brand: currentVehicle.brand || 'Nao informado',
+              model: currentVehicle.model || 'Nao informado',
+            },
+          });
+          vehicleByPlate.set(plate, vehicle);
+        } else {
+          vehicle = currentVehicle;
+        }
+        stats.vehiclesUpdated += 1;
+      } else if (dryRun) {
+        vehicle = { id: `dry-veh-${plate}`, plate, clientId: client.id };
+        stats.vehiclesCreated += 1;
+      } else {
+        try {
+          vehicle = await prisma.vehicle.create({
+            data: {
+              clientId: client.id,
+              plate,
+              brand: 'Nao informado',
+              model: 'Nao informado',
+              active: true,
+            },
+          });
+          stats.vehiclesCreated += 1;
+        } catch (error) {
+          if (!isUniqueViolation(error, 'plate')) throw error;
+          const existingByPlate = await prisma.vehicle.findFirst({ where: { plate } });
+          if (!existingByPlate) throw error;
+          vehicle = await prisma.vehicle.update({
+            where: { id: existingByPlate.id },
+            data: {
+              clientId: client.id,
+              active: true,
+              brand: existingByPlate.brand || 'Nao informado',
+              model: existingByPlate.model || 'Nao informado',
+            },
+          });
+          stats.vehiclesUpdated += 1;
+        }
+        vehicleByPlate.set(plate, vehicle);
+      }
+
+      if (!imei) continue;
+
+      const existingDevice = deviceByImei.get(imei);
+      if (existingDevice) {
+        if (!dryRun) {
+          const updatedDevice = await prisma.trackingDevice.update({
+            where: { id: existingDevice.id },
+            data: {
+              clientId: client.id,
+              vehicleId: vehicle.id,
+              model: trackerModel || 'Rastreador',
+              chipNumber: chip,
+              status: 'ACTIVE',
+            },
+          });
+          deviceByImei.set(imei, updatedDevice);
+        }
+        stats.devicesUpdated += 1;
+        continue;
+      }
+
+      if (dryRun) {
+        stats.devicesCreated += 1;
+        continue;
+      }
+
+      try {
+        const createdDevice = await prisma.trackingDevice.create({
+          data: {
+            clientId: client.id,
+            vehicleId: vehicle.id,
+            model: trackerModel || 'Rastreador',
+            imei,
+            chipNumber: chip,
+            status: 'ACTIVE',
+            installedAt: new Date(),
+          },
+        });
+        deviceByImei.set(imei, createdDevice);
+        stats.devicesCreated += 1;
+      } catch (error) {
+        if (!isUniqueViolation(error, 'imei')) throw error;
+        const existingByImei = await prisma.trackingDevice.findFirst({ where: { imei } });
+        if (!existingByImei) throw error;
+
+        const updatedByImei = await prisma.trackingDevice.update({
+          where: { id: existingByImei.id },
+          data: {
+            clientId: client.id,
+            vehicleId: vehicle.id,
+            model: trackerModel || 'Rastreador',
+            chipNumber: chip,
+            status: 'ACTIVE',
+          },
+        });
+        deviceByImei.set(imei, updatedByImei);
+        stats.devicesUpdated += 1;
+      }
+    }
+
+    return res.json({
+      message: dryRun ? 'Simulação Rastrek concluída.' : 'Importação Rastrek concluída.',
+      mode: dryRun ? 'DRY_RUN' : 'IMPORT',
+      sheets: {
+        clients: clientsSheet.sheetName,
+        vehicles: vehiclesSheet.sheetName,
+      },
+      totalRows: {
+        clients: clientRows.length,
+        vehicles: vehicleRows.length,
+      },
+      summary: stats,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: 'Erro ao importar arquivos da Rastrek.', details: err.message });
   }
 }
 
@@ -210,7 +534,7 @@ function downloadImportTemplate(req, res) {
         whatsapp: '65999990000',
         email: 'cliente@exemplo.com',
         address: 'Rua Exemplo, 123',
-        city: 'Cuiabá',
+        city: 'Cuiaba',
         type: 'PERSONAL',
         active: true,
       },
@@ -232,4 +556,4 @@ function downloadImportTemplate(req, res) {
   }
 }
 
-module.exports = { importClients, downloadImportTemplate };
+module.exports = { importClients, importRastrek, downloadImportTemplate };
