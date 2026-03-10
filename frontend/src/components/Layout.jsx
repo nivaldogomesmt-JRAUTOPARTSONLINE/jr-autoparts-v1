@@ -15,6 +15,7 @@ const NAV = [
   { section: 'OPERACIONAL', items: [
     { to: '/os', icon: '📋', label: 'Ordens de Servico' },
     { to: '/manutencao', icon: '⚙', label: 'Manutencao Prev.' },
+    { to: '/tracking', icon: 'RF', label: 'Rastreamento' },
   ]},
   { section: 'COMUNICACAO', items: [
     { to: '/mensagens', icon: '💬', label: 'Mensagens WhatsApp' },
@@ -105,3 +106,5 @@ export default function Layout() {
     </div>
   );
 }
+
+

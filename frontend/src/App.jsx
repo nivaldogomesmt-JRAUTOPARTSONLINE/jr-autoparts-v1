@@ -23,6 +23,7 @@ import MaintenancePage from './pages/maintenance/MaintenancePage';
 import MessagesPage from './pages/messages/MessagesPage';
 import CompanyAssetsPage from './pages/admin/CompanyAssetsPage';
 import DigitalAccountsPage from './pages/admin/DigitalAccountsPage';
+import TrackingPage from './pages/tracking/TrackingPage';
 
 // Portal do cliente
 import PortalLogin from './pages/portal/PortalLogin';
@@ -82,6 +83,7 @@ function AppRoutes() {
         <Route path="mensagens" element={<MessagesPage />} />
         <Route path="ativos" element={<CompanyAssetsPage />} />
         <Route path="contas-digitais" element={<DigitalAccountsPage />} />
+        <Route path="tracking" element={<TrackingPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
@@ -98,5 +100,7 @@ export default function App() {
     </BrowserRouter>
   );
 }
+
+
 
 

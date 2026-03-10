@@ -1,4 +1,4 @@
-﻿require('dotenv').config();
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const prisma = require('./src/lib/prisma');
@@ -13,13 +13,13 @@ const allowedOrigins = [
 app.use(cors({
   origin(origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error('Origem nÃ£o permitida pelo CORS.'));
+    return callback(new Error('Origem não permitida pelo CORS.'));
   },
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(createRateLimit({ windowMs: 60_000, max: 300, keyPrefix: 'api', message: 'Muitas requisiÃ§Ãµes. Aguarde alguns instantes.' }));
+app.use(createRateLimit({ windowMs: 60_000, max: 300, keyPrefix: 'api', message: 'Muitas requisições. Aguarde alguns instantes.' }));
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString(), app: 'JR Auto Parts API' });
@@ -38,9 +38,10 @@ app.use('/api/portal',       require('./src/routes/portalRoutes'));
 app.use('/api/dashboard',    require('./src/routes/dashboardRoutes'));
 app.use('/api/company-assets', require('./src/routes/companyAssetRoutes'));
 app.use('/api/digital-accounts', require('./src/routes/digitalAccountRoutes'));
+app.use('/api/tracking', require('./src/routes/trackingRoutes'));
 
 app.use((req, res) => {
-  res.status(404).json({ error: 'Rota nÃ£o encontrada' });
+  res.status(404).json({ error: 'Rota não encontrada' });
 });
 
 app.use((err, req, res, next) => {
@@ -49,9 +50,9 @@ app.use((err, req, res, next) => {
     return res.status(409).json({ error: 'Registro duplicado. Verifique os dados e tente novamente.' });
   }
   if (err.code === 'P2025') {
-    return res.status(404).json({ error: 'Registro nÃ£o encontrado.' });
+    return res.status(404).json({ error: 'Registro não encontrado.' });
   }
-  if (err.message === 'Origem nÃ£o permitida pelo CORS.') {
+  if (err.message === 'Origem não permitida pelo CORS.') {
     return res.status(403).json({ error: err.message });
   }
   return res.status(err.status || 500).json({ error: err.publicMessage || 'Erro interno do servidor.' });
@@ -76,4 +77,5 @@ async function shutdown() {
 
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+
 

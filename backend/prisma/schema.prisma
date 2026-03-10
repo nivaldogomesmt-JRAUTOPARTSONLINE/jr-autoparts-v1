@@ -50,6 +50,8 @@ model Client {
   vehicles      Vehicle[]
   serviceOrders ServiceOrder[]
   messages      WhatsappMessage[]
+  trackingDevices TrackingDevice[]
+  trackingContracts TrackingContract[]
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @updatedAt @map("updated_at")
 
@@ -77,6 +79,8 @@ model Vehicle {
   client        Client        @relation(fields: [clientId], references: [id])
   serviceOrders ServiceOrder[]
   maintenances  PreventiveMaintenance[]
+  trackingDevices TrackingDevice[]
+  trackingContracts TrackingContract[]
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @updatedAt @map("updated_at")
 
@@ -306,3 +310,91 @@ enum DigitalAccountStatus {
   INACTIVE
   PENDING
 }
+
+model TrackingDevice {
+  id          String               @id @default(uuid())
+  clientId    String?              @map("client_id")
+  vehicleId   String?              @map("vehicle_id")
+  model       String
+  imei        String               @unique
+  chipNumber  String?              @map("chip_number")
+  carrier     String?
+  status      TrackingDeviceStatus @default(STOCK)
+  installedAt DateTime?            @map("installed_at")
+  notes       String?
+  client      Client?              @relation(fields: [clientId], references: [id])
+  vehicle     Vehicle?             @relation(fields: [vehicleId], references: [id])
+  contracts   TrackingContract[]
+  createdAt   DateTime             @default(now()) @map("created_at")
+  updatedAt   DateTime             @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([clientId])
+  @@index([vehicleId])
+  @@map("tracking_devices")
+}
+
+enum TrackingDeviceStatus {
+  ACTIVE
+  STOCK
+  MAINTENANCE
+  REMOVED
+}
+
+model TrackingContract {
+  id             String                @id @default(uuid())
+  clientId       String                @map("client_id")
+  vehicleId      String                @map("vehicle_id")
+  deviceId       String                @map("device_id")
+  monthlyAmount  Decimal               @db.Decimal(10, 2) @map("monthly_amount")
+  dueDay         Int                   @map("due_day")
+  startDate      DateTime              @map("start_date")
+  endDate        DateTime?             @map("end_date")
+  status         TrackingContractStatus @default(ACTIVE)
+  notes          String?
+  client         Client                @relation(fields: [clientId], references: [id])
+  vehicle        Vehicle               @relation(fields: [vehicleId], references: [id])
+  device         TrackingDevice        @relation(fields: [deviceId], references: [id])
+  invoices       TrackingInvoice[]
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([clientId])
+  @@index([vehicleId])
+  @@index([deviceId])
+  @@map("tracking_contracts")
+}
+
+enum TrackingContractStatus {
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+}
+
+model TrackingInvoice {
+  id             String               @id @default(uuid())
+  contractId     String               @map("contract_id")
+  referenceMonth String               @map("reference_month")
+  dueDate        DateTime             @map("due_date")
+  paidAt         DateTime?            @map("paid_at")
+  amount         Decimal              @db.Decimal(10, 2)
+  status         TrackingInvoiceStatus @default(PENDING)
+  notes          String?
+  contract       TrackingContract     @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+
+  @@unique([contractId, referenceMonth])
+  @@index([status])
+  @@index([dueDate])
+  @@map("tracking_invoices")
+}
+
+enum TrackingInvoiceStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+

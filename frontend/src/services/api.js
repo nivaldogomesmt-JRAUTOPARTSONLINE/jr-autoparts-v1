@@ -1,10 +1,10 @@
-﻿import axios from 'axios';
+import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 const api = axios.create({ baseURL: API_URL });
 
-// Injeta token em todas as requisiÃ§Ãµes
+// Injeta token em todas as requisições
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('jr_token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
@@ -26,7 +26,7 @@ api.interceptors.response.use(
   }
 );
 
-// â”€â”€â”€ AUTH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── AUTH ─────────────────────────────────────────────────────────────────────
 export const authAPI = {
   login:          (data) => api.post('/auth/login', data),
   me:             ()     => api.get('/auth/me'),
@@ -35,7 +35,7 @@ export const authAPI = {
   listUsers:      ()     => api.get('/auth/users'),
 };
 
-// â”€â”€â”€ CLIENTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── CLIENTS ──────────────────────────────────────────────────────────────────
 export const clientsAPI = {
   list:               (params) => api.get('/clients', { params }),
   get:                (id)     => api.get(`/clients/${id}`),
@@ -55,7 +55,7 @@ export const clientsAPI = {
   exportFile:         (params) => api.get('/clients/export', { params, responseType: 'blob' }),
 };
 
-// â”€â”€â”€ VEHICLES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── VEHICLES ─────────────────────────────────────────────────────────────────
 export const vehiclesAPI = {
   list:    (params)    => api.get('/vehicles', { params }),
   get:     (id)        => api.get(`/vehicles/${id}`),
@@ -65,7 +65,7 @@ export const vehiclesAPI = {
   history: (id)        => api.get(`/vehicles/${id}/history`),
 };
 
-// â”€â”€â”€ PRODUCTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── PRODUCTS ─────────────────────────────────────────────────────────────────
 export const productsAPI = {
   list:   (params)   => api.get('/products', { params }),
   get:    (id)       => api.get(`/products/${id}`),
@@ -74,7 +74,7 @@ export const productsAPI = {
   remove: (id)       => api.delete(`/products/${id}`),
 };
 
-// â”€â”€â”€ SERVICES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── SERVICES ─────────────────────────────────────────────────────────────────
 export const servicesAPI = {
   list:   (params)   => api.get('/services', { params }),
   get:    (id)       => api.get(`/services/${id}`),
@@ -83,7 +83,7 @@ export const servicesAPI = {
   remove: (id)       => api.delete(`/services/${id}`),
 };
 
-// â”€â”€â”€ SERVICE ORDERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── SERVICE ORDERS ───────────────────────────────────────────────────────────
 export const soAPI = {
   list:         (params)   => api.get('/so', { params }),
   get:          (id)       => api.get(`/so/${id}`),
@@ -92,7 +92,7 @@ export const soAPI = {
   updateStatus: (id, data) => api.put(`/so/${id}/status`, data),
 };
 
-// â”€â”€â”€ MAINTENANCE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── MAINTENANCE ──────────────────────────────────────────────────────────────
 export const maintenanceAPI = {
   alerts:    ()            => api.get('/maintenance/alerts'),
   byVehicle: (vehicleId)  => api.get(`/maintenance/vehicle/${vehicleId}`),
@@ -100,19 +100,19 @@ export const maintenanceAPI = {
   markDone:  (vehicleId, data) => api.post(`/maintenance/vehicle/${vehicleId}/mark-done`, data),
 };
 
-// â”€â”€â”€ MESSAGES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── MESSAGES ─────────────────────────────────────────────────────────────────
 export const messagesAPI = {
   list:   (params) => api.get('/messages', { params }),
   send:   (data)   => api.post('/messages/send', data),
   resend: (id)     => api.post(`/messages/${id}/resend`),
 };
 
-// â”€â”€â”€ DASHBOARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── DASHBOARD ────────────────────────────────────────────────────────────────
 export const dashboardAPI = {
   get: () => api.get('/dashboard'),
 };
 
-// â”€â”€â”€ PORTAL (cliente) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── PORTAL (cliente) ─────────────────────────────────────────────────────────
 export const companyAssetsAPI = {
   list:   (params)   => api.get('/company-assets', { params }),
   get:    (id)       => api.get(`/company-assets/${id}`),
@@ -135,7 +135,20 @@ export const portalAPI = {
   soDetail:      (id)       => api.get(`/portal/so/${id}`),
 };
 
+
+export const trackingAPI = {
+  summary:      () => api.get('/tracking/summary'),
+  listDevices:  () => api.get('/tracking/devices'),
+  createDevice: (data) => api.post('/tracking/devices', data),
+  updateDevice: (id, data) => api.put(`/tracking/devices/${id}`, data),
+  listContracts: () => api.get('/tracking/contracts'),
+  createContract: (data) => api.post('/tracking/contracts', data),
+  listInvoices: (params) => api.get('/tracking/invoices', { params }),
+  createInvoice: (data) => api.post('/tracking/invoices', data),
+  payInvoice: (id) => api.post(`/tracking/invoices/${id}/pay`),
+};
 export default api;
+
 
 
 
