@@ -27,6 +27,7 @@ export default function ClientsPage() {
   const [importingRastrek, setImportingRastrek] = useState(false);
   const [rastrekResult, setRastrekResult] = useState(null);
   const [rastrekError, setRastrekError] = useState('');
+  const [exportingConsolidated, setExportingConsolidated] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -69,6 +70,30 @@ export default function ClientsPage() {
 
   const summaryRows = formatSummary(rastrekResult?.summary);
 
+  const downloadConsolidatedExport = async () => {
+    setExportingConsolidated(true);
+    try {
+      const res = await clientsAPI.exportConsolidated({ search });
+      const blob = new Blob([res.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const today = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `clientes_placas_consolidado_${today}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      setRastrekError('Nao foi possivel exportar a planilha consolidada.');
+    } finally {
+      setExportingConsolidated(false);
+    }
+  };
+
   return (
     <div>
       <div className="page-header">
@@ -76,7 +101,17 @@ export default function ClientsPage() {
           <div className="page-title">Clientes</div>
           <div className="page-subtitle">{total} clientes cadastrados</div>
         </div>
-        <Link to="/clientes/novo" className="btn btn-primary">+ Novo Cliente</Link>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={downloadConsolidatedExport}
+            disabled={exportingConsolidated}
+          >
+            {exportingConsolidated ? 'Exportando...' : 'Exportar cliente + placas'}
+          </button>
+          <Link to="/clientes/novo" className="btn btn-primary">+ Novo Cliente</Link>
+        </div>
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
@@ -221,3 +256,6 @@ export default function ClientsPage() {
     </div>
   );
 }
+
+
+

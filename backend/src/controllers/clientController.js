@@ -1,4 +1,4 @@
-const bcrypt = require('bcryptjs');
+﻿const bcrypt = require('bcryptjs');
 const prisma = require('../lib/prisma');
 const XLSX = require('xlsx');
 
@@ -51,7 +51,7 @@ const get = async (req, res) => {
         user: { select: { id: true, email: true, role: true } },
       },
     });
-    if (!client) return res.status(404).json({ error: 'Cliente não encontrado.' });
+    if (!client) return res.status(404).json({ error: 'Cliente nÃ£o encontrado.' });
     res.json(client);
   } catch (err) {
     res.status(500).json({ error: 'Erro ao buscar cliente.' });
@@ -62,7 +62,7 @@ const get = async (req, res) => {
 const create = async (req, res) => {
   try {
     const { name, cpfCnpj, phone, whatsapp, email, address, city, type, createPortalAccess, password } = req.body;
-    if (!name) return res.status(400).json({ error: 'Nome é obrigatório.' });
+    if (!name) return res.status(400).json({ error: 'Nome Ã© obrigatÃ³rio.' });
 
     const client = await prisma.client.create({
       data: { name, cpfCnpj, phone, whatsapp, email, address, city, type: type || 'PERSONAL' },
@@ -84,7 +84,7 @@ const create = async (req, res) => {
 
     res.status(201).json(client);
   } catch (err) {
-    if (err.code === 'P2002') return res.status(409).json({ error: 'CPF/CNPJ ou email já cadastrado.' });
+    if (err.code === 'P2002') return res.status(409).json({ error: 'CPF/CNPJ ou email jÃ¡ cadastrado.' });
     res.status(500).json({ error: 'Erro ao criar cliente.' });
   }
 };
@@ -99,7 +99,7 @@ const update = async (req, res) => {
     });
     res.json(client);
   } catch (err) {
-    if (err.code === 'P2025') return res.status(404).json({ error: 'Cliente não encontrado.' });
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Cliente nÃ£o encontrado.' });
     res.status(500).json({ error: 'Erro ao atualizar cliente.' });
   }
 };
@@ -124,7 +124,7 @@ const grantPortalAccess = async (req, res) => {
     }
 
     const exists = await prisma.user.findFirst({ where: { clientId: client.id } });
-    if (exists) return res.status(409).json({ error: 'Cliente já tem acesso ao portal.' });
+    if (exists) return res.status(409).json({ error: 'Cliente jÃ¡ tem acesso ao portal.' });
 
     const passwordHash = await bcrypt.hash(password || 'JR@2024', 10);
     await prisma.user.create({
@@ -194,6 +194,67 @@ const exportClients = async (req, res) => {
   }
 };
 
-module.exports = { list, get, create, update, remove, grantPortalAccess, exportClients };
+
+// GET /api/clients/export/consolidated
+const exportClientsConsolidated = async (req, res) => {
+  try {
+    const { search } = req.query;
+    const where = {
+      active: true,
+      ...(search && {
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { cpfCnpj: { contains: search } },
+          { phone: { contains: search } },
+          { email: { contains: search, mode: 'insensitive' } },
+        ],
+      }),
+    };
+
+    const clients = await prisma.client.findMany({
+      where,
+      include: {
+        vehicles: {
+          where: { active: true },
+          orderBy: { plate: 'asc' },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    const rows = clients.map((c) => {
+      const vehiclePlates = c.vehicles.map((v) => v.plate).filter(Boolean);
+      return {
+        name: c.name || '',
+        cpfCnpj: c.cpfCnpj || '',
+        phone: c.phone || '',
+        whatsapp: c.whatsapp || '',
+        email: c.email || '',
+        city: c.city || '',
+        totalVehicles: vehiclePlates.length,
+        plates: vehiclePlates.join(', '),
+      };
+    });
+
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(rows, {
+      header: ['name', 'cpfCnpj', 'phone', 'whatsapp', 'email', 'city', 'totalVehicles', 'plates'],
+    });
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Clientes_Placas');
+
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    const now = new Date().toISOString().slice(0, 10);
+    const filename = `clientes_placas_consolidado_${now}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.send(buffer);
+  } catch (err) {
+    return res.status(500).json({ error: 'Erro ao exportar clientes consolidados.' });
+  }
+};
+module.exports = { list, get, create, update, remove, grantPortalAccess, exportClients, exportClientsConsolidated };
+
+
 
 

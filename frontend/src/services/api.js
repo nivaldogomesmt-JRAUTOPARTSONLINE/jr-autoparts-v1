@@ -62,6 +62,7 @@ export const clientsAPI = {
   },
   downloadTemplate:   ()       => api.get('/clients/import/template', { responseType: 'blob' }),
   exportFile:         (params) => api.get('/clients/export', { params, responseType: 'blob' }),
+  exportConsolidated: (params) => api.get('/clients/export/consolidated', { params, responseType: 'blob' }),
 };
 
 // â”€â”€â”€ VEHICLES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -160,6 +161,7 @@ export const trackingAPI = {
   runCollect: () => api.post('/tracking/jobs/collect'),
 };
 export default api;
+
 
 
 
