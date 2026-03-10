@@ -136,6 +136,7 @@ export default function SODetail() {
       content: m.content,
       title: `WhatsApp ${MESSAGE_STATUS[m.status]?.label || m.status}`,
       subtitle: m.phone || '',
+      errorMessage: m.errorMessage || '',
     }));
 
     return [...statusEvents, ...messageEvents].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -303,10 +304,15 @@ export default function SODetail() {
                       <>
                         <div className="text-sm text-muted" style={{ marginBottom: 4 }}>{event.subtitle}</div>
                         <div style={{ fontSize: 13, marginBottom: 8, whiteSpace: 'pre-wrap' }}>{event.content}</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                           <span className={`badge ${MESSAGE_STATUS[event.status]?.badge || 'badge-gray'}`}>
                             {MESSAGE_STATUS[event.status]?.label || event.status}
                           </span>
+                          {event.status === 'FAILED' && event.errorMessage ? (
+                            <span className="text-sm" style={{ color: '#b91c1c' }} title={event.errorMessage}>
+                              Erro: {event.errorMessage}
+                            </span>
+                          ) : null}
                           {event.status === 'FAILED' ? (
                             <button
                               type="button"
@@ -353,9 +359,18 @@ export default function SODetail() {
             </div>
             <div style={{ display: 'grid', gap: 6 }}>
               {(os.messages || []).slice(0, 5).map((m) => (
-                <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderBottom: '1px solid #f1f5f9', paddingBottom: 6 }}>
-                  <span>{formatDateTime(m.createdAt)}</span>
-                  <span className={`badge ${MESSAGE_STATUS[m.status]?.badge || 'badge-gray'}`}>{MESSAGE_STATUS[m.status]?.label || m.status}</span>
+                <div key={m.id} style={{ fontSize: 13, borderBottom: '1px solid #f1f5f9', paddingBottom: 6 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>{formatDateTime(m.createdAt)}</span>
+                    <span className={`badge ${MESSAGE_STATUS[m.status]?.badge || 'badge-gray'}`}>
+                      {MESSAGE_STATUS[m.status]?.label || m.status}
+                    </span>
+                  </div>
+                  {m.status === 'FAILED' && m.errorMessage ? (
+                    <div className="text-sm" style={{ color: '#b91c1c', marginTop: 4 }} title={m.errorMessage}>
+                      {m.errorMessage}
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -366,3 +381,7 @@ export default function SODetail() {
     </div>
   );
 }
+
+
+
+
