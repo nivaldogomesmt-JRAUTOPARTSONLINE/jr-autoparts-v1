@@ -13,7 +13,8 @@
                     "db:studio":  "prisma studio",
                     "db:seed:assets":  "node scripts/seed_company_assets.js",
                     "tracking:jobs":  "node scripts/run_tracking_jobs.js",
-                    "tracking:generate":  "node scripts/run_tracking_jobs.js"
+                    "tracking:generate":  "node scripts/run_tracking_jobs.js",
+                    "products:import:csv":  "node scripts/import_products_csv.js"
                 },
     "dependencies":  {
                          "@prisma/client":  "^5.10.0",

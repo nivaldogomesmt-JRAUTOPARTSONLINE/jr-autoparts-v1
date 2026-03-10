@@ -1,6 +1,7 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { BRAND } from '../config/brand';
 
 const BASE_NAV = [
   {
@@ -67,7 +68,8 @@ export default function Layout() {
 
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-logo">
-          JR <span>Auto Parts</span>
+          <img src={BRAND.logoUrl} alt={BRAND.name} className="sidebar-logo-image" />
+          <div className="sidebar-logo-text">{BRAND.name}</div>
         </div>
 
         <nav className="sidebar-nav">
@@ -115,7 +117,7 @@ export default function Layout() {
           </button>
           <style>{`@media (max-width: 768px) { #menu-btn { display: flex !important; } }`}</style>
 
-          <span style={{ fontWeight: 600, color: '#1A3C5E' }}>JR Auto Parts</span>
+          <span style={{ fontWeight: 600, color: '#1A3C5E' }}>{BRAND.name}</span>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 13, color: '#64748b' }}>
@@ -126,6 +128,13 @@ export default function Layout() {
         </header>
 
         <div className="main-body">
+          <div className="print-brand-header" aria-hidden="true">
+            <img src={BRAND.logoUrl} alt={BRAND.name} className="print-brand-logo" />
+            <div>
+              <div className="print-brand-title">{BRAND.name}</div>
+              <div className="print-brand-subtitle">WhatsApp: {BRAND.phone}</div>
+            </div>
+          </div>
           <Outlet />
         </div>
       </div>

@@ -1,60 +1,143 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { productsAPI } from '../../services/api';
 
+function money(v) {
+  return `R$ ${Number(v || 0).toFixed(2).replace('.', ',')}`;
+}
+
+function stockClass(stock) {
+  if (stock <= 0) return 'badge-red';
+  if (stock <= 2) return 'badge-yellow';
+  return 'badge-green';
+}
+
+function ProductCard({ product }) {
+  const stock = Number(product.stock || 0);
+  return (
+    <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', background: '#fff' }}>
+      <div style={{ height: 150, background: 'linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+        {product.photoUrl ? (
+          <img src={product.photoUrl} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        ) : (
+          <span style={{ fontSize: 38 }}>??</span>
+        )}
+      </div>
+
+      <div style={{ padding: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <span className="badge badge-gray" style={{ fontSize: 10 }}>{product.category || 'Sem categoria'}</span>
+          <span className={`badge ${stockClass(stock)}`} style={{ fontSize: 10 }}>Estoque: {stock}</span>
+        </div>
+
+        <div style={{ fontWeight: 700, color: '#0f172a', minHeight: 40, lineHeight: 1.35 }}>{product.name}</div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+          <strong style={{ color: '#1A3C5E', fontSize: 16 }}>{money(product.price)}</strong>
+          <Link to={`/produtos/${product.id}/editar`} className="btn btn-ghost btn-sm">Editar</Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ProductsPage() {
-  const [products, setProducts] = useState([]); const [total, setTotal] = useState(0);
-  const [search, setSearch] = useState(''); const [category, setCategory] = useState('');
-  const [categories, setCategories] = useState([]); const [page, setPage] = useState(1); const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('');
+  const [categories, setCategories] = useState([]);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
 
   const load = async () => {
     setLoading(true);
     try {
       const res = await productsAPI.list({ search, category, page, limit: 30 });
-      setProducts(res.data.data); setTotal(res.data.total);
+      setProducts(res.data.data || []);
+      setTotal(res.data.total || 0);
       if (res.data.categories) setCategories(res.data.categories);
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
-  useEffect(() => { load(); }, [search, category, page]);
+
+  useEffect(() => {
+    load();
+  }, [search, category, page]);
+
+  const stats = useMemo(() => {
+    const stockTotal = products.reduce((acc, p) => acc + Number(p.stock || 0), 0);
+    const lowStock = products.filter((p) => Number(p.stock || 0) <= 2).length;
+    const withoutPrice = products.filter((p) => Number(p.price || 0) <= 0).length;
+    return { stockTotal, lowStock, withoutPrice };
+  }, [products]);
 
   return (
     <div>
       <div className="page-header">
-        <div><div className="page-title">Produtos</div><div className="page-subtitle">{total} produtos cadastrados</div></div>
-        <Link to="/produtos/novo" className="btn btn-primary">+ Novo Produto</Link>
+        <div>
+          <div className="page-title">Produtos</div>
+          <div className="page-subtitle">{total} produtos cadastrados</div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Link to="/produtos/novo" className="btn btn-primary">+ Novo Produto</Link>
+        </div>
       </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 14 }}>
+        <div className="card" style={{ padding: 12 }}>
+          <div className="text-sm text-muted">Estoque (pagina atual)</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: '#1A3C5E' }}>{stats.stockTotal}</div>
+        </div>
+        <div className="card" style={{ padding: 12 }}>
+          <div className="text-sm text-muted">Baixo estoque</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: '#ca8a04' }}>{stats.lowStock}</div>
+        </div>
+        <div className="card" style={{ padding: 12 }}>
+          <div className="text-sm text-muted">Sem preco</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: '#dc2626' }}>{stats.withoutPrice}</div>
+        </div>
+      </div>
+
       <div className="card" style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <input className="form-control" placeholder="🔍  Nome, descrição ou categoria..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}/>
-          </div>
-          <select className="form-control" style={{ width: 200 }} value={category} onChange={e => { setCategory(e.target.value); setPage(1); }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: 10 }}>
+          <input
+            className="form-control"
+            placeholder="Buscar por nome, categoria ou descricao..."
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+          />
+
+          <select
+            className="form-control"
+            value={category}
+            onChange={(e) => {
+              setCategory(e.target.value);
+              setPage(1);
+            }}
+          >
             <option value="">Todas as categorias</option>
-            {categories.map(c => <option key={c} value={c}>{c}</option>)}
+            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
       </div>
+
       <div className="card">
-        {loading ? <div className="loading"><div className="spinner"/></div> : products.length === 0 ? (
-          <div className="empty-state"><div className="empty-state-icon">📦</div><div className="empty-state-text">Nenhum produto encontrado</div>
-            <Link to="/produtos/novo" className="btn btn-primary btn-sm" style={{ marginTop: 12 }}>+ Cadastrar Produto</Link></div>
+        {loading ? (
+          <div className="loading"><div className="spinner" /></div>
+        ) : products.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-state-icon">??</div>
+            <div className="empty-state-text">Nenhum produto encontrado</div>
+            <Link to="/produtos/novo" className="btn btn-primary btn-sm" style={{ marginTop: 12 }}>+ Cadastrar Produto</Link>
+          </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
-            {products.map(p => (
-              <div key={p.id} style={{ border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden', background: 'white' }}>
-                <div style={{ height: 140, background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                  {p.photoUrl ? <img src={p.photoUrl} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }}/> : <span style={{ fontSize: 40 }}>📦</span>}
-                </div>
-                <div style={{ padding: '10px 12px' }}>
-                  {p.category && <span className="badge badge-gray" style={{ fontSize: 10, marginBottom: 4 }}>{p.category}</span>}
-                  <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{p.name}</div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontWeight: 700, color: '#1A3C5E' }}>R$ {parseFloat(p.price).toFixed(2).replace('.', ',')}</span>
-                    <Link to={`/produtos/${p.id}/editar`} className="btn btn-ghost btn-sm">✏️</Link>
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
+            {products.map((p) => <ProductCard key={p.id} product={p} />)}
           </div>
         )}
       </div>
