@@ -9,16 +9,33 @@ const invoiceBandLabel = {
   RECOVERY: 'Elegivel retirada (+90d)',
 };
 
+const deviceStatusLabel = {
+  ACTIVE: 'Ativo',
+  STOCK: 'Estoque',
+  MAINTENANCE: 'Manutencao',
+  REMOVED: 'Removido',
+};
+
+const deviceStatusBadgeClass = {
+  ACTIVE: 'badge-green',
+  STOCK: 'badge-blue',
+  MAINTENANCE: 'badge-yellow',
+  REMOVED: 'badge-red',
+};
+
 export default function TrackingPage() {
   const [summary, setSummary] = useState(null);
   const [devices, setDevices] = useState([]);
+  const [allDevices, setAllDevices] = useState([]);
   const [contracts, setContracts] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [clients, setClients] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deviceListLoading, setDeviceListLoading] = useState(false);
   const [jobReferenceMonth, setJobReferenceMonth] = useState('');
+  const [deviceFilters, setDeviceFilters] = useState({ search: '', status: 'ALL' });
 
   const [deviceForm, setDeviceForm] = useState({
     model: '', imei: '', chipNumber: '', carrier: '', status: 'STOCK', clientId: '', vehicleId: '', notes: '',
@@ -30,33 +47,64 @@ export default function TrackingPage() {
     contractId: '', referenceMonth: '', dueDate: '', amount: '', notes: '',
   });
 
-  const loadAll = async () => {
+  const loadBaseData = async () => {
     setLoading(true);
     try {
-      const [s, d, c, i, cl, vh] = await Promise.all([
+      const [s, c, i, cl, vh, allD] = await Promise.all([
         trackingAPI.summary(),
-        trackingAPI.listDevices(),
         trackingAPI.listContracts(),
         trackingAPI.listInvoices(),
         clientsAPI.list({ page: 1, limit: 5000 }),
         vehiclesAPI.list({ page: 1, limit: 5000 }),
+        trackingAPI.listDevices(),
       ]);
       setSummary(s.data);
-      setDevices(d.data || []);
       setContracts(c.data || []);
       setInvoices(i.data || []);
       setClients(cl.data?.data || []);
       setVehicles(vh.data?.data || []);
+      setAllDevices(allD.data || []);
     } finally {
       setLoading(false);
     }
   };
 
+  const loadDevices = async (filters = deviceFilters) => {
+    setDeviceListLoading(true);
+    try {
+      const params = {};
+      const trimmedSearch = String(filters.search || '').trim();
+      if (trimmedSearch) params.search = trimmedSearch;
+      if (filters.status && filters.status !== 'ALL') params.status = filters.status;
+
+      const d = await trackingAPI.listDevices(params);
+      setDevices(d.data || []);
+    } finally {
+      setDeviceListLoading(false);
+    }
+  };
+
   useEffect(() => {
-    loadAll();
+    loadBaseData();
+    loadDevices({ search: '', status: 'ALL' });
   }, []);
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadDevices(deviceFilters);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [deviceFilters.search, deviceFilters.status]);
+
   const overdueInvoices = useMemo(() => (invoices || []).filter((i) => i.daysOverdue > 0 && i.status !== 'PAID'), [invoices]);
+
+  const deviceStats = useMemo(() => {
+    const stats = { total: devices.length, ACTIVE: 0, STOCK: 0, MAINTENANCE: 0, REMOVED: 0 };
+    devices.forEach((d) => {
+      if (stats[d.status] !== undefined) stats[d.status] += 1;
+    });
+    return stats;
+  }, [devices]);
 
   const submitDevice = async (e) => {
     e.preventDefault();
@@ -64,7 +112,7 @@ export default function TrackingPage() {
     try {
       await trackingAPI.createDevice(deviceForm);
       setDeviceForm({ model: '', imei: '', chipNumber: '', carrier: '', status: 'STOCK', clientId: '', vehicleId: '', notes: '' });
-      await loadAll();
+      await Promise.all([loadBaseData(), loadDevices()]);
       alert('Rastreador cadastrado com sucesso.');
     } catch (err) {
       alert(err.response?.data?.error || 'Erro ao cadastrar rastreador.');
@@ -79,7 +127,7 @@ export default function TrackingPage() {
     try {
       await trackingAPI.createContract(contractForm);
       setContractForm({ clientId: '', vehicleId: '', deviceId: '', monthlyAmount: '', dueDay: 10, startDate: '', notes: '' });
-      await loadAll();
+      await loadBaseData();
       alert('Contrato criado com sucesso.');
     } catch (err) {
       alert(err.response?.data?.error || 'Erro ao criar contrato.');
@@ -94,7 +142,7 @@ export default function TrackingPage() {
     try {
       await trackingAPI.createInvoice(invoiceForm);
       setInvoiceForm({ contractId: '', referenceMonth: '', dueDate: '', amount: '', notes: '' });
-      await loadAll();
+      await loadBaseData();
       alert('Mensalidade criada com sucesso.');
     } catch (err) {
       alert(err.response?.data?.error || 'Erro ao criar mensalidade.');
@@ -108,7 +156,7 @@ export default function TrackingPage() {
     setSaving(true);
     try {
       await trackingAPI.payInvoice(id);
-      await loadAll();
+      await loadBaseData();
     } catch (err) {
       alert(err.response?.data?.error || 'Erro ao baixar mensalidade.');
     } finally {
@@ -120,7 +168,7 @@ export default function TrackingPage() {
     setSaving(true);
     try {
       await trackingAPI.runJobs(jobReferenceMonth ? { referenceMonth: jobReferenceMonth } : {});
-      await loadAll();
+      await loadBaseData();
       alert('Rotinas de rastreamento executadas com sucesso.');
     } catch (err) {
       alert(err.response?.data?.error || 'Erro ao executar rotinas.');
@@ -161,6 +209,85 @@ export default function TrackingPage() {
         </div>
       </div>
 
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+          <h3 style={{ margin: 0 }}>Listagem de rastreadores</h3>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <span className="badge badge-gray">Total: {deviceStats.total}</span>
+            <span className="badge badge-green">Ativo: {deviceStats.ACTIVE}</span>
+            <span className="badge badge-blue">Estoque: {deviceStats.STOCK}</span>
+            <span className="badge badge-yellow">Manutencao: {deviceStats.MAINTENANCE}</span>
+            <span className="badge badge-red">Removido: {deviceStats.REMOVED}</span>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'minmax(260px, 1fr) 190px auto', marginBottom: 10 }}>
+          <input
+            className="form-control"
+            placeholder="Buscar por placa, cliente, IMEI, modelo ou chip"
+            value={deviceFilters.search}
+            onChange={(e) => setDeviceFilters((prev) => ({ ...prev, search: e.target.value }))}
+          />
+          <select
+            className="form-control"
+            value={deviceFilters.status}
+            onChange={(e) => setDeviceFilters((prev) => ({ ...prev, status: e.target.value }))}
+          >
+            <option value="ALL">Todos os status</option>
+            <option value="ACTIVE">Ativo</option>
+            <option value="STOCK">Estoque</option>
+            <option value="MAINTENANCE">Manutencao</option>
+            <option value="REMOVED">Removido</option>
+          </select>
+          <button className="btn btn-outline" onClick={() => setDeviceFilters({ search: '', status: 'ALL' })}>
+            Limpar filtros
+          </button>
+        </div>
+
+        <div className="table-container">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Placa</th>
+                <th>IMEI</th>
+                <th>Modelo</th>
+                <th>Chip</th>
+                <th>Operadora</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {deviceListLoading ? (
+                <tr>
+                  <td colSpan={7} className="text-center text-muted">Carregando rastreadores...</td>
+                </tr>
+              ) : devices.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="text-center text-muted">Nenhum rastreador encontrado para os filtros informados.</td>
+                </tr>
+              ) : (
+                devices.map((d) => (
+                  <tr key={d.id}>
+                    <td>{d.client?.name || '-'}</td>
+                    <td>{d.vehicle?.plate || '-'}</td>
+                    <td>{d.imei}</td>
+                    <td>{d.model || '-'}</td>
+                    <td>{d.chipNumber || '-'}</td>
+                    <td>{d.carrier || '-'}</td>
+                    <td>
+                      <span className={`badge ${deviceStatusBadgeClass[d.status] || 'badge-gray'}`}>
+                        {deviceStatusLabel[d.status] || d.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div style={{ display: 'grid', gap: 16, gridTemplateColumns: '1fr 1fr' }}>
         <form className="card" onSubmit={submitDevice}>
           <h3>Cadastrar rastreador</h3>
@@ -177,7 +304,7 @@ export default function TrackingPage() {
           <h3>Criar contrato</h3>
           <div className="form-group"><label>Cliente</label><select className="form-control" value={contractForm.clientId} onChange={(e) => setContractForm({ ...contractForm, clientId: e.target.value })} required><option value="">Selecione</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
           <div className="form-group"><label>Veiculo</label><select className="form-control" value={contractForm.vehicleId} onChange={(e) => setContractForm({ ...contractForm, vehicleId: e.target.value })} required><option value="">Selecione</option>{vehicles.map((v) => <option key={v.id} value={v.id}>{v.plate} - {v.brand} {v.model}</option>)}</select></div>
-          <div className="form-group"><label>Rastreador</label><select className="form-control" value={contractForm.deviceId} onChange={(e) => setContractForm({ ...contractForm, deviceId: e.target.value })} required><option value="">Selecione</option>{devices.map((d) => <option key={d.id} value={d.id}>{d.model} - {d.imei}</option>)}</select></div>
+          <div className="form-group"><label>Rastreador</label><select className="form-control" value={contractForm.deviceId} onChange={(e) => setContractForm({ ...contractForm, deviceId: e.target.value })} required><option value="">Selecione</option>{allDevices.map((d) => <option key={d.id} value={d.id}>{d.model} - {d.imei}</option>)}</select></div>
           <div className="form-group"><label>Valor mensal</label><input className="form-control" type="number" step="0.01" value={contractForm.monthlyAmount} onChange={(e) => setContractForm({ ...contractForm, monthlyAmount: e.target.value })} required /></div>
           <div className="form-group"><label>Dia vencimento</label><input className="form-control" type="number" min="1" max="28" value={contractForm.dueDay} onChange={(e) => setContractForm({ ...contractForm, dueDay: e.target.value })} required /></div>
           <div className="form-group"><label>Inicio</label><input className="form-control" type="date" value={contractForm.startDate} onChange={(e) => setContractForm({ ...contractForm, startDate: e.target.value })} required /></div>

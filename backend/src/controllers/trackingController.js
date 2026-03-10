@@ -62,7 +62,27 @@ const summary = async (req, res) => {
 
 const listDevices = async (req, res) => {
   try {
+    const rawSearch = String(req.query.search || '').trim();
+    const rawStatus = String(req.query.status || '').trim().toUpperCase();
+
+    const where = {};
+
+    if (rawStatus && ['ACTIVE', 'STOCK', 'MAINTENANCE', 'REMOVED'].includes(rawStatus)) {
+      where.status = rawStatus;
+    }
+
+    if (rawSearch) {
+      where.OR = [
+        { imei: { contains: rawSearch, mode: 'insensitive' } },
+        { model: { contains: rawSearch, mode: 'insensitive' } },
+        { chipNumber: { contains: rawSearch, mode: 'insensitive' } },
+        { client: { name: { contains: rawSearch, mode: 'insensitive' } } },
+        { vehicle: { plate: { contains: rawSearch, mode: 'insensitive' } } },
+      ];
+    }
+
     const devices = await prisma.trackingDevice.findMany({
+      where,
       include: {
         client: { select: { id: true, name: true, whatsapp: true } },
         vehicle: { select: { id: true, plate: true, brand: true, model: true } },
@@ -249,3 +269,4 @@ module.exports = {
   createInvoice,
   markInvoicePaid,
 };
+

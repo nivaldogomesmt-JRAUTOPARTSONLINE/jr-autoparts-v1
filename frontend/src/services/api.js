@@ -180,7 +180,7 @@ export const portalAPI = {
 
 export const trackingAPI = {
   summary:      () => api.get('/tracking/summary'),
-  listDevices:  () => api.get('/tracking/devices'),
+  listDevices:  (params) => api.get('/tracking/devices', { params }),
   createDevice: (data) => api.post('/tracking/devices', data),
   updateDevice: (id, data) => api.put(`/tracking/devices/${id}`, data),
   listContracts: () => api.get('/tracking/contracts'),
@@ -193,6 +193,7 @@ export const trackingAPI = {
   runCollect: () => api.post('/tracking/jobs/collect'),
 };
 export default api;
+
 
 
 
