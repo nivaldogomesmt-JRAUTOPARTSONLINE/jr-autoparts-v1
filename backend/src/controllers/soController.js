@@ -1,4 +1,4 @@
-const prisma = require('../lib/prisma');
+﻿const prisma = require('../lib/prisma');
 const { sendWhatsAppMessage } = require('../services/whatsappService');
 const { uploadToCloudinary, deleteFromCloudinary } = require('../services/uploadService');
 
@@ -14,6 +14,115 @@ const STATUS_LABELS = {
 };
 
 const NOTIFY_ON_STATUS = ['STARTED', 'IN_PROGRESS', 'WAITING_PART', 'FINISHING', 'DONE', 'DELIVERED'];
+const STATUS_CLOSE_FLOW = ['DONE', 'DELIVERED'];
+
+const MAINTENANCE_RULES = [
+  {
+    type: 'oil',
+    label: 'Troca de Oleo',
+    intervalKm: 10000,
+    intervalMonths: 6,
+    match: (text) => text.includes('OLEO'),
+  },
+  {
+    type: 'belt',
+    label: 'Correia Dentada',
+    intervalKm: 60000,
+    intervalMonths: 48,
+    match: (text) => text.includes('CORREIA') && text.includes('DENTADA'),
+  },
+];
+
+function normalizeText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase();
+}
+
+function recalcNextMaintenance({ doneDate, doneKm, intervalMonths, intervalKm, currentNextDate, currentNextKm }) {
+  let nextDate = currentNextDate || null;
+  let nextKm = currentNextKm || null;
+
+  if (doneDate && intervalMonths) {
+    const d = new Date(doneDate);
+    d.setMonth(d.getMonth() + parseInt(intervalMonths, 10));
+    nextDate = d;
+  }
+
+  if (doneKm !== null && doneKm !== undefined && intervalKm) {
+    nextKm = parseInt(doneKm, 10) + parseInt(intervalKm, 10);
+  }
+
+  return { nextDate, nextKm };
+}
+
+async function syncVehicleMaintenancesFromOrder(tx, order) {
+  const shouldSync = STATUS_CLOSE_FLOW.includes(order.status) && !STATUS_CLOSE_FLOW.includes(order.previousStatus);
+  if (!shouldSync) return;
+
+  const doneDate = new Date();
+  const doneKm = Number.isInteger(order.entryKm) ? order.entryKm : (Number.isInteger(order.vehicle?.currentKm) ? order.vehicle.currentKm : null);
+
+  const joinedOrderText = normalizeText(
+    (order.items || [])
+      .map((item) => item.itemName)
+      .filter(Boolean)
+      .join(' ')
+  );
+  if (!joinedOrderText) return;
+
+  for (const rule of MAINTENANCE_RULES) {
+    if (!rule.match(joinedOrderText)) continue;
+
+    const existing = await tx.preventiveMaintenance.findFirst({
+      where: { vehicleId: order.vehicleId, type: rule.type },
+    });
+
+    if (!existing) {
+      const { nextDate, nextKm } = recalcNextMaintenance({
+        doneDate,
+        doneKm,
+        intervalMonths: rule.intervalMonths,
+        intervalKm: rule.intervalKm,
+      });
+
+      await tx.preventiveMaintenance.create({
+        data: {
+          vehicleId: order.vehicleId,
+          type: rule.type,
+          label: rule.label,
+          intervalKm: rule.intervalKm,
+          intervalMonths: rule.intervalMonths,
+          lastDate: doneDate,
+          lastKm: doneKm,
+          nextDate,
+          nextKm,
+        },
+      });
+      continue;
+    }
+
+    const { nextDate, nextKm } = recalcNextMaintenance({
+      doneDate,
+      doneKm,
+      intervalMonths: existing.intervalMonths,
+      intervalKm: existing.intervalKm,
+      currentNextDate: existing.nextDate,
+      currentNextKm: existing.nextKm,
+    });
+
+    await tx.preventiveMaintenance.update({
+      where: { id: existing.id },
+      data: {
+        lastDate: doneDate,
+        lastKm: doneKm,
+        nextDate,
+        nextKm,
+      },
+    });
+  }
+}
 
 function extractCloudinaryPublicId(url) {
   if (!url || typeof url !== 'string') return null;
@@ -157,25 +266,34 @@ const updateStatus = async (req, res) => {
 
     const current = await prisma.serviceOrder.findUnique({
       where: { id: req.params.id },
-      include: { client: true, vehicle: true },
+      include: { client: true, vehicle: true, items: true },
     });
     if (!current) return res.status(404).json({ error: 'OS nao encontrada.' });
 
-    const order = await prisma.$transaction(async (tx) => tx.serviceOrder.update({
-      where: { id: req.params.id },
-      data: {
-        status,
-        ...(notes && { notes }),
-        statusLogs: {
-          create: {
-            oldStatus: current.status,
-            newStatus: status,
-            userId: req.user.id,
+    const order = await prisma.$transaction(async (tx) => {
+      const updatedOrder = await tx.serviceOrder.update({
+        where: { id: req.params.id },
+        data: {
+          status,
+          ...(notes && { notes }),
+          statusLogs: {
+            create: {
+              oldStatus: current.status,
+              newStatus: status,
+              userId: req.user.id,
+            },
           },
         },
-      },
-      include: { client: true, vehicle: true },
-    }));
+        include: { client: true, vehicle: true, items: true },
+      });
+
+      await syncVehicleMaintenancesFromOrder(tx, {
+        ...updatedOrder,
+        previousStatus: current.status,
+      });
+
+      return updatedOrder;
+    });
 
     if (NOTIFY_ON_STATUS.includes(status)) {
       const phone = current.client.whatsapp || current.client.phone;
@@ -313,3 +431,6 @@ function buildWhatsAppMessage(clientName, plate, brand, model, status, number) {
 }
 
 module.exports = { list, get, create, update, updateStatus, uploadPhotos, deletePhoto };
+
+
+

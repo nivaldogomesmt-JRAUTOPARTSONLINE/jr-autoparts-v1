@@ -92,6 +92,11 @@ const me = async (req, res) => {
           where: { active: true },
           include: {
             maintenances: true,
+            serviceOrders: {
+              select: { id: true, status: true, createdAt: true, updatedAt: true },
+              orderBy: { updatedAt: 'desc' },
+              take: 1,
+            },
           },
         },
       },
@@ -123,14 +128,28 @@ const me = async (req, res) => {
       const overdueCount = enrichedMaintenances.filter((m) => m.alertLevel === 'OVERDUE').length;
       const dueSoonCount = enrichedMaintenances.filter((m) => m.alertLevel === 'DUE_SOON').length;
 
+      const latestMaintenanceUpdate = enrichedMaintenances.reduce((latest, m) => {
+        const t = m.updatedAt ? new Date(m.updatedAt).getTime() : 0;
+        return t > latest ? t : latest;
+      }, 0);
+
+      const latestOrderUpdate = (v.serviceOrders || []).reduce((latest, order) => {
+        const t = order?.updatedAt ? new Date(order.updatedAt).getTime() : 0;
+        return t > latest ? t : latest;
+      }, 0);
+
+      const latestVehicleUpdate = v.updatedAt ? new Date(v.updatedAt).getTime() : 0;
+      const latestActivityAt = new Date(Math.max(latestVehicleUpdate, latestMaintenanceUpdate, latestOrderUpdate || 0));
+
       return {
         ...v,
         maintenances: enrichedMaintenances,
         nextMaintenance,
         overdueCount,
         dueSoonCount,
+        latestActivityAt,
       };
-    });
+    }).sort((a, b) => new Date(b.latestActivityAt).getTime() - new Date(a.latestActivityAt).getTime());
 
     const maintenances = vehicles.flatMap((v) =>
       v.maintenances
@@ -304,5 +323,7 @@ const soDetail = async (req, res) => {
 };
 
 module.exports = { me, vehicleDetail, soDetail };
+
+
 
 
