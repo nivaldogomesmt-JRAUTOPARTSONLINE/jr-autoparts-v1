@@ -45,6 +45,37 @@ const toStatusLabel = (alertLevel) => {
   return 'Em dia';
 };
 
+const buildDueMeta = (maintenance, currentKm) => {
+  const now = new Date();
+  const dayMs = 1000 * 60 * 60 * 24;
+
+  const daysUntil = maintenance.nextDate
+    ? Math.floor((new Date(maintenance.nextDate).getTime() - now.getTime()) / dayMs)
+    : null;
+
+  const remainingKm = maintenance.nextKm && currentKm !== null && currentKm !== undefined
+    ? maintenance.nextKm - currentKm
+    : null;
+
+  let dueBy = 'NONE';
+  if (daysUntil !== null && remainingKm !== null) {
+    if (daysUntil <= 0 && remainingKm <= 0) dueBy = 'DATE_OR_KM';
+    else if (daysUntil <= 0) dueBy = 'DATE';
+    else if (remainingKm <= 0) dueBy = 'KM';
+    else {
+      const dateScore = daysUntil / 30;
+      const kmScore = remainingKm / 1000;
+      dueBy = dateScore <= kmScore ? 'DATE' : 'KM';
+    }
+  } else if (daysUntil !== null) {
+    dueBy = 'DATE';
+  } else if (remainingKm !== null) {
+    dueBy = 'KM';
+  }
+
+  return { dueBy, daysUntil, remainingKm };
+};
+
 const getMaintenanceSortWeight = (maintenance, currentKm) => {
   const priority = getMaintenancePriority(maintenance, currentKm);
   const nextDate = maintenance.nextDate ? new Date(maintenance.nextDate).getTime() : Number.MAX_SAFE_INTEGER;
@@ -71,10 +102,12 @@ const me = async (req, res) => {
     const vehicles = client.vehicles.map((v) => {
       const enrichedMaintenances = v.maintenances.map((m) => {
         const alertLevel = getAlertLevel(m, v.currentKm);
+        const dueMeta = buildDueMeta(m, v.currentKm);
         return {
           ...m,
           alertLevel,
           statusLabel: toStatusLabel(alertLevel),
+          ...dueMeta,
         };
       });
 
@@ -192,10 +225,12 @@ const vehicleDetail = async (req, res) => {
 
     const maintenances = vehicle.maintenances.map((m) => {
       const alertLevel = getAlertLevel(m, vehicle.currentKm);
+      const dueMeta = buildDueMeta(m, vehicle.currentKm);
       return {
         ...m,
         alertLevel,
         statusLabel: toStatusLabel(alertLevel),
+        ...dueMeta,
       };
     });
 
@@ -269,3 +304,5 @@ const soDetail = async (req, res) => {
 };
 
 module.exports = { me, vehicleDetail, soDetail };
+
+

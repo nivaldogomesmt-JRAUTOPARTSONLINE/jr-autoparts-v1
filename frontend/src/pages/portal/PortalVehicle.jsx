@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { portalAPI } from '../../services/api';
 
@@ -34,6 +34,13 @@ const MAINT_COLOR = {
   OVERDUE: '#c53030',
   DUE_SOON: '#92400e',
   OK: '#2d3748',
+};
+
+const DUE_BY_LABEL = {
+  DATE: 'Vence primeiro por data',
+  KM: 'Vence primeiro por km',
+  DATE_OR_KM: 'Vence por data e km',
+  NONE: 'Sem previsao de vencimento',
 };
 
 const TRACKING_STATUS_LABEL = {
@@ -129,6 +136,9 @@ export default function PortalVehicle() {
                     <div style={{ fontSize: 12, color: '#718096' }}>
                       Proxima data: {formatDate(m.nextDate)} | Proximo km: {formatKm(m.nextKm)}
                     </div>
+                    <div style={{ fontSize: 12, color: '#4b5563', marginTop: 4 }}>
+                      {DUE_BY_LABEL[m.dueBy || 'NONE']}
+                    </div>
                   </div>
                   <div style={{ fontSize: 12, fontWeight: 700, color: MAINT_COLOR[m.alertLevel || 'OK'] }}>
                     {MAINT_ICON[m.alertLevel || 'OK']} {m.statusLabel || 'Em dia'}
@@ -153,6 +163,9 @@ export default function PortalVehicle() {
                   </div>
                   <div style={{ fontSize: 12, color: '#718096' }}>
                     Proxima troca: {formatDate(m.nextDate)} | KM previsto: {formatKm(m.nextKm)}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#4b5563' }}>
+                    {DUE_BY_LABEL[m.dueBy || 'NONE']}
                   </div>
                 </div>
               ))}
@@ -220,3 +233,5 @@ export default function PortalVehicle() {
     </div>
   );
 }
+
+
