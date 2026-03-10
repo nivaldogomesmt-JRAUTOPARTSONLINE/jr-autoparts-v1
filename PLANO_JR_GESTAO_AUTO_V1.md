@@ -178,3 +178,11 @@ Entrega esperada: controle financeiro basico e operacao mais segura.
 3. Criar migracoes Prisma das novas tabelas criticas
 4. Subir ambiente de homologacao
 5. Validar fluxo completo com 5 clientes reais antes de ampliar
+
+---
+
+## Referencia de rastreamento
+
+Consulte tambem o plano detalhado de aproveitamento da plataforma Rastrek:
+
+- `PLANO_APROVEITAMENTO_RASTREK.md`
