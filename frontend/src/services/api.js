@@ -104,10 +104,12 @@ export const soAPI = {
 
 // â”€â”€â”€ MAINTENANCE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const maintenanceAPI = {
-  alerts:    ()            => api.get('/maintenance/alerts'),
-  byVehicle: (vehicleId)  => api.get(`/maintenance/vehicle/${vehicleId}`),
-  update:    (id, data)   => api.put(`/maintenance/${id}`, data),
-  markDone:  (vehicleId, data) => api.post(`/maintenance/vehicle/${vehicleId}/mark-done`, data),
+  alerts:      ()               => api.get('/maintenance/alerts'),
+  byVehicle:   (vehicleId)      => api.get(`/maintenance/vehicle/${vehicleId}`),
+  initialize:  (vehicleId)      => api.post(`/maintenance/vehicle/${vehicleId}/initialize`),
+  upsertItem:  (vehicleId, data) => api.post(`/maintenance/vehicle/${vehicleId}/item`, data),
+  update:      (id, data)       => api.put(`/maintenance/${id}`, data),
+  markDone:    (vehicleId, data) => api.post(`/maintenance/vehicle/${vehicleId}/mark-done`, data),
 };
 
 // â”€â”€â”€ MESSAGES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -161,6 +163,7 @@ export const trackingAPI = {
   runCollect: () => api.post('/tracking/jobs/collect'),
 };
 export default api;
+
 
 
 
