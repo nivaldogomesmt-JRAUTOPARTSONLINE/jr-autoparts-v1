@@ -1,15 +1,15 @@
-﻿import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+﻿import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { portalAPI } from '../../services/api';
 
 const SO_STATUS_LABEL = {
-  QUOTE: 'Orcamento',
+  QUOTE: 'Orçamento',
   APPROVED: 'Aprovado',
   STARTED: 'Iniciado',
   IN_PROGRESS: 'Em andamento',
-  WAITING_PART: 'Aguardando peca',
+  WAITING_PART: 'Aguardando peça',
   FINISHING: 'Finalizando',
-  DONE: 'Concluido',
+  DONE: 'Concluído',
   DELIVERED: 'Entregue',
 };
 
@@ -27,7 +27,7 @@ const SO_STATUS_COLOR = {
 const MAINT_ICON = {
   OVERDUE: '!',
   DUE_SOON: '~',
-  OK: 'ok',
+  OK: 'OK',
 };
 
 const MAINT_COLOR = {
@@ -38,15 +38,15 @@ const MAINT_COLOR = {
 
 const DUE_BY_LABEL = {
   DATE: 'Vence primeiro por data',
-  KM: 'Vence primeiro por km',
-  DATE_OR_KM: 'Vence por data e km',
-  NONE: 'Sem previsao de vencimento',
+  KM: 'Vence primeiro por quilometragem',
+  DATE_OR_KM: 'Vence por data e quilometragem',
+  NONE: 'Sem previsão de vencimento',
 };
 
 const TRACKING_STATUS_LABEL = {
   ACTIVE: 'Ativo',
   STOCK: 'Estoque',
-  MAINTENANCE: 'Manutencao',
+  MAINTENANCE: 'Manutenção',
   REMOVED: 'Retirado',
 };
 
@@ -56,7 +56,7 @@ function formatDate(value) {
 }
 
 function formatKm(value) {
-  if (!value && value !== 0) return '-';
+  if (value === null || value === undefined) return '-';
   return `${Number(value).toLocaleString('pt-BR')} km`;
 }
 
@@ -70,7 +70,7 @@ export default function PortalVehicle() {
   useEffect(() => {
     portalAPI.vehicleDetail(id)
       .then((r) => setData(r.data))
-      .catch(() => setError('Veiculo nao encontrado.'))
+      .catch(() => setError('Veículo não encontrado.'))
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -112,33 +112,27 @@ export default function PortalVehicle() {
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '20px 16px' }}>
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-            <div style={{ fontSize: 24 }}>CAR</div>
+            <div style={{ fontSize: 24 }}>AUTO</div>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: 20, color: '#1A3C5E' }}>{vehicle.plate}</div>
               <div style={{ color: '#4a5568' }}>{vehicle.brand} {vehicle.model}</div>
-              <div style={{ color: '#718096', fontSize: 13, marginTop: 4 }}>
-                KM atual: <b>{formatKm(vehicle.currentKm)}</b>
-              </div>
+              <div style={{ color: '#718096', fontSize: 13, marginTop: 4 }}>KM atual: <b>{formatKm(vehicle.currentKm)}</b></div>
             </div>
           </div>
         </div>
 
         <div className="card" style={{ marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, color: '#1A3C5E', marginBottom: 10 }}>Proximos servicos recomendados</div>
+          <div style={{ fontWeight: 700, color: '#1A3C5E', marginBottom: 10 }}>Próximos serviços recomendados</div>
           {upcomingMaintenances.length === 0 ? (
-            <div style={{ color: '#718096' }}>Sem previsoes cadastradas.</div>
+            <div style={{ color: '#718096' }}>Sem previsões cadastradas.</div>
           ) : (
             <div style={{ display: 'grid', gap: 8 }}>
               {upcomingMaintenances.map((m) => (
                 <div key={m.id} style={{ border: '1px solid #edf2f7', borderRadius: 8, padding: 10, display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                   <div>
                     <div style={{ fontWeight: 700, color: MAINT_COLOR[m.alertLevel || 'OK'] }}>{m.label}</div>
-                    <div style={{ fontSize: 12, color: '#718096' }}>
-                      Proxima data: {formatDate(m.nextDate)} | Proximo km: {formatKm(m.nextKm)}
-                    </div>
-                    <div style={{ fontSize: 12, color: '#4b5563', marginTop: 4 }}>
-                      {DUE_BY_LABEL[m.dueBy || 'NONE']}
-                    </div>
+                    <div style={{ fontSize: 12, color: '#718096' }}>Próxima data: {formatDate(m.nextDate)} | Próximo km: {formatKm(m.nextKm)}</div>
+                    <div style={{ fontSize: 12, color: '#4b5563', marginTop: 4 }}>{DUE_BY_LABEL[m.dueBy || 'NONE']}</div>
                   </div>
                   <div style={{ fontSize: 12, fontWeight: 700, color: MAINT_COLOR[m.alertLevel || 'OK'] }}>
                     {MAINT_ICON[m.alertLevel || 'OK']} {m.statusLabel || 'Em dia'}
@@ -150,23 +144,17 @@ export default function PortalVehicle() {
         </div>
 
         <div className="card" style={{ marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, color: '#1A3C5E', marginBottom: 10 }}>Historico de manutencao por item</div>
+          <div style={{ fontWeight: 700, color: '#1A3C5E', marginBottom: 10 }}>Histórico de manutenção por item</div>
           {maintenances.length === 0 ? (
-            <div style={{ color: '#718096' }}>Nenhuma manutencao registrada.</div>
+            <div style={{ color: '#718096' }}>Nenhuma manutenção registrada.</div>
           ) : (
             <div style={{ display: 'grid', gap: 8 }}>
               {maintenances.map((m) => (
                 <div key={m.id} style={{ border: '1px solid #edf2f7', borderRadius: 8, padding: 10 }}>
                   <div style={{ fontWeight: 700, color: '#1A3C5E' }}>{m.label}</div>
-                  <div style={{ fontSize: 12, color: '#718096', marginTop: 4 }}>
-                    Ultima troca: {formatDate(m.lastDate)} | KM da troca: {formatKm(m.lastKm)}
-                  </div>
-                  <div style={{ fontSize: 12, color: '#718096' }}>
-                    Proxima troca: {formatDate(m.nextDate)} | KM previsto: {formatKm(m.nextKm)}
-                  </div>
-                  <div style={{ fontSize: 12, color: '#4b5563' }}>
-                    {DUE_BY_LABEL[m.dueBy || 'NONE']}
-                  </div>
+                  <div style={{ fontSize: 12, color: '#718096', marginTop: 4 }}>Última troca: {formatDate(m.lastDate)} | KM da troca: {formatKm(m.lastKm)}</div>
+                  <div style={{ fontSize: 12, color: '#718096' }}>Próxima troca: {formatDate(m.nextDate)} | KM previsto: {formatKm(m.nextKm)}</div>
+                  <div style={{ fontSize: 12, color: '#4b5563' }}>{DUE_BY_LABEL[m.dueBy || 'NONE']}</div>
                 </div>
               ))}
             </div>
@@ -176,7 +164,7 @@ export default function PortalVehicle() {
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 700, color: '#1A3C5E', marginBottom: 10 }}>Rastreador instalado</div>
           {trackingDevices.length === 0 ? (
-            <div style={{ color: '#718096' }}>Nenhum rastreador vinculado a este veiculo.</div>
+            <div style={{ color: '#718096' }}>Nenhum rastreador vinculado a este veículo.</div>
           ) : (
             <div style={{ display: 'grid', gap: 8 }}>
               {trackingDevices.map((d) => (
@@ -192,9 +180,9 @@ export default function PortalVehicle() {
         </div>
 
         <div className="card">
-          <div style={{ fontWeight: 700, color: '#1A3C5E', marginBottom: 10 }}>Historico de ordens de servico</div>
+          <div style={{ fontWeight: 700, color: '#1A3C5E', marginBottom: 10 }}>Histórico de ordens de serviço</div>
           {serviceOrders.length === 0 ? (
-            <div style={{ color: '#718096' }}>Nenhum servico registrado para este veiculo.</div>
+            <div style={{ color: '#718096' }}>Nenhum serviço registrado para este veículo.</div>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
               {serviceOrders.map((os) => (
@@ -209,7 +197,7 @@ export default function PortalVehicle() {
                     </span>
                   </div>
 
-                  {os.items?.length > 0 && (
+                  {os.items?.length > 0 ? (
                     <div style={{ marginTop: 8, display: 'grid', gap: 6 }}>
                       {os.items.map((item) => {
                         const qty = Number(item.quantity || 0);
@@ -223,7 +211,7 @@ export default function PortalVehicle() {
                         );
                       })}
                     </div>
-                  )}
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -233,5 +221,3 @@ export default function PortalVehicle() {
     </div>
   );
 }
-
-
