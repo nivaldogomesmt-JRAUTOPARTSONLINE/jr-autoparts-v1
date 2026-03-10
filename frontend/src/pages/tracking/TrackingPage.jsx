@@ -18,6 +18,7 @@ export default function TrackingPage() {
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [jobReferenceMonth, setJobReferenceMonth] = useState('');
 
   const [deviceForm, setDeviceForm] = useState({
     model: '', imei: '', chipNumber: '', carrier: '', status: 'STOCK', clientId: '', vehicleId: '', notes: '',
@@ -115,6 +116,19 @@ export default function TrackingPage() {
     }
   };
 
+  const runJobs = async () => {
+    setSaving(true);
+    try {
+      await trackingAPI.runJobs(jobReferenceMonth ? { referenceMonth: jobReferenceMonth } : {});
+      await loadAll();
+      alert('Rotinas de rastreamento executadas com sucesso.');
+    } catch (err) {
+      alert(err.response?.data?.error || 'Erro ao executar rotinas.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) return <div className="loading"><div className="spinner" /></div>;
 
   return (
@@ -123,6 +137,10 @@ export default function TrackingPage() {
         <div>
           <h1>Rastreamento e Mensalidades</h1>
           <p>Controle de rastreadores, contratos e inadimplencia.</p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input className="form-control" style={{ width: 130 }} placeholder="YYYY-MM" value={jobReferenceMonth} onChange={(e) => setJobReferenceMonth(e.target.value)} />
+          <button className="btn btn-outline" onClick={runJobs} disabled={saving}>Rodar cobranca</button>
         </div>
       </div>
 
@@ -198,4 +216,3 @@ export default function TrackingPage() {
     </div>
   );
 }
-

@@ -146,8 +146,14 @@ export const trackingAPI = {
   listInvoices: (params) => api.get('/tracking/invoices', { params }),
   createInvoice: (data) => api.post('/tracking/invoices', data),
   payInvoice: (id) => api.post(`/tracking/invoices/${id}/pay`),
+  runJobs: (data) => api.post('/tracking/jobs/run', data),
+  runGenerate: (data) => api.post('/tracking/jobs/generate', data),
+  runCollect: () => api.post('/tracking/jobs/collect'),
 };
 export default api;
+
+
+
 
 
 

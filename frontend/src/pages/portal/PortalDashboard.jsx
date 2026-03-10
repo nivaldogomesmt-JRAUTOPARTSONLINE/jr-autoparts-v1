@@ -93,6 +93,38 @@ export default function PortalDashboard() {
           </div>
         </div>
 
+
+        {!!data?.tracking?.pendingInvoices?.length && (
+          <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #c53030' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
+              <div style={{ fontWeight: 700, color: '#c53030' }}>Financeiro de Rastreamento</div>
+              <div style={{ fontSize: 13, color: '#4a5568' }}>
+                Em aberto: <b>R$ {Number(data?.tracking?.openAmount || 0).toFixed(2).replace('.', ',')}</b>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {data.tracking.pendingInvoices.slice(0, 4).map((inv) => (
+                <div key={inv.id} style={{ border: '1px solid #edf2f7', borderRadius: 8, padding: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#1A3C5E' }}>
+                      {inv.contract?.vehicle?.plate} - {inv.referenceMonth}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#718096' }}>
+                      Venc.: {new Date(inv.dueDate).toLocaleDateString('pt-BR')} | {inv.daysOverdue > 0 ? `${inv.daysOverdue} dia(s) de atraso` : 'a vencer'}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#1A3C5E' }}>
+                    R$ {Number(inv.amount || 0).toFixed(2).replace('.', ',')}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: 10, fontSize: 13, color: '#718096' }}>
+              Para regularizar, fale com a equipe: <a href="https://wa.me/5565992812000" style={{ color: '#1A3C5E', fontWeight: 700 }}>(65) 99281-2000</a>
+            </div>
+          </div>
+        )}
+
         {/* Maintenance Alerts */}
         {(overdueAlerts.length > 0 || dueSoonAlerts.length > 0) && (
           <div style={{ background: overdueAlerts.length > 0 ? '#fff5f5' : '#fffbeb', border: `1px solid ${overdueAlerts.length > 0 ? '#fc8181' : '#f6e05e'}`, borderRadius: 12, padding: 16, marginBottom: 20 }}>
@@ -203,4 +235,5 @@ export default function PortalDashboard() {
     </div>
   );
 }
+
 

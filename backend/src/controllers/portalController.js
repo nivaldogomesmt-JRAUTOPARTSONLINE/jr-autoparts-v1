@@ -1,6 +1,27 @@
 const prisma = require('../lib/prisma');
 
 // Calcula alertLevel de uma manutenção
+
+const getInvoiceBand = (daysOverdue) => {
+  if (daysOverdue <= 0) return 'ON_TIME';
+  if (daysOverdue <= 30) return 'LIGHT';
+  if (daysOverdue <= 60) return 'INTENSIVE';
+  if (daysOverdue <= 90) return 'CRITICAL';
+  return 'RECOVERY';
+};
+
+const normalizeTrackingInvoice = (invoice) => {
+  const now = new Date();
+  const due = new Date(invoice.dueDate);
+  const diff = now.getTime() - due.getTime();
+  const daysOverdue = diff > 0 ? Math.floor(diff / (1000 * 60 * 60 * 24)) : 0;
+  return {
+    ...invoice,
+    effectiveStatus: invoice.paidAt ? 'PAID' : daysOverdue > 0 ? 'OVERDUE' : invoice.status,
+    daysOverdue,
+    delinquencyBand: getInvoiceBand(daysOverdue),
+  };
+};
 const getAlertLevel = (m, currentKm) => {
   const now = new Date();
   const in30days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
@@ -46,13 +67,40 @@ const me = async (req, res) => {
         .map(m => ({ ...m, vehicle: { id: v.id, plate: v.plate, brand: v.brand, model: v.model } }))
     );
 
-    // OS recentes do cliente (exceto orçamentos)
+    // OS recentes do cliente (exceto or�amentos)
     const recentOrders = await prisma.serviceOrder.findMany({
       where: { clientId: client.id, status: { not: 'QUOTE' } },
       orderBy: { createdAt: 'desc' },
       take: 10,
       include: { vehicle: { select: { plate: true, brand: true, model: true } } },
     });
+
+    const trackingContracts = await prisma.trackingContract.findMany({
+      where: { clientId: client.id },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        vehicle: { select: { id: true, plate: true, brand: true, model: true } },
+        device: { select: { id: true, model: true, imei: true, status: true } },
+        invoices: {
+          orderBy: { dueDate: 'desc' },
+          take: 6,
+        },
+      },
+    });
+
+    const trackingInvoices = trackingContracts.flatMap((contract) =>
+      contract.invoices.map((invoice) => ({
+        ...normalizeTrackingInvoice(invoice),
+        contract: {
+          id: contract.id,
+          vehicle: contract.vehicle,
+          device: contract.device,
+        },
+      }))
+    );
+
+    const pendingTrackingInvoices = trackingInvoices.filter((i) => i.effectiveStatus !== 'PAID');
+    const trackingOpenAmount = pendingTrackingInvoices.reduce((sum, i) => sum + Number(i.amount || 0), 0);
 
     res.json({
       client: {
@@ -64,6 +112,12 @@ const me = async (req, res) => {
       vehicles,
       maintenances,
       recentOrders,
+      tracking: {
+        contracts: trackingContracts,
+        invoices: trackingInvoices,
+        pendingInvoices: pendingTrackingInvoices,
+        openAmount: trackingOpenAmount,
+      },
     });
   } catch (err) {
     console.error(err);
@@ -141,3 +195,4 @@ const soDetail = async (req, res) => {
 };
 
 module.exports = { me, vehicleDetail, soDetail };
+
