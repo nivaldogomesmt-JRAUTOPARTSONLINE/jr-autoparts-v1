@@ -159,14 +159,14 @@ const me = async (req, res) => {
 
     const recentOrders = await prisma.serviceOrder.findMany({
       where: { clientId: client.id, status: { not: 'QUOTE' } },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { updatedAt: 'desc' },
       take: 10,
       include: { vehicle: { select: { plate: true, brand: true, model: true } } },
     });
 
     const trackingContracts = await prisma.trackingContract.findMany({
       where: { clientId: client.id },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { updatedAt: 'desc' },
       include: {
         vehicle: { select: { id: true, plate: true, brand: true, model: true } },
         device: { select: { id: true, model: true, imei: true, status: true, installedAt: true } },
@@ -223,7 +223,7 @@ const vehicleDetail = async (req, res) => {
         trackingDevices: { orderBy: [{ installedAt: 'desc' }, { createdAt: 'desc' }] },
         serviceOrders: {
           where: { status: { not: 'QUOTE' } },
-          orderBy: { createdAt: 'desc' },
+          orderBy: { updatedAt: 'desc' },
           include: { items: true },
         },
       },
@@ -323,6 +323,7 @@ const soDetail = async (req, res) => {
 };
 
 module.exports = { me, vehicleDetail, soDetail };
+
 
 
 

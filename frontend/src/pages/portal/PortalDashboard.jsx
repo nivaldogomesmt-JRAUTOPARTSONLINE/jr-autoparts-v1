@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { portalAPI } from '../../services/api';
@@ -34,6 +34,11 @@ const LEVEL_STYLE = {
 function formatDate(value) {
   if (!value) return '-';
   return new Date(value).toLocaleDateString('pt-BR');
+}
+
+function formatDateTime(value) {
+  if (!value) return '-';
+  return new Date(value).toLocaleDateString('pt-BR') + ' ' + new Date(value).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
 function formatKm(value) {
@@ -128,6 +133,9 @@ function PlateVehicleCard({ vehicle }) {
 
           <div style={{ marginTop: 6, fontSize: 12, color: '#475569', fontWeight: 600 }}>
             {(vehicle.brand || 'Marca')}{' '}{(vehicle.model || 'Modelo')}{vehicle.year ? ` ${vehicle.year}` : ''}
+          </div>
+          <div style={{ marginTop: 4, fontSize: 11, color: '#64748b' }}>
+            Atualizado em: {formatDateTime(vehicle.latestActivityAt)}
           </div>
 
           <MaintenanceLine title="Prox. troca de oleo" maintenance={oil} />
@@ -259,3 +267,4 @@ export default function PortalDashboard() {
     </div>
   );
 }
+
