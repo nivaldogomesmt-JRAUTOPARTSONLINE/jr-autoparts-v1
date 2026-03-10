@@ -1,16 +1,16 @@
-import { useState, useEffect } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { portalAPI } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { portalAPI } from '../../services/api';
 
 const SO_STATUS_LABEL = {
-  QUOTE: 'Orçamento',
+  QUOTE: 'Orcamento',
   APPROVED: 'Aprovado',
   STARTED: 'Iniciado',
   IN_PROGRESS: 'Em Andamento',
-  WAITING_PART: 'Aguardando Peça',
+  WAITING_PART: 'Aguardando Peca',
   FINISHING: 'Finalizando',
-  DONE: 'Concluído',
+  DONE: 'Concluido',
   DELIVERED: 'Entregue',
 };
 
@@ -25,7 +25,21 @@ const SO_STATUS_COLOR = {
   DELIVERED: '#38a169',
 };
 
-const ALERT_ICON = { OVERDUE: '❗', DUE_SOON: '⚠️' };
+const LEVEL_STYLE = {
+  OVERDUE: { bg: '#fee2e2', color: '#b91c1c', label: 'Vencido' },
+  DUE_SOON: { bg: '#fef3c7', color: '#92400e', label: 'Proximo' },
+  OK: { bg: '#dcfce7', color: '#166534', label: 'Em dia' },
+};
+
+function formatDate(value) {
+  if (!value) return '-';
+  return new Date(value).toLocaleDateString('pt-BR');
+}
+
+function formatKm(value) {
+  if (value === null || value === undefined) return '-';
+  return `${Number(value).toLocaleString('pt-BR')} km`;
+}
 
 export default function PortalDashboard() {
   const [data, setData] = useState(null);
@@ -34,26 +48,30 @@ export default function PortalDashboard() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    portalAPI.me().then(r => setData(r.data)).finally(() => setLoading(false));
+    portalAPI.me().then((r) => setData(r.data)).finally(() => setLoading(false));
   }, []);
 
-  const handleLogout = () => { logout(); navigate('/portal/login'); };
+  const handleLogout = () => {
+    logout();
+    navigate('/portal/login');
+  };
 
-  if (loading) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div className="spinner" style={{ width: 40, height: 40 }}/>
-    </div>
-  );
+  const overdueAlerts = useMemo(() => data?.maintenances?.filter((m) => m.alertLevel === 'OVERDUE') || [], [data]);
+  const dueSoonAlerts = useMemo(() => data?.maintenances?.filter((m) => m.alertLevel === 'DUE_SOON') || [], [data]);
 
-  const overdueAlerts = data?.maintenances?.filter(m => m.alertLevel === 'OVERDUE') || [];
-  const dueSoonAlerts = data?.maintenances?.filter(m => m.alertLevel === 'DUE_SOON') || [];
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="spinner" style={{ width: 40, height: 40 }} />
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
-      {/* Header */}
       <div style={{ background: '#1A3C5E', color: 'white', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 36, height: 36, background: '#F0A500', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🔧</div>
+          <div style={{ width: 36, height: 36, background: '#F0A500', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>JR</div>
           <div>
             <div style={{ fontWeight: 700, fontSize: 15 }}>JR Auto Parts</div>
             <div style={{ fontSize: 11, opacity: 0.8 }}>Portal do Cliente</div>
@@ -70,170 +88,107 @@ export default function PortalDashboard() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px 16px' }}>
-        {/* Greeting */}
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: '20px 16px' }}>
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 20, fontWeight: 700, color: '#1A3C5E' }}>
-            Olá, {data?.client?.name?.split(' ')[0]}! 👋
+            Ola, {data?.client?.name?.split(' ')[0]}!
           </div>
-          <div style={{ color: '#718096', fontSize: 14 }}>Acompanhe seus veículos e serviços aqui.</div>
+          <div style={{ color: '#718096', fontSize: 14 }}>Acompanhe seus veiculos, servicos e proximas revisoes.</div>
         </div>
 
-        <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #1A3C5E' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <div>
-              <div style={{ fontWeight: 700, color: '#1A3C5E' }}>Central de Rastreamento</div>
-              <div style={{ color: '#718096', fontSize: 13 }}>
-                Acesse rapidamente seu painel de rastreamento e acompanhe veiculos com mais facilidade.
-              </div>
-            </div>
-            <Link to="/portal/rastreamento" className="btn btn-primary" style={{ textDecoration: 'none' }}>
-              Abrir rastreamento
-            </Link>
-          </div>
-        </div>
-
-
-        {!!data?.tracking?.pendingInvoices?.length && (
-          <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #c53030' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
-              <div style={{ fontWeight: 700, color: '#c53030' }}>Financeiro de Rastreamento</div>
-              <div style={{ fontSize: 13, color: '#4a5568' }}>
-                Em aberto: <b>R$ {Number(data?.tracking?.openAmount || 0).toFixed(2).replace('.', ',')}</b>
-              </div>
-            </div>
-            <div style={{ display: 'grid', gap: 8 }}>
-              {data.tracking.pendingInvoices.slice(0, 4).map((inv) => (
-                <div key={inv.id} style={{ border: '1px solid #edf2f7', borderRadius: 8, padding: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#1A3C5E' }}>
-                      {inv.contract?.vehicle?.plate} - {inv.referenceMonth}
-                    </div>
-                    <div style={{ fontSize: 12, color: '#718096' }}>
-                      Venc.: {new Date(inv.dueDate).toLocaleDateString('pt-BR')} | {inv.daysOverdue > 0 ? `${inv.daysOverdue} dia(s) de atraso` : 'a vencer'}
-                    </div>
-                  </div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: '#1A3C5E' }}>
-                    R$ {Number(inv.amount || 0).toFixed(2).replace('.', ',')}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div style={{ marginTop: 10, fontSize: 13, color: '#718096' }}>
-              Para regularizar, fale com a equipe: <a href="https://wa.me/5565992812000" style={{ color: '#1A3C5E', fontWeight: 700 }}>(65) 99281-2000</a>
-            </div>
-          </div>
-        )}
-
-        {/* Maintenance Alerts */}
-        {(overdueAlerts.length > 0 || dueSoonAlerts.length > 0) && (
+        {(overdueAlerts.length > 0 || dueSoonAlerts.length > 0) ? (
           <div style={{ background: overdueAlerts.length > 0 ? '#fff5f5' : '#fffbeb', border: `1px solid ${overdueAlerts.length > 0 ? '#fc8181' : '#f6e05e'}`, borderRadius: 12, padding: 16, marginBottom: 20 }}>
-            <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10, color: overdueAlerts.length > 0 ? '#c53030' : '#92400e' }}>
-              {overdueAlerts.length > 0 ? '❗ Manutenções Vencidas' : '⚠️ Manutenções Próximas'}
+            <div style={{ fontWeight: 700, marginBottom: 10, color: overdueAlerts.length > 0 ? '#c53030' : '#92400e' }}>
+              {overdueAlerts.length > 0 ? 'Manutencoes vencidas' : 'Manutencoes proximas'}
             </div>
-            {[...overdueAlerts, ...dueSoonAlerts].map((alert, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: i < overdueAlerts.length + dueSoonAlerts.length - 1 ? '1px solid rgba(0,0,0,0.06)' : 'none' }}>
-                <div>
-                  <span style={{ fontWeight: 600, fontSize: 13 }}>{ALERT_ICON[alert.alertLevel]} {alert.label}</span>
-                  <span style={{ color: '#718096', fontSize: 12, marginLeft: 8 }}>— {alert.vehicle?.plate} ({alert.vehicle?.brand} {alert.vehicle?.model})</span>
+            {[...overdueAlerts, ...dueSoonAlerts].slice(0, 8).map((alert) => (
+              <div key={alert.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+                <div style={{ fontSize: 13 }}>
+                  <b>{alert.label}</b> - {alert.vehicle?.plate}
                 </div>
-                {alert.nextDate && (
-                  <div style={{ fontSize: 12, color: '#718096' }}>
-                    {new Date(alert.nextDate).toLocaleDateString('pt-BR')}
-                  </div>
-                )}
+                <div style={{ fontSize: 12, color: '#64748b' }}>{formatDate(alert.nextDate)}</div>
               </div>
             ))}
-            <div style={{ marginTop: 12, fontSize: 13, color: '#718096' }}>
-              Entre em contato: <a href="https://wa.me/5565992812000" style={{ color: '#1A3C5E', fontWeight: 600 }}>📱 (65) 99281-2000</a>
-            </div>
           </div>
-        )}
+        ) : null}
 
-        {/* Vehicles */}
         <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#1A3C5E', marginBottom: 12 }}>Meus Veículos</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#1A3C5E', marginBottom: 12 }}>Meus Veiculos</div>
           {data?.vehicles?.length === 0 ? (
-            <div className="card" style={{ textAlign: 'center', padding: 32, color: '#718096' }}>
-              Nenhum veículo cadastrado.
-            </div>
+            <div className="card" style={{ textAlign: 'center', padding: 32, color: '#718096' }}>Nenhum veiculo cadastrado.</div>
           ) : (
             <div style={{ display: 'grid', gap: 12 }}>
-              {data?.vehicles?.map(v => (
-                <Link key={v.id} to={`/portal/veiculo/${v.id}`} style={{ textDecoration: 'none' }}>
-                  <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 16, cursor: 'pointer', transition: 'box-shadow 0.2s', padding: '16px 20px' }}
-                    onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 20px rgba(26,60,94,0.15)'}
-                    onMouseLeave={e => e.currentTarget.style.boxShadow = ''}>
-                    <div style={{ width: 48, height: 48, background: '#EBF4FF', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>🚗</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 700, color: '#1A3C5E', fontSize: 15 }}>{v.plate}</div>
-                      <div style={{ color: '#718096', fontSize: 13 }}>{v.brand} {v.model} {v.year ? `· ${v.year}` : ''}</div>
-                      {v.color && <div style={{ color: '#a0aec0', fontSize: 12 }}>{v.color}{v.fuel ? ` · ${v.fuel}` : ''}</div>}
-                    </div>
-                    {v.maintenances?.some(m => m.alertLevel) && (
-                      <div style={{ fontSize: 18 }}>
-                        {v.maintenances.some(m => m.alertLevel === 'OVERDUE') ? '❗' : '⚠️'}
+              {data.vehicles.map((v) => {
+                const next = v.nextMaintenance;
+                const level = next?.alertLevel || 'OK';
+                const style = LEVEL_STYLE[level] || LEVEL_STYLE.OK;
+
+                return (
+                  <Link key={v.id} to={`/portal/veiculo/${v.id}`} style={{ textDecoration: 'none' }}>
+                    <div className="card" style={{ padding: '16px 20px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                        <div>
+                          <div style={{ fontWeight: 700, color: '#1A3C5E', fontSize: 15 }}>{v.plate}</div>
+                          <div style={{ color: '#718096', fontSize: 13 }}>{v.brand} {v.model} {v.year ? `- ${v.year}` : ''}</div>
+                          <div style={{ color: '#94a3b8', fontSize: 12 }}>
+                            {v.color || '-'} {v.fuel ? `- ${v.fuel}` : ''}
+                          </div>
+                        </div>
+
+                        <div style={{ minWidth: 260 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <div style={{ fontSize: 12, color: '#64748b' }}>Proximo servico</div>
+                            <span style={{ background: style.bg, color: style.color, padding: '2px 10px', borderRadius: 999, fontSize: 12, fontWeight: 700 }}>
+                              {style.label}
+                            </span>
+                          </div>
+
+                          {next ? (
+                            <>
+                              <div style={{ fontWeight: 700, color: style.color, fontSize: 13 }}>{next.label}</div>
+                              <div style={{ fontSize: 12, color: '#64748b' }}>
+                                Data: {formatDate(next.nextDate)} | KM: {formatKm(next.nextKm)}
+                              </div>
+                            </>
+                          ) : (
+                            <div style={{ fontSize: 12, color: '#94a3b8' }}>Sem previsoes cadastradas.</div>
+                          )}
+
+                          <div style={{ fontSize: 12, color: '#64748b', marginTop: 6 }}>
+                            Itens vencidos: <b>{v.overdueCount || 0}</b> | proximos: <b>{v.dueSoonCount || 0}</b>
+                          </div>
+                        </div>
                       </div>
-                    )}
-                    <div style={{ color: '#a0aec0', fontSize: 18 }}>›</div>
-                  </div>
-                </Link>
-              ))}
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
           )}
         </div>
 
-        {/* Recent Service Orders */}
         <div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#1A3C5E', marginBottom: 12 }}>Ordens de Serviço Recentes</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#1A3C5E', marginBottom: 12 }}>Ordens de Servico Recentes</div>
           {data?.recentOrders?.length === 0 ? (
-            <div className="card" style={{ textAlign: 'center', padding: 32, color: '#718096' }}>
-              Nenhuma ordem de serviço encontrada.
-            </div>
+            <div className="card" style={{ textAlign: 'center', padding: 32, color: '#718096' }}>Nenhuma ordem de servico encontrada.</div>
           ) : (
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-              {data?.recentOrders?.map((os, i) => (
-                <div key={os.id} style={{
-                  display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px',
-                  borderBottom: i < data.recentOrders.length - 1 ? '1px solid #f0f0f0' : 'none'
-                }}>
+              {data.recentOrders.map((os, i) => (
+                <div key={os.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px', borderBottom: i < data.recentOrders.length - 1 ? '1px solid #f0f0f0' : 'none' }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 600, fontSize: 14, color: '#1A3C5E' }}>OS #{os.number}</div>
-                    <div style={{ fontSize: 12, color: '#718096', marginTop: 2 }}>
-                      {os.vehicle?.plate} — {new Date(os.createdAt).toLocaleDateString('pt-BR')}
-                    </div>
+                    <div style={{ fontSize: 12, color: '#718096', marginTop: 2 }}>{os.vehicle?.plate} - {new Date(os.createdAt).toLocaleDateString('pt-BR')}</div>
                   </div>
-                  <div>
-                    <span style={{
-                      background: SO_STATUS_COLOR[os.status] + '20',
-                      color: SO_STATUS_COLOR[os.status],
-                      padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600
-                    }}>
-                      {SO_STATUS_LABEL[os.status]}
-                    </span>
-                  </div>
-                  {os.total && (
-                    <div style={{ fontWeight: 700, color: '#1A3C5E', fontSize: 14, minWidth: 80, textAlign: 'right' }}>
-                      R$ {parseFloat(os.total).toFixed(2).replace('.', ',')}
-                    </div>
-                  )}
+                  <span style={{ background: `${SO_STATUS_COLOR[os.status] || '#718096'}20`, color: SO_STATUS_COLOR[os.status] || '#718096', padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
+                    {SO_STATUS_LABEL[os.status] || os.status}
+                  </span>
+                  {os.total ? <div style={{ fontWeight: 700, color: '#1A3C5E', fontSize: 14, minWidth: 80, textAlign: 'right' }}>R$ {parseFloat(os.total).toFixed(2).replace('.', ',')}</div> : null}
                 </div>
               ))}
             </div>
           )}
-        </div>
-
-        {/* Footer */}
-        <div style={{ marginTop: 32, textAlign: 'center', color: '#a0aec0', fontSize: 12 }}>
-          <div>Precisa de ajuda?</div>
-          <a href="https://wa.me/5565992812000" style={{ color: '#1A3C5E', fontWeight: 600, fontSize: 14 }}>
-            📱 WhatsApp: (65) 99281-2000
-          </a>
-          <div style={{ marginTop: 8 }}>© 2024 JR Auto Parts · jrautopartsmt.com.br</div>
         </div>
       </div>
     </div>
   );
 }
-
-

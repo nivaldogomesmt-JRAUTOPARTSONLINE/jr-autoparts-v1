@@ -1,4 +1,4 @@
-const prisma = require('../lib/prisma');
+﻿const prisma = require('../lib/prisma');
 
 const getInvoiceBand = (daysOverdue) => {
   if (daysOverdue <= 0) return 'ON_TIME';
@@ -28,7 +28,7 @@ const getAlertLevel = (maintenance, currentKm) => {
   if (maintenance.nextDate && new Date(maintenance.nextDate) < now) return 'OVERDUE';
   if (maintenance.nextKm && currentKm && currentKm >= maintenance.nextKm) return 'OVERDUE';
   if (maintenance.nextDate && new Date(maintenance.nextDate) <= in30days) return 'DUE_SOON';
-  if (maintenance.nextKm && currentKm && (maintenance.nextKm - currentKm) <= 1000) return 'DUE_SOON';
+  if (maintenance.nextKm && currentKm && maintenance.nextKm - currentKm <= 1000) return 'DUE_SOON';
   return null;
 };
 
@@ -43,6 +43,13 @@ const toStatusLabel = (alertLevel) => {
   if (alertLevel === 'OVERDUE') return 'Vencido';
   if (alertLevel === 'DUE_SOON') return 'Proximo';
   return 'Em dia';
+};
+
+const getMaintenanceSortWeight = (maintenance, currentKm) => {
+  const priority = getMaintenancePriority(maintenance, currentKm);
+  const nextDate = maintenance.nextDate ? new Date(maintenance.nextDate).getTime() : Number.MAX_SAFE_INTEGER;
+  const nextKm = maintenance.nextKm || Number.MAX_SAFE_INTEGER;
+  return [priority, nextDate, nextKm];
 };
 
 const me = async (req, res) => {
@@ -61,13 +68,36 @@ const me = async (req, res) => {
 
     if (!client) return res.status(404).json({ error: 'Cliente nao encontrado.' });
 
-    const vehicles = client.vehicles.map((v) => ({
-      ...v,
-      maintenances: v.maintenances.map((m) => ({
-        ...m,
-        alertLevel: getAlertLevel(m, v.currentKm),
-      })),
-    }));
+    const vehicles = client.vehicles.map((v) => {
+      const enrichedMaintenances = v.maintenances.map((m) => {
+        const alertLevel = getAlertLevel(m, v.currentKm);
+        return {
+          ...m,
+          alertLevel,
+          statusLabel: toStatusLabel(alertLevel),
+        };
+      });
+
+      const sortedMaintenances = [...enrichedMaintenances].sort((a, b) => {
+        const [pa, da, ka] = getMaintenanceSortWeight(a, v.currentKm);
+        const [pb, db, kb] = getMaintenanceSortWeight(b, v.currentKm);
+        if (pa !== pb) return pa - pb;
+        if (da !== db) return da - db;
+        return ka - kb;
+      });
+
+      const nextMaintenance = sortedMaintenances.length ? sortedMaintenances[0] : null;
+      const overdueCount = enrichedMaintenances.filter((m) => m.alertLevel === 'OVERDUE').length;
+      const dueSoonCount = enrichedMaintenances.filter((m) => m.alertLevel === 'DUE_SOON').length;
+
+      return {
+        ...v,
+        maintenances: enrichedMaintenances,
+        nextMaintenance,
+        overdueCount,
+        dueSoonCount,
+      };
+    });
 
     const maintenances = vehicles.flatMap((v) =>
       v.maintenances
