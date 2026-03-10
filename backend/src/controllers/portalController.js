@@ -76,6 +76,25 @@ const buildDueMeta = (maintenance, currentKm) => {
   return { dueBy, daysUntil, remainingKm };
 };
 
+
+
+const computeMaintenanceForecast = (maintenance) => {
+  let nextDate = maintenance.nextDate || null;
+  let nextKm = maintenance.nextKm || null;
+
+  if (!nextDate && maintenance.lastDate && maintenance.intervalMonths) {
+    const d = new Date(maintenance.lastDate);
+    d.setMonth(d.getMonth() + parseInt(maintenance.intervalMonths, 10));
+    nextDate = d;
+  }
+
+  if ((nextKm === null || nextKm === undefined) && maintenance.lastKm !== null && maintenance.lastKm !== undefined && maintenance.intervalKm) {
+    nextKm = Number(maintenance.lastKm) + Number(maintenance.intervalKm);
+  }
+
+  return { nextDate, nextKm };
+};
+
 const getMaintenanceSortWeight = (maintenance, currentKm) => {
   const priority = getMaintenancePriority(maintenance, currentKm);
   const nextDate = maintenance.nextDate ? new Date(maintenance.nextDate).getTime() : Number.MAX_SAFE_INTEGER;
@@ -106,10 +125,12 @@ const me = async (req, res) => {
 
     const vehicles = client.vehicles.map((v) => {
       const enrichedMaintenances = v.maintenances.map((m) => {
-        const alertLevel = getAlertLevel(m, v.currentKm);
-        const dueMeta = buildDueMeta(m, v.currentKm);
+        const forecast = computeMaintenanceForecast(m);
+        const normalized = { ...m, nextDate: forecast.nextDate, nextKm: forecast.nextKm };
+        const alertLevel = getAlertLevel(normalized, v.currentKm);
+        const dueMeta = buildDueMeta(normalized, v.currentKm);
         return {
-          ...m,
+          ...normalized,
           alertLevel,
           statusLabel: toStatusLabel(alertLevel),
           ...dueMeta,
@@ -243,10 +264,12 @@ const vehicleDetail = async (req, res) => {
     };
 
     const maintenances = vehicle.maintenances.map((m) => {
-      const alertLevel = getAlertLevel(m, vehicle.currentKm);
-      const dueMeta = buildDueMeta(m, vehicle.currentKm);
+      const forecast = computeMaintenanceForecast(m);
+      const normalized = { ...m, nextDate: forecast.nextDate, nextKm: forecast.nextKm };
+      const alertLevel = getAlertLevel(normalized, vehicle.currentKm);
+      const dueMeta = buildDueMeta(normalized, vehicle.currentKm);
       return {
-        ...m,
+        ...normalized,
         alertLevel,
         statusLabel: toStatusLabel(alertLevel),
         ...dueMeta,
