@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { vehiclesAPI, clientsAPI } from '../../services/api';
 
@@ -34,6 +34,7 @@ export default function VehicleForm() {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [clientSearch, setClientSearch] = useState('');
 
   useEffect(() => {
     clientsAPI.list({ page: 1, limit: 5000 }).then((r) => setClients(r.data.data));
@@ -69,6 +70,14 @@ export default function VehicleForm() {
   }, [id, isEdit]);
 
   const setField = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+
+  const filteredClients = useMemo(() => {
+    const q = clientSearch.trim().toLowerCase();
+    if (!q) return clients;
+    return clients.filter((c) =>
+      [c.name, c.cpfCnpj, c.phone, c.whatsapp, c.email].filter(Boolean).join(' ').toLowerCase().includes(q)
+    );
+  }, [clients, clientSearch]);
 
   const applyPreset = (mode) => {
     setMaintenanceMode(mode);
@@ -128,10 +137,12 @@ export default function VehicleForm() {
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="form-row">
             <div className="form-group">
+              <label className="form-label">Buscar cliente</label>
+              <input className="form-control" placeholder="Digite nome, CPF/CNPJ, telefone ou email..." value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} style={{ marginBottom: 8 }} />
               <label className="form-label required">Cliente</label>
               <select className="form-control" value={form.clientId} onChange={(e) => setField('clientId', e.target.value)} required>
                 <option value="">Selecione...</option>
-                {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {filteredClients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
             <div className="form-group">

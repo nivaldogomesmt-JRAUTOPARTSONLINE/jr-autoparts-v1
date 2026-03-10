@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { clientsAPI, productsAPI, servicesAPI, soAPI, vehiclesAPI } from '../../services/api';
 
@@ -15,6 +15,7 @@ export default function SOForm() {
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [clientSearch, setClientSearch] = useState('');
 
   useEffect(() => {
     Promise.all([
@@ -78,6 +79,14 @@ export default function SOForm() {
 
   const total = items.reduce((sum, i) => sum + parseFloat(i.unitPrice) * parseFloat(i.quantity), 0);
 
+  const filteredClients = useMemo(() => {
+    const q = clientSearch.trim().toLowerCase();
+    if (!q) return clients;
+    return clients.filter((c) =>
+      [c.name, c.cpfCnpj, c.phone, c.whatsapp, c.email].filter(Boolean).join(' ').toLowerCase().includes(q)
+    );
+  }, [clients, clientSearch]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.clientId || !form.vehicleId) return setError('Selecione cliente e veiculo.');
@@ -119,6 +128,8 @@ export default function SOForm() {
           <div className="card-title">Dados do Cliente</div>
           <div className="form-row">
             <div className="form-group">
+              <label className="form-label">Buscar cliente</label>
+              <input className="form-control" placeholder="Digite nome, CPF/CNPJ, telefone ou email..." value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} style={{ marginBottom: 8 }} />
               <label className="form-label required">Cliente</label>
               <select
                 className="form-control"
@@ -127,7 +138,7 @@ export default function SOForm() {
                 required
               >
                 <option value="">Selecione o cliente...</option>
-                {clients.map((c) => (
+                {filteredClients.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>

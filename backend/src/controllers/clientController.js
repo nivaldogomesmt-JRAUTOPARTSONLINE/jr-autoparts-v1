@@ -7,7 +7,7 @@ const list = async (req, res) => {
   try {
     const { search } = req.query;
     const pageNumber = Math.max(parseInt(req.query.page || '1', 10) || 1, 1);
-    const limitNumber = Math.min(Math.max(parseInt(req.query.limit || '20', 10) || 20, 1), 5000);
+    const limitNumber = Math.min(Math.max(parseInt(req.query.limit || '20', 10) || 20, 1), 50000);
     const skip = (pageNumber - 1) * limitNumber;
     const where = {
       active: true,
@@ -256,6 +256,7 @@ const exportClientsConsolidated = async (req, res) => {
   }
 };
 module.exports = { list, get, create, update, remove, grantPortalAccess, exportClients, exportClientsConsolidated };
+
 
 
 
