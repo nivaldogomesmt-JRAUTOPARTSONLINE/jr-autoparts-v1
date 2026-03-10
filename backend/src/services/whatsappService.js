@@ -1,4 +1,4 @@
-const axios = require('axios');
+﻿const axios = require('axios');
 const prisma = require('../lib/prisma');
 
 const DEFAULT_COUNTRY_CODE = '55';
@@ -49,7 +49,7 @@ function parseErrorMessage(err) {
 
 function looksLikeSubscriberMissing(errorText) {
   const text = String(errorText || '').toLowerCase();
-  return text.includes('subscriber') && (text.includes('not found') || text.includes('nao encontrado') || text.includes('n�o encontrado'));
+  return text.includes('subscriber') && (text.includes('not found') || text.includes('nao encontrado') || text.includes('não encontrado'));
 }
 
 async function ensureSubscriber({ baseUrl, headers, phone }) {
@@ -139,7 +139,7 @@ async function upsertMessageRecord({ clientId, soId, phone, content, messageId }
  */
 const sendWhatsAppMessage = async ({ clientId, soId, phone, content, messageId }) => {
   const normalizedPhone = normalizePhone(phone);
-  const apiUrl = sanitizeBaseUrl(process.env.BOTCONVERSA_API_URL || process.env.BOTCONVERSA_API_BASE_URL);
+  const apiUrl = sanitizeBaseUrl(process.env.BOTCONVERSA_API_URL || process.env.BOTCONVERSA_API_BASE_URL || 'https://backend.botconversa.com.br/api/v1');
   const apiKey = String(process.env.BOTCONVERSA_API_KEY || '').trim();
 
   const message = await upsertMessageRecord({
@@ -159,8 +159,8 @@ const sendWhatsAppMessage = async ({ clientId, soId, phone, content, messageId }
     return { success: false, messageId: message.id, error: errorMsg };
   }
 
-  if (!apiUrl || !apiKey) {
-    const errorMsg = 'BOTCONVERSA_API_URL ou BOTCONVERSA_API_KEY nao configurados no backend.';
+  if (!apiKey) {
+    const errorMsg = 'BOTCONVERSA_API_KEY nao configurada no backend.';
     await prisma.whatsappMessage.update({
       where: { id: message.id },
       data: { status: 'FAILED', errorMessage: errorMsg },
@@ -197,3 +197,5 @@ const sendWhatsAppMessage = async ({ clientId, soId, phone, content, messageId }
 };
 
 module.exports = { sendWhatsAppMessage };
+
+
