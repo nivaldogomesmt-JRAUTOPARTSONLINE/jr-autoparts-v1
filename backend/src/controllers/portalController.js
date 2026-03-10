@@ -1,7 +1,5 @@
 const prisma = require('../lib/prisma');
 
-// Calcula alertLevel de uma manutenção
-
 const getInvoiceBand = (daysOverdue) => {
   if (daysOverdue <= 0) return 'ON_TIME';
   if (daysOverdue <= 30) return 'LIGHT';
@@ -22,19 +20,31 @@ const normalizeTrackingInvoice = (invoice) => {
     delinquencyBand: getInvoiceBand(daysOverdue),
   };
 };
-const getAlertLevel = (m, currentKm) => {
+
+const getAlertLevel = (maintenance, currentKm) => {
   const now = new Date();
   const in30days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-  // Prioridade: vencido > próximo
-  if (m.nextDate && new Date(m.nextDate) < now) return 'OVERDUE';
-  if (m.nextKm && currentKm && currentKm >= m.nextKm) return 'OVERDUE';
-  if (m.nextDate && new Date(m.nextDate) <= in30days) return 'DUE_SOON';
-  if (m.nextKm && currentKm && (m.nextKm - currentKm) <= 1000) return 'DUE_SOON';
-  return null; // OK — sem alerta
+  if (maintenance.nextDate && new Date(maintenance.nextDate) < now) return 'OVERDUE';
+  if (maintenance.nextKm && currentKm && currentKm >= maintenance.nextKm) return 'OVERDUE';
+  if (maintenance.nextDate && new Date(maintenance.nextDate) <= in30days) return 'DUE_SOON';
+  if (maintenance.nextKm && currentKm && (maintenance.nextKm - currentKm) <= 1000) return 'DUE_SOON';
+  return null;
 };
 
-// GET /api/portal/me — dados completos do cliente logado
+const getMaintenancePriority = (maintenance, currentKm) => {
+  const alertLevel = getAlertLevel(maintenance, currentKm);
+  if (alertLevel === 'OVERDUE') return 0;
+  if (alertLevel === 'DUE_SOON') return 1;
+  return 2;
+};
+
+const toStatusLabel = (alertLevel) => {
+  if (alertLevel === 'OVERDUE') return 'Vencido';
+  if (alertLevel === 'DUE_SOON') return 'Proximo';
+  return 'Em dia';
+};
+
 const me = async (req, res) => {
   try {
     const client = await prisma.client.findUnique({
@@ -49,25 +59,22 @@ const me = async (req, res) => {
       },
     });
 
-    if (!client) return res.status(404).json({ error: 'Cliente não encontrado.' });
+    if (!client) return res.status(404).json({ error: 'Cliente nao encontrado.' });
 
-    // Montar veículos com alertas calculados
-    const vehicles = client.vehicles.map(v => ({
+    const vehicles = client.vehicles.map((v) => ({
       ...v,
-      maintenances: v.maintenances.map(m => ({
+      maintenances: v.maintenances.map((m) => ({
         ...m,
         alertLevel: getAlertLevel(m, v.currentKm),
       })),
     }));
 
-    // Lista plana de manutenções com alerta (para o banner do dashboard)
-    const maintenances = vehicles.flatMap(v =>
+    const maintenances = vehicles.flatMap((v) =>
       v.maintenances
-        .filter(m => m.alertLevel)
-        .map(m => ({ ...m, vehicle: { id: v.id, plate: v.plate, brand: v.brand, model: v.model } }))
+        .filter((m) => m.alertLevel)
+        .map((m) => ({ ...m, vehicle: { id: v.id, plate: v.plate, brand: v.brand, model: v.model } }))
     );
 
-    // OS recentes do cliente (exceto or�amentos)
     const recentOrders = await prisma.serviceOrder.findMany({
       where: { clientId: client.id, status: { not: 'QUOTE' } },
       orderBy: { createdAt: 'desc' },
@@ -80,7 +87,7 @@ const me = async (req, res) => {
       orderBy: { createdAt: 'desc' },
       include: {
         vehicle: { select: { id: true, plate: true, brand: true, model: true } },
-        device: { select: { id: true, model: true, imei: true, status: true } },
+        device: { select: { id: true, model: true, imei: true, status: true, installedAt: true } },
         invoices: {
           orderBy: { dueDate: 'desc' },
           take: 6,
@@ -125,13 +132,13 @@ const me = async (req, res) => {
   }
 };
 
-// GET /api/portal/vehicles/:vehicleId — detalhe de um veículo
 const vehicleDetail = async (req, res) => {
   try {
     const vehicle = await prisma.vehicle.findFirst({
       where: { id: req.params.vehicleId, clientId: req.client.id, active: true },
       include: {
         maintenances: { orderBy: { type: 'asc' } },
+        trackingDevices: { orderBy: [{ installedAt: 'desc' }, { createdAt: 'desc' }] },
         serviceOrders: {
           where: { status: { not: 'QUOTE' } },
           orderBy: { createdAt: 'desc' },
@@ -140,13 +147,43 @@ const vehicleDetail = async (req, res) => {
       },
     });
 
-    if (!vehicle) return res.status(404).json({ error: 'Veículo não encontrado.' });
+    if (!vehicle) return res.status(404).json({ error: 'Veiculo nao encontrado.' });
 
     const STATUS_LABELS = {
-      QUOTE: 'Orçamento', APPROVED: 'Aprovado', STARTED: 'Iniciado',
-      IN_PROGRESS: 'Em Execução', WAITING_PART: 'Aguardando Peça',
-      FINISHING: 'Finalizando', DONE: 'Finalizado', DELIVERED: 'Entregue',
+      QUOTE: 'Orcamento',
+      APPROVED: 'Aprovado',
+      STARTED: 'Iniciado',
+      IN_PROGRESS: 'Em execucao',
+      WAITING_PART: 'Aguardando peca',
+      FINISHING: 'Finalizando',
+      DONE: 'Finalizado',
+      DELIVERED: 'Entregue',
     };
+
+    const maintenances = vehicle.maintenances.map((m) => {
+      const alertLevel = getAlertLevel(m, vehicle.currentKm);
+      return {
+        ...m,
+        alertLevel,
+        statusLabel: toStatusLabel(alertLevel),
+      };
+    });
+
+    const upcomingMaintenances = [...maintenances]
+      .sort((a, b) => {
+        const pa = getMaintenancePriority(a, vehicle.currentKm);
+        const pb = getMaintenancePriority(b, vehicle.currentKm);
+        if (pa !== pb) return pa - pb;
+
+        const ad = a.nextDate ? new Date(a.nextDate).getTime() : Number.MAX_SAFE_INTEGER;
+        const bd = b.nextDate ? new Date(b.nextDate).getTime() : Number.MAX_SAFE_INTEGER;
+        if (ad !== bd) return ad - bd;
+
+        const ak = a.nextKm || Number.MAX_SAFE_INTEGER;
+        const bk = b.nextKm || Number.MAX_SAFE_INTEGER;
+        return ak - bk;
+      })
+      .slice(0, 6);
 
     res.json({
       vehicle: {
@@ -160,22 +197,29 @@ const vehicleDetail = async (req, res) => {
         currentKm: vehicle.currentKm,
         notes: vehicle.notes,
       },
-      maintenances: vehicle.maintenances.map(m => ({
-        ...m,
-        alertLevel: getAlertLevel(m, vehicle.currentKm),
+      maintenances,
+      upcomingMaintenances,
+      trackingDevices: vehicle.trackingDevices.map((device) => ({
+        id: device.id,
+        model: device.model,
+        imei: device.imei,
+        chipNumber: device.chipNumber,
+        carrier: device.carrier,
+        status: device.status,
+        installedAt: device.installedAt,
+        notes: device.notes,
       })),
-      serviceOrders: vehicle.serviceOrders.map(o => ({
-        ...o,
-        statusLabel: STATUS_LABELS[o.status] || o.status,
+      serviceOrders: vehicle.serviceOrders.map((order) => ({
+        ...order,
+        statusLabel: STATUS_LABELS[order.status] || order.status,
       })),
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Erro ao buscar veículo.' });
+    res.status(500).json({ error: 'Erro ao buscar veiculo.' });
   }
 };
 
-// GET /api/portal/so/:soId — detalhe de uma OS (confirma que pertence ao cliente)
 const soDetail = async (req, res) => {
   try {
     const order = await prisma.serviceOrder.findFirst({
@@ -186,7 +230,7 @@ const soDetail = async (req, res) => {
         statusLogs: { orderBy: { createdAt: 'asc' } },
       },
     });
-    if (!order) return res.status(404).json({ error: 'OS não encontrada.' });
+    if (!order) return res.status(404).json({ error: 'OS nao encontrada.' });
     res.json(order);
   } catch (err) {
     console.error(err);
@@ -195,4 +239,3 @@ const soDetail = async (req, res) => {
 };
 
 module.exports = { me, vehicleDetail, soDetail };
-
