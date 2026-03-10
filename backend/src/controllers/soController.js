@@ -1,12 +1,12 @@
-const prisma = require('../lib/prisma');
+﻿const prisma = require('../lib/prisma');
 const { sendWhatsAppMessage } = require('../services/whatsappService');
 
 const STATUS_LABELS = {
-  QUOTE: 'Orçamento',
+  QUOTE: 'OrÃ§amento',
   APPROVED: 'Aprovado',
   STARTED: 'Iniciado',
-  IN_PROGRESS: 'Em Execução',
-  WAITING_PART: 'Aguardando Peça',
+  IN_PROGRESS: 'Em ExecuÃ§Ã£o',
+  WAITING_PART: 'Aguardando PeÃ§a',
   FINISHING: 'Finalizando',
   DONE: 'Finalizado',
   DELIVERED: 'Entregue',
@@ -53,7 +53,7 @@ const list = async (req, res) => {
       pages: Math.ceil(total / parseInt(limit, 10)),
     });
   } catch (err) {
-    return res.status(500).json({ error: 'Erro ao listar ordens de serviço.' });
+    return res.status(500).json({ error: 'Erro ao listar ordens de serviÃ§o.' });
   }
 };
 
@@ -77,7 +77,7 @@ const get = async (req, res) => {
         messages: { orderBy: { createdAt: 'desc' }, take: 10 },
       },
     });
-    if (!order) return res.status(404).json({ error: 'OS não encontrada.' });
+    if (!order) return res.status(404).json({ error: 'OS nÃ£o encontrada.' });
     return res.json({ ...order, total: order.totalPrice });
   } catch (err) {
     return res.status(500).json({ error: 'Erro ao buscar OS.' });
@@ -88,7 +88,12 @@ const create = async (req, res) => {
   try {
     const { clientId, vehicleId, entryKm, notes, items = [] } = req.body;
     if (!clientId || !vehicleId) {
-      return res.status(400).json({ error: 'Cliente e veículo são obrigatórios.' });
+      return res.status(400).json({ error: 'Cliente e veiculo sao obrigatorios.' });
+    }
+
+    const parsedEntryKm = parseInt(entryKm, 10);
+    if (!Number.isInteger(parsedEntryKm) || parsedEntryKm < 0) {
+      return res.status(400).json({ error: 'Quilometragem de entrada e obrigatoria.' });
     }
 
     const parsedItems = items.map((item) => ({
@@ -106,7 +111,7 @@ const create = async (req, res) => {
         data: {
           clientId,
           vehicleId,
-          entryKm: entryKm ? parseInt(entryKm, 10) : null,
+          entryKm: parsedEntryKm,
           notes,
           totalPrice: total,
           createdById: req.user.id,
@@ -116,9 +121,7 @@ const create = async (req, res) => {
         include: { client: true, vehicle: true, items: true },
       });
 
-      if (entryKm) {
-        await tx.vehicle.update({ where: { id: vehicleId }, data: { currentKm: parseInt(entryKm, 10) } });
-      }
+      await tx.vehicle.update({ where: { id: vehicleId }, data: { currentKm: parsedEntryKm } });
       return created;
     });
 
@@ -132,14 +135,14 @@ const updateStatus = async (req, res) => {
   try {
     const { status, notes } = req.body;
     if (!status || !STATUS_LABELS[status]) {
-      return res.status(400).json({ error: 'Status inválido.' });
+      return res.status(400).json({ error: 'Status invÃ¡lido.' });
     }
 
     const current = await prisma.serviceOrder.findUnique({
       where: { id: req.params.id },
       include: { client: true, vehicle: true },
     });
-    if (!current) return res.status(404).json({ error: 'OS não encontrada.' });
+    if (!current) return res.status(404).json({ error: 'OS nÃ£o encontrada.' });
 
     const order = await prisma.$transaction(async (tx) => tx.serviceOrder.update({
       where: { id: req.params.id },
@@ -176,8 +179,12 @@ const updateStatus = async (req, res) => {
 const update = async (req, res) => {
   try {
     const { entryKm, notes, items } = req.body;
+    const parsedEntryKm = entryKm !== undefined && entryKm !== null && entryKm !== '' ? parseInt(entryKm, 10) : null;
+    if (parsedEntryKm !== null && (!Number.isInteger(parsedEntryKm) || parsedEntryKm < 0)) {
+      return res.status(400).json({ error: 'Quilometragem de entrada invalida.' });
+    }
     const current = await prisma.serviceOrder.findUnique({ where: { id: req.params.id } });
-    if (!current) return res.status(404).json({ error: 'OS não encontrada.' });
+    if (!current) return res.status(404).json({ error: 'OS nÃ£o encontrada.' });
 
     const order = await prisma.$transaction(async (tx) => {
       let total = current.totalPrice;
@@ -199,15 +206,15 @@ const update = async (req, res) => {
       const updated = await tx.serviceOrder.update({
         where: { id: req.params.id },
         data: {
-          entryKm: entryKm ? parseInt(entryKm, 10) : undefined,
+          entryKm: parsedEntryKm !== null ? parsedEntryKm : undefined,
           notes,
           totalPrice: parseFloat(total),
         },
         include: { client: true, vehicle: true, items: true },
       });
 
-      if (entryKm) {
-        await tx.vehicle.update({ where: { id: updated.vehicleId }, data: { currentKm: parseInt(entryKm, 10) } });
+      if (parsedEntryKm !== null) {
+        await tx.vehicle.update({ where: { id: updated.vehicleId }, data: { currentKm: parsedEntryKm } });
       }
       return updated;
     });
@@ -222,14 +229,19 @@ function buildWhatsAppMessage(clientName, plate, brand, model, status, number) {
   const statusLabel = STATUS_LABELS[status];
   const portalUrl = `${process.env.FRONTEND_URL}/portal`;
   const msgs = {
-    STARTED: `Olá, ${clientName}! A manutenção do seu ${brand} ${model} (${plate}) foi iniciada. OS #${number}. Acompanhe pelo portal: ${portalUrl}`,
-    IN_PROGRESS: `Olá, ${clientName}! Seu ${brand} ${model} (${plate}) está em manutenção neste momento. OS #${number}. Status: ${statusLabel}.`,
-    WAITING_PART: `Olá, ${clientName}! Seu ${brand} ${model} (${plate}) está aguardando peça para continuidade do serviço. OS #${number}.`,
-    FINISHING: `Olá, ${clientName}! O serviço do seu ${brand} ${model} (${plate}) está em fase final. OS #${number}.`,
-    DONE: `Olá, ${clientName}! O serviço do seu ${brand} ${model} (${plate}) foi concluído. OS #${number}. Em breve faremos a liberação/entrega.`,
-    DELIVERED: `Olá, ${clientName}! Seu ${brand} ${model} (${plate}) foi entregue. Obrigado pela preferência. Portal: ${portalUrl}`,
+    STARTED: `OlÃ¡, ${clientName}! A manutenÃ§Ã£o do seu ${brand} ${model} (${plate}) foi iniciada. OS #${number}. Acompanhe pelo portal: ${portalUrl}`,
+    IN_PROGRESS: `OlÃ¡, ${clientName}! Seu ${brand} ${model} (${plate}) estÃ¡ em manutenÃ§Ã£o neste momento. OS #${number}. Status: ${statusLabel}.`,
+    WAITING_PART: `OlÃ¡, ${clientName}! Seu ${brand} ${model} (${plate}) estÃ¡ aguardando peÃ§a para continuidade do serviÃ§o. OS #${number}.`,
+    FINISHING: `OlÃ¡, ${clientName}! O serviÃ§o do seu ${brand} ${model} (${plate}) estÃ¡ em fase final. OS #${number}.`,
+    DONE: `OlÃ¡, ${clientName}! O serviÃ§o do seu ${brand} ${model} (${plate}) foi concluÃ­do. OS #${number}. Em breve faremos a liberaÃ§Ã£o/entrega.`,
+    DELIVERED: `OlÃ¡, ${clientName}! Seu ${brand} ${model} (${plate}) foi entregue. Obrigado pela preferÃªncia. Portal: ${portalUrl}`,
   };
-  return msgs[status] || `Atualização da OS #${number}: status alterado para ${statusLabel}.`;
+  return msgs[status] || `AtualizaÃ§Ã£o da OS #${number}: status alterado para ${statusLabel}.`;
 }
 
 module.exports = { list, get, create, update, updateStatus };
+
+
+
+
+
