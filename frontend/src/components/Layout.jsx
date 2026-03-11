@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { BRAND } from '../config/brand';
@@ -33,7 +33,10 @@ const BASE_NAV = [
   {
     section: 'INTEGRACOES',
     items: [
-      { to: '/integracoes', icon: 'IE', label: 'Importar / Exportar', permission: 'module:integrations:view' },
+      { to: '/integracoes?tab=integracoes', icon: 'IN', label: 'Integracoes', permission: 'module:integrations:view' },
+      { to: '/integracoes?tab=importacoes', icon: 'IM', label: 'Importacoes', permission: 'module:integrations:view' },
+      { to: '/integracoes?tab=exportacoes', icon: 'EX', label: 'Exportacoes', permission: 'module:integrations:view' },
+      { to: '/integracoes?tab=logs', icon: 'LG', label: 'Logs', permission: 'module:integrations:view' },
       { to: '/integracoes/notificacoes', icon: 'NT', label: 'Central Notificacoes', permission: 'adminOnly' },
     ],
   },
@@ -50,6 +53,7 @@ const BASE_NAV = [
 export default function Layout() {
   const { user, logout, can } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const nav = useMemo(
@@ -63,6 +67,16 @@ export default function Layout() {
   const handleLogout = () => {
     logout();
     navigate('/login');
+  };
+
+  const isItemActive = (item, isActive) => {
+    if (!item?.to || !String(item.to).includes('?')) return isActive;
+
+    const [pathOnly, search = ''] = String(item.to).split('?');
+    if (location.pathname !== pathOnly) return false;
+
+    const currentSearch = String(location.search || '').replace(/^\?/, '');
+    return currentSearch === search;
   };
 
   return (
@@ -88,7 +102,7 @@ export default function Layout() {
                 <NavLink
                   key={item.to}
                   to={item.to}
-                  className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
+                  className={({ isActive }) => `nav-item${isItemActive(item, isActive) ? ' active' : ''}`}
                   onClick={() => setSidebarOpen(false)}
                 >
                   <span>{item.icon}</span>

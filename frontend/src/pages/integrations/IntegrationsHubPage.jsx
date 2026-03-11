@@ -1,8 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { clientsAPI, integrationLogsAPI, productsAPI, soAPI, vehiclesAPI } from '../../services/api';
 import useDebouncedValue from '../../hooks/useDebouncedValue';
 
+const HUB_TABS = [
+  { key: 'integracoes', label: '1. Integracoes' },
+  { key: 'importacoes', label: '2. Importacoes' },
+  { key: 'exportacoes', label: '3. Exportacoes' },
+  { key: 'logs', label: '4. Logs' },
+];
+
+const SECTION_ID_BY_TAB = {
+  integracoes: 'section-integracoes',
+  importacoes: 'section-importacoes',
+  exportacoes: 'section-exportacoes',
+  logs: 'section-logs',
+};
 function formatLogWhen(iso) {
   if (!iso) return '-';
   const parsed = new Date(iso);
@@ -51,6 +64,23 @@ export default function IntegrationsHubPage() {
   const [exportIncludeInactive, setExportIncludeInactive] = useState(false);
   const [logsSearch, setLogsSearch] = useState('');
   const debouncedLogsSearch = useDebouncedValue(logsSearch, 220);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = String(searchParams.get('tab') || 'integracoes').toLowerCase();
+  const currentTab = HUB_TABS.some((tab) => tab.key === tabParam) ? tabParam : 'integracoes';
+
+  const setCurrentTab = useCallback((tabKey) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', tabKey);
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  const getSectionCardStyle = useCallback((tabKey) => {
+    if (currentTab !== tabKey) return undefined;
+    return {
+      border: '2px solid #1A3C5E',
+      boxShadow: '0 0 0 2px rgba(26, 60, 94, 0.12)',
+    };
+  }, [currentTab]);
 
   const [logs, setLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
@@ -77,6 +107,20 @@ export default function IntegrationsHubPage() {
   useEffect(() => {
     loadLogs();
   }, [loadLogs]);
+
+  useEffect(() => {
+    const sectionId = SECTION_ID_BY_TAB[currentTab];
+    if (!sectionId) return undefined;
+
+    const timer = window.setTimeout(() => {
+      const element = document.getElementById(sectionId);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 60);
+
+    return () => window.clearTimeout(timer);
+  }, [currentTab]);
 
   const registerIntegrationLog = useCallback(async (entry) => {
     try {
@@ -316,8 +360,23 @@ export default function IntegrationsHubPage() {
         </div>
       </div>
 
+      <div className="card" style={{ marginBottom: 16, padding: 10 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {HUB_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              className={currentTab === tab.key ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm'}
+              onClick={() => setCurrentTab(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="grid-2" style={{ marginBottom: 16 }}>
-        <div className="card">
+        <div id={SECTION_ID_BY_TAB.integracoes} className="card" style={getSectionCardStyle('integracoes')}>
           <div className="card-title">1. Integracoes</div>
           <div style={{ display: 'grid', gap: 8 }}>
             <Link to="/mensagens" className="btn btn-outline">WhatsApp</Link>
@@ -328,7 +387,7 @@ export default function IntegrationsHubPage() {
           </div>
         </div>
 
-        <div className="card">
+        <div id={SECTION_ID_BY_TAB.importacoes} className="card" style={getSectionCardStyle('importacoes')}>
           <div className="card-title">2. Importacoes</div>
           <div style={{ display: 'grid', gap: 12 }}>
             <div>
@@ -436,7 +495,7 @@ export default function IntegrationsHubPage() {
       </div>
 
       <div className="grid-2" style={{ marginBottom: 16 }}>
-        <div className="card">
+        <div id={SECTION_ID_BY_TAB.exportacoes} className="card" style={getSectionCardStyle('exportacoes')}>
           <div className="card-title">3. Exportacoes</div>
           <div style={{ display: 'grid', gap: 10 }}>
             <input
@@ -530,7 +589,7 @@ export default function IntegrationsHubPage() {
           </div>
         </div>
 
-        <div className="card">
+        <div id={SECTION_ID_BY_TAB.logs} className="card" style={getSectionCardStyle('logs')}>
           <div className="card-title">4. Logs de operacoes</div>
           <input
             className="form-control"
@@ -577,4 +636,3 @@ export default function IntegrationsHubPage() {
     </div>
   );
 }
-
