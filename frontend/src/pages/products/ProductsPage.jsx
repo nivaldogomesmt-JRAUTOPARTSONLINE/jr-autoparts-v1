@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { productsAPI } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 import useDebouncedValue from '../../hooks/useDebouncedValue';
 
 const CAMPAIGNS_STORAGE_KEY = 'jr_products_campaigns';
@@ -85,7 +86,7 @@ function getCampaignStatus(target, achieved) {
   return { label: 'Atencao', color: '#991b1b', bg: '#fee2e2' };
 }
 
-function ProductCard({ product }) {
+function ProductCard({ product, showValues = true }) {
   const stock = Number(product.stock || 0);
   return (
     <Link to={`/produtos/${product.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
@@ -108,7 +109,7 @@ function ProductCard({ product }) {
           <div className="text-sm text-muted" style={{ marginTop: 4 }}>Cod. barras: {product.barcode || 'Nao informado'}</div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
-            <strong style={{ color: '#1A3C5E', fontSize: 16 }}>{money(product.price)}</strong>
+            <strong style={{ color: '#1A3C5E', fontSize: 16 }}>{showValues ? money(product.price) : 'Restrito'}</strong>
             <span className="btn btn-ghost btn-sm">Abrir</span>
           </div>
         </div>
@@ -118,6 +119,8 @@ function ProductCard({ product }) {
 }
 
 export default function ProductsPage() {
+  const { can } = useAuth();
+  const canViewValues = can('sensitive:viewValues');
   const [products, setProducts] = useState([]);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
@@ -303,12 +306,16 @@ export default function ProductsPage() {
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Link to="/integracoes" className="btn btn-outline">Integracoes</Link>
-          <button className="btn btn-outline" onClick={exportFiltered} disabled={exporting || loading}>
-            {exporting ? 'Exportando...' : 'Exportar filtrados'}
-          </button>
-          <button className="btn btn-outline" onClick={printFiltered} disabled={loading || !products.length}>
-            Imprimir
-          </button>
+          {canViewValues ? (
+            <>
+              <button className="btn btn-outline" onClick={exportFiltered} disabled={exporting || loading}>
+                {exporting ? 'Exportando...' : 'Exportar filtrados'}
+              </button>
+              <button className="btn btn-outline" onClick={printFiltered} disabled={loading || !products.length}>
+                Imprimir
+              </button>
+            </>
+          ) : null}
           <Link to="/produtos/novo" className="btn btn-primary">+ Novo Produto</Link>
         </div>
       </div>
@@ -375,7 +382,7 @@ export default function ProductsPage() {
                   {overview.rankings.topByRevenue.slice(0, 6).map((item) => (
                     <div key={`rev-${item.rank}-${item.name}`} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                       <span>{item.rank}. {item.name}</span>
-                      <strong>{money(item.revenue)}</strong>
+                      <strong>{canViewValues ? money(item.revenue) : 'Restrito'}</strong>
                     </div>
                   ))}
                 </div>
@@ -459,7 +466,7 @@ export default function ProductsPage() {
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
-            {products.map((p) => <ProductCard key={p.id} product={p} />)}
+            {products.map((p) => <ProductCard key={p.id} product={p} showValues={canViewValues} />)}
           </div>
         )}
       </div>

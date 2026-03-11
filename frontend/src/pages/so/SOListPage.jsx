@@ -121,7 +121,7 @@ function resolveFilename(headers, fallbackName) {
   return fallbackName;
 }
 
-function MiniRanking({ title, rows = [] }) {
+function MiniRanking({ title, rows = [], showValues = true }) {
   return (
     <div className="card">
       <div className="card-title" style={{ marginBottom: 8 }}>{title}</div>
@@ -132,7 +132,7 @@ function MiniRanking({ title, rows = [] }) {
           {rows.slice(0, 6).map((row) => (
             <Link key={row.id} to={`/os/${row.id}`} style={{ textDecoration: 'none', color: 'inherit', borderBottom: '1px solid #f1f5f9', paddingBottom: 6 }}>
               <div style={{ fontWeight: 700 }}>OS #{row.number} - {row.vehicle?.plate || '-'}</div>
-              <div className="text-sm text-muted">{row.client?.name || '-'} | {formatMoney(row.totalPrice)} | {toStatusLabel(row.status)}</div>
+              <div className="text-sm text-muted">{row.client?.name || '-'} | {showValues ? formatMoney(row.totalPrice) : 'Restrito'} | {toStatusLabel(row.status)}</div>
             </Link>
           ))}
         </div>
@@ -143,6 +143,7 @@ function MiniRanking({ title, rows = [] }) {
 
 export default function SOListPage() {
   const { can } = useAuth();
+  const canViewValues = can('sensitive:viewValues');
   const [orders, setOrders] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -329,11 +330,11 @@ export default function SOListPage() {
         </div>
         <div className="card" style={{ padding: 12 }}>
           <div className="text-sm text-muted">Faturamento</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#166534' }}>{overviewLoading ? '...' : formatMoney(overview?.totals?.revenue || 0)}</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#166534' }}>{overviewLoading ? '...' : (canViewValues ? formatMoney(overview?.totals?.revenue || 0) : 'Restrito')}</div>
         </div>
         <div className="card" style={{ padding: 12 }}>
           <div className="text-sm text-muted">Ticket mÃ©dio</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a' }}>{overviewLoading ? '...' : formatMoney(overview?.totals?.avgTicket || 0)}</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a' }}>{overviewLoading ? '...' : (canViewValues ? formatMoney(overview?.totals?.avgTicket || 0) : 'Restrito')}</div>
         </div>
         <div className="card" style={{ padding: 12 }}>
           <div className="text-sm text-muted">OS atrasadas</div>
@@ -342,14 +343,14 @@ export default function SOListPage() {
       </div>
 
       <div className="grid-3" style={{ marginBottom: 14 }}>
-        <MiniRanking title="OS em andamento" rows={overview?.rankings?.inProgress || []} />
-        <MiniRanking title="Aguardando peÃ§a" rows={overview?.rankings?.waitingPart || []} />
-        <MiniRanking title="OS prontas" rows={overview?.rankings?.ready || []} />
+        <MiniRanking title="OS em andamento" rows={overview?.rankings?.inProgress || []} showValues={canViewValues} />
+        <MiniRanking title="Aguardando peÃ§a" rows={overview?.rankings?.waitingPart || []} showValues={canViewValues} />
+        <MiniRanking title="OS prontas" rows={overview?.rankings?.ready || []} showValues={canViewValues} />
       </div>
 
       <div className="grid-2" style={{ marginBottom: 16 }}>
-        <MiniRanking title="Maiores receitas" rows={overview?.rankings?.topRevenue || []} />
-        <MiniRanking title="OS paradas hÃ¡ mais tempo" rows={overview?.rankings?.stalled || []} />
+        <MiniRanking title="Maiores receitas" rows={overview?.rankings?.topRevenue || []} showValues={canViewValues} />
+        <MiniRanking title="OS paradas hÃ¡ mais tempo" rows={overview?.rankings?.stalled || []} showValues={canViewValues} />
       </div>
 
       <div className="card no-print" style={{ marginBottom: 16 }}>
@@ -442,7 +443,7 @@ export default function SOListPage() {
                   <th>Status</th>
                   <th>Fase pedido</th>
                   <th>Entrega</th>
-                  <th>Total</th>
+                  <th>{canViewValues ? 'Total' : 'Financeiro'}</th>
                   <th>Data</th>
                   <th className="no-print"></th>
                 </tr>
@@ -463,7 +464,7 @@ export default function SOListPage() {
                     </td>
                     <td className="text-sm">{getOrderPhaseLabel(getOrderPhase(os))}</td>
                     <td className="text-sm">{getDeliveryStatusLabel(getDeliveryStatus(os))}</td>
-                    <td>{formatMoney(os.totalPrice)}</td>
+                    <td>{canViewValues ? formatMoney(os.totalPrice) : 'Restrito'}</td>
                     <td className="text-sm text-muted">{new Date(os.createdAt).toLocaleDateString('pt-BR')}</td>
                     <td className="no-print">
                       <div style={{ display: 'flex', gap: 6 }}>

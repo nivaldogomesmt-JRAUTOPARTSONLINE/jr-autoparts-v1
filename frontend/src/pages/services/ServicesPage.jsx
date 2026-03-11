@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { servicesAPI } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 import useDebouncedValue from '../../hooks/useDebouncedValue';
 
 const CAMPAIGNS_STORAGE_KEY = 'jr_services_campaigns';
@@ -68,6 +69,8 @@ function getCampaignStatus(target, achieved) {
 }
 
 export default function ServicesPage() {
+  const { can } = useAuth();
+  const canViewValues = can('sensitive:viewValues');
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -297,7 +300,7 @@ export default function ServicesPage() {
           <div className="page-subtitle">Tela gerencial de execucao, receita e eficiencia</div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button className="btn btn-outline" onClick={exportFilteredServices}>Exportar filtrados</button>
+          {canViewValues ? <button className="btn btn-outline" onClick={exportFilteredServices}>Exportar filtrados</button> : null}
           <button className="btn btn-primary" onClick={() => openModal()}>+ Novo Servico</button>
         </div>
       </div>
@@ -321,7 +324,7 @@ export default function ServicesPage() {
         </div>
         <div className="card" style={{ padding: 12 }}>
           <div className="text-sm text-muted">Preco medio</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a' }}>{formatMoney(resumo.averagePrice)}</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a' }}>{canViewValues ? formatMoney(resumo.averagePrice) : 'Restrito'}</div>
         </div>
       </div>
 
@@ -337,7 +340,7 @@ export default function ServicesPage() {
               {overview.rankings.topByRevenue.slice(0, 6).map((row) => (
                 <div key={`rev-${row.rank}-${row.name}`} style={{ borderBottom: '1px solid #f1f5f9', paddingBottom: 6 }}>
                   <div style={{ fontWeight: 700 }}>{row.rank}. {row.name}</div>
-                  <div className="text-sm text-muted">Qtd: {row.quantity} | Receita: {formatMoney(row.revenue)}</div>
+                  <div className="text-sm text-muted">Qtd: {row.quantity} | Receita: {canViewValues ? formatMoney(row.revenue) : 'Restrito'}</div>
                 </div>
               ))}
             </div>
@@ -355,7 +358,7 @@ export default function ServicesPage() {
               {overview.rankings.topByQuantity.slice(0, 6).map((row) => (
                 <div key={`qty-${row.rank}-${row.name}`} style={{ borderBottom: '1px solid #f1f5f9', paddingBottom: 6 }}>
                   <div style={{ fontWeight: 700 }}>{row.rank}. {row.name}</div>
-                  <div className="text-sm text-muted">Qtd: {row.quantity} | Receita: {formatMoney(row.revenue)}</div>
+                  <div className="text-sm text-muted">Qtd: {row.quantity} | Receita: {canViewValues ? formatMoney(row.revenue) : 'Restrito'}</div>
                 </div>
               ))}
             </div>
@@ -375,7 +378,7 @@ export default function ServicesPage() {
               {overview.slowRows.slice(0, 6).map((row) => (
                 <div key={`slow-${row.id}`} style={{ borderBottom: '1px solid #f1f5f9', paddingBottom: 6 }}>
                   <div style={{ fontWeight: 700 }}>{row.name}</div>
-                  <div className="text-sm text-muted">Tempo: {formatMinutes(row.estimatedTime)} | Preco: {formatMoney(row.price)}</div>
+                  <div className="text-sm text-muted">Tempo: {formatMinutes(row.estimatedTime)} | Preco: {canViewValues ? formatMoney(row.price) : 'Restrito'}</div>
                 </div>
               ))}
             </div>
@@ -456,7 +459,7 @@ export default function ServicesPage() {
                   <tr key={s.id}>
                     <td style={{ fontWeight: 700 }}>{s.name}</td>
                     <td className="text-sm text-muted">{s.description || '-'}</td>
-                    <td><strong style={{ color: '#1A3C5E' }}>{formatMoney(s.price)}</strong></td>
+                    <td><strong style={{ color: '#1A3C5E' }}>{canViewValues ? formatMoney(s.price) : 'Restrito'}</strong></td>
                     <td className="text-sm">{formatMinutes(s.estimatedTime)}</td>
                     <td>
                       <button className="btn btn-ghost btn-sm" onClick={() => openModal(s)}>Editar</button>
@@ -490,7 +493,11 @@ export default function ServicesPage() {
                 <div className="form-row">
                   <div className="form-group">
                     <label className="form-label required">Preco (R$)</label>
-                    <input type="number" step="0.01" className="form-control" value={form.price} onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))} required />
+                    {canViewValues ? (
+                      <input type="number" step="0.01" className="form-control" value={form.price} onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))} required />
+                    ) : (
+                      <input type="text" className="form-control" value="Restrito" disabled />
+                    )}
                   </div>
                   <div className="form-group">
                     <label className="form-label">Tempo estimado (minutos)</label>
@@ -563,3 +570,4 @@ export default function ServicesPage() {
     </div>
   );
 }
+
