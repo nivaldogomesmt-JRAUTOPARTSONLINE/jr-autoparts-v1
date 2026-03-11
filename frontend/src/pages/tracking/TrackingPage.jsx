@@ -1,6 +1,31 @@
 import { useEffect, useMemo, useState } from 'react';
 import { clientsAPI, trackingAPI, vehiclesAPI } from '../../services/api';
 
+const CAMPAIGNS_STORAGE_KEY = 'jr_tracking_campaigns';
+
+const DEFAULT_CAMPAIGNS = [
+  {
+    id: 'trk-campaign-1',
+    name: 'Reducao de inadimplencia',
+    objective: 'Diminuir mensalidades em atraso',
+    period: 'Mensal',
+    owner: 'Financeiro',
+    target: 5,
+    achieved: 0,
+    autoSource: 'OPEN_INVOICES',
+  },
+  {
+    id: 'trk-campaign-2',
+    name: 'Ativacao de contratos',
+    objective: 'Aumentar contratos ativos',
+    period: 'Mensal',
+    owner: 'Comercial',
+    target: 20,
+    achieved: 0,
+    autoSource: 'ACTIVE_CONTRACTS',
+  },
+];
+
 const invoiceBandLabel = {
   ON_TIME: 'Em dia',
   LIGHT: 'Atraso leve (1-30d)',
@@ -22,6 +47,30 @@ const deviceStatusBadgeClass = {
   MAINTENANCE: 'badge-yellow',
   REMOVED: 'badge-red',
 };
+
+function getInitialCampaigns() {
+  if (typeof window === 'undefined') return DEFAULT_CAMPAIGNS;
+  try {
+    const raw = window.localStorage.getItem(CAMPAIGNS_STORAGE_KEY);
+    if (!raw) return DEFAULT_CAMPAIGNS;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || !parsed.length) return DEFAULT_CAMPAIGNS;
+    return parsed;
+  } catch {
+    return DEFAULT_CAMPAIGNS;
+  }
+}
+
+function getCampaignStatus(target, achieved) {
+  const safeTarget = Number(target || 0);
+  const safeAchieved = Number(achieved || 0);
+  if (safeTarget <= 0) return { label: 'Sem meta', color: '#334155', bg: '#e2e8f0' };
+
+  const ratio = safeAchieved / safeTarget;
+  if (ratio >= 1) return { label: 'Em meta', color: '#166534', bg: '#dcfce7' };
+  if (ratio >= 0.7) return { label: 'Em acompanhamento', color: '#92400e', bg: '#fef3c7' };
+  return { label: 'Atencao', color: '#991b1b', bg: '#fee2e2' };
+}
 
 export default function TrackingPage() {
   const [summary, setSummary] = useState(null);
@@ -46,6 +95,7 @@ export default function TrackingPage() {
   const [invoiceForm, setInvoiceForm] = useState({
     contractId: '', referenceMonth: '', dueDate: '', amount: '', notes: '',
   });
+  const [campaigns, setCampaigns] = useState(() => getInitialCampaigns());
 
   const loadBaseData = async () => {
     setLoading(true);
@@ -96,6 +146,14 @@ export default function TrackingPage() {
     return () => clearTimeout(timer);
   }, [deviceFilters.search, deviceFilters.status]);
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(CAMPAIGNS_STORAGE_KEY, JSON.stringify(campaigns));
+    } catch {
+      // ignore storage errors
+    }
+  }, [campaigns]);
+
   const overdueInvoices = useMemo(() => (invoices || []).filter((i) => i.daysOverdue > 0 && i.status !== 'PAID'), [invoices]);
 
   const deviceStats = useMemo(() => {
@@ -105,6 +163,52 @@ export default function TrackingPage() {
     });
     return stats;
   }, [devices]);
+
+  const campaignsView = useMemo(() => (
+    campaigns.map((campaign) => {
+      let achieved = Number(campaign.achieved || 0);
+      if (campaign.autoSource === 'OPEN_INVOICES') achieved = Number(summary?.openInvoices || 0);
+      if (campaign.autoSource === 'ACTIVE_CONTRACTS') achieved = Number(summary?.activeContracts || 0);
+      if (campaign.autoSource === 'OPEN_AMOUNT') achieved = Number(summary?.openAmount || 0);
+      const status = getCampaignStatus(campaign.target, achieved);
+      return {
+        ...campaign,
+        achieved,
+        statusLabel: status.label,
+        statusColor: status.color,
+        statusBg: status.bg,
+      };
+    })
+  ), [campaigns, summary]);
+
+  const addCampaign = () => {
+    const name = window.prompt('Nome da campanha:');
+    if (!name) return;
+
+    const objective = window.prompt('Objetivo da campanha:', 'Melhorar indicadores de rastreamento') || '';
+    const period = window.prompt('Periodo (ex: Mensal):', 'Mensal') || 'Mensal';
+    const owner = window.prompt('Responsavel:', 'Financeiro') || 'Financeiro';
+    const target = Number(window.prompt('Meta numerica:', '10') || 0);
+
+    setCampaigns((prev) => [
+      {
+        id: `trk-campaign-${Date.now()}`,
+        name: String(name).trim(),
+        objective: String(objective).trim(),
+        period: String(period).trim(),
+        owner: String(owner).trim(),
+        target,
+        achieved: 0,
+        autoSource: '',
+      },
+      ...prev,
+    ]);
+  };
+
+  const removeCampaign = (id) => {
+    if (!window.confirm('Remover esta campanha?')) return;
+    setCampaigns((prev) => prev.filter((row) => row.id !== id));
+  };
 
   const submitDevice = async (e) => {
     e.preventDefault();
@@ -207,6 +311,41 @@ export default function TrackingPage() {
           <div>61-90 dias: <b>{summary?.delinquency?.critical || 0}</b></div>
           <div>+90 dias: <b>{summary?.delinquency?.recovery || 0}</b></div>
         </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+          <h3 style={{ margin: 0 }}>Metas e campanhas</h3>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={addCampaign}>+ Nova campanha</button>
+        </div>
+
+        {!campaignsView.length ? (
+          <div className="text-sm text-muted">Sem campanhas cadastradas.</div>
+        ) : (
+          <div style={{ display: 'grid', gap: 8 }}>
+            {campaignsView.map((campaign) => (
+              <div key={campaign.id} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
+                  <div style={{ fontWeight: 700 }}>{campaign.name}</div>
+                  <span style={{ background: campaign.statusBg, color: campaign.statusColor, padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>
+                    {campaign.statusLabel}
+                  </span>
+                </div>
+                <div className="text-sm text-muted">Objetivo: {campaign.objective || '-'}</div>
+                <div className="text-sm text-muted">Periodo: {campaign.period || '-'} | Responsavel: {campaign.owner || '-'}</div>
+                <div className="text-sm">
+                  Meta: <b>{Number(campaign.target || 0)}</b> | Realizado: <b>{Number(campaign.achieved || 0)}</b> | Status: <b>{campaign.statusLabel}</b>
+                </div>
+                {campaign.autoSource ? (
+                  <div className="text-sm text-muted">Realizado automatico com base no painel de rastreamento.</div>
+                ) : null}
+                <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                  <button type="button" className="btn btn-danger btn-sm" onClick={() => removeCampaign(campaign.id)}>Remover</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>

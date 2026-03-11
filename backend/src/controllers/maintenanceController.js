@@ -1,4 +1,11 @@
 ﻿const prisma = require('../lib/prisma');
+const {
+  computeMaintenanceForecast,
+  getMaintenanceAlertLevel,
+  toDateOrNull,
+  toIntOrNull,
+} = require('../utils/maintenance');
+const { sendMaintenanceAlerts } = require('../services/maintenanceNotificationService');
 
 const DEFAULT_MAINTENANCE_ITEMS = [
   { type: 'oil', label: 'Troca de Oleo', intervalKm: 10000, intervalMonths: 6 },
@@ -14,45 +21,38 @@ const DEFAULT_MAINTENANCE_ITEMS = [
 ];
 
 function intOrNull(value) {
-  if (value === null || value === undefined || value === '') return null;
-  const n = parseInt(value, 10);
-  return Number.isNaN(n) ? null : n;
+  return toIntOrNull(value);
 }
 
 function dateOrNull(value) {
-  if (!value) return null;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
+  return toDateOrNull(value);
 }
 
-function computeAlertLevel(maintenance, currentKm) {
-  const now = new Date();
-  const in30days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-
-  if (maintenance.nextDate && new Date(maintenance.nextDate) < now) return 'OVERDUE';
-  if (maintenance.nextKm && currentKm && currentKm >= maintenance.nextKm) return 'OVERDUE';
-
-  if (maintenance.nextDate && new Date(maintenance.nextDate) <= in30days) return 'DUE_SOON';
-  if (maintenance.nextKm && currentKm && maintenance.nextKm - currentKm <= 1000) return 'DUE_SOON';
-
-  return 'OK';
+function computeAlertLevel(maintenance, currentKm, options = {}) {
+  return getMaintenanceAlertLevel(maintenance, currentKm, options);
 }
 
-function recalcNext({ lastDate, lastKm, intervalMonths, intervalKm, currentNextDate, currentNextKm }) {
-  let nextDate = currentNextDate || null;
-  let nextKm = currentNextKm || null;
-
-  if (lastDate && intervalMonths) {
-    const d = new Date(lastDate);
-    d.setMonth(d.getMonth() + parseInt(intervalMonths, 10));
-    nextDate = d;
-  }
-
-  if (lastKm !== null && lastKm !== undefined && intervalKm) {
-    nextKm = parseInt(lastKm, 10) + parseInt(intervalKm, 10);
-  }
-
-  return { nextDate, nextKm };
+function recalcNext({
+  lastDate,
+  lastKm,
+  intervalMonths,
+  intervalKm,
+  currentNextDate,
+  currentNextKm,
+  baselineDate,
+  baselineKm,
+}) {
+  return computeMaintenanceForecast(
+    {
+      lastDate,
+      lastKm,
+      intervalMonths,
+      intervalKm,
+      nextDate: currentNextDate,
+      nextKm: currentNextKm,
+    },
+    { baselineDate, baselineKm }
+  );
 }
 
 async function ensureVehicleExists(vehicleId) {
@@ -72,6 +72,8 @@ const alerts = async (req, res) => {
         OR: [
           { nextDate: { not: null } },
           { nextKm: { not: null } },
+          { intervalMonths: { not: null } },
+          { intervalKm: { not: null } },
         ],
       },
       include: {
@@ -90,7 +92,19 @@ const alerts = async (req, res) => {
     });
 
     const result = maintenances
-      .map((m) => ({ ...m, alertLevel: computeAlertLevel(m, m.vehicle?.currentKm || null) }))
+      .map((m) => {
+        const forecast = computeMaintenanceForecast(m, {
+          baselineDate: m.createdAt,
+          baselineKm: m.vehicle?.currentKm,
+        });
+
+        const normalized = { ...m, ...forecast };
+
+        return {
+          ...normalized,
+          alertLevel: computeAlertLevel(normalized, m.vehicle?.currentKm),
+        };
+      })
       .filter((m) => m.alertLevel !== 'OK')
       .sort((a, b) => {
         const order = { OVERDUE: 0, DUE_SOON: 1 };
@@ -114,10 +128,18 @@ const byVehicle = async (req, res) => {
       orderBy: { type: 'asc' },
     });
 
-    const result = maintenances.map((m) => ({
-      ...m,
-      alertLevel: computeAlertLevel(m, vehicle.currentKm),
-    }));
+    const result = maintenances.map((m) => {
+      const forecast = computeMaintenanceForecast(m, {
+        baselineDate: m.createdAt,
+        baselineKm: vehicle.currentKm,
+      });
+      const normalized = { ...m, ...forecast };
+
+      return {
+        ...normalized,
+        alertLevel: computeAlertLevel(normalized, vehicle.currentKm),
+      };
+    });
 
     res.json({ vehicle, maintenances: result });
   } catch (err) {
@@ -133,6 +155,11 @@ const update = async (req, res) => {
     const current = await prisma.preventiveMaintenance.findUnique({ where: { id: req.params.id } });
     if (!current) return res.status(404).json({ error: 'Manutencao nao encontrada.' });
 
+    const vehicle = await prisma.vehicle.findUnique({
+      where: { id: current.vehicleId },
+      select: { currentKm: true },
+    });
+
     const effIntervalKm = intervalKm !== undefined ? intOrNull(intervalKm) : current.intervalKm;
     const effIntervalMonths = intervalMonths !== undefined ? intOrNull(intervalMonths) : current.intervalMonths;
     const effLastDate = lastDate !== undefined ? dateOrNull(lastDate) : current.lastDate;
@@ -145,6 +172,8 @@ const update = async (req, res) => {
       intervalKm: effIntervalKm,
       currentNextDate: current.nextDate,
       currentNextKm: current.nextKm,
+      baselineDate: current.createdAt,
+      baselineKm: vehicle?.currentKm,
     });
 
     const maintenance = await prisma.preventiveMaintenance.update({
@@ -192,6 +221,8 @@ const upsertVehicleItem = async (req, res) => {
         lastKm: lastKmParsed,
         intervalMonths: intervalMonthsParsed,
         intervalKm: intervalKmParsed,
+        baselineDate: new Date(),
+        baselineKm: vehicle.currentKm,
       });
 
       const created = await prisma.preventiveMaintenance.create({
@@ -218,6 +249,8 @@ const upsertVehicleItem = async (req, res) => {
       intervalKm: intervalKm !== undefined ? intervalKmParsed : existing.intervalKm,
       currentNextDate: existing.nextDate,
       currentNextKm: existing.nextKm,
+      baselineDate: existing.createdAt,
+      baselineKm: vehicle.currentKm,
     });
 
     const updated = await prisma.preventiveMaintenance.update({
@@ -256,14 +289,28 @@ const initializeVehicle = async (req, res) => {
       return res.json({ created: 0, message: 'Itens de manutencao ja estavam completos.' });
     }
 
+    const now = new Date();
+
     await prisma.preventiveMaintenance.createMany({
-      data: missing.map((item) => ({
-        vehicleId: vehicle.id,
-        type: item.type,
-        label: item.label,
-        intervalKm: item.intervalKm,
-        intervalMonths: item.intervalMonths,
-      })),
+      data: missing.map((item) => {
+        const forecast = computeMaintenanceForecast(
+          {
+            intervalKm: item.intervalKm,
+            intervalMonths: item.intervalMonths,
+          },
+          { baselineDate: now, baselineKm: vehicle.currentKm }
+        );
+
+        return {
+          vehicleId: vehicle.id,
+          type: item.type,
+          label: item.label,
+          intervalKm: item.intervalKm,
+          intervalMonths: item.intervalMonths,
+          nextDate: forecast.nextDate,
+          nextKm: forecast.nextKm,
+        };
+      }),
       skipDuplicates: true,
     });
 
@@ -285,6 +332,7 @@ const markDone = async (req, res) => {
 
     if (!maintenance) return res.status(404).json({ error: 'Manutencao nao encontrada para esse veiculo.' });
 
+    const vehicle = await ensureVehicleExists(req.params.vehicleId);
     const doneDateParsed = doneDate ? new Date(doneDate) : new Date();
     const doneKmParsed = doneKm !== undefined && doneKm !== null && doneKm !== '' ? parseInt(doneKm, 10) : null;
 
@@ -295,6 +343,8 @@ const markDone = async (req, res) => {
       intervalKm: maintenance.intervalKm,
       currentNextDate: maintenance.nextDate,
       currentNextKm: maintenance.nextKm,
+      baselineDate: maintenance.createdAt,
+      baselineKm: vehicle?.currentKm,
     });
 
     const updated = await prisma.preventiveMaintenance.update({
@@ -313,4 +363,20 @@ const markDone = async (req, res) => {
   }
 };
 
-module.exports = { alerts, byVehicle, update, upsertVehicleItem, initializeVehicle, markDone };
+
+// POST /api/maintenance/notify-run
+const notifyNow = async (req, res) => {
+  try {
+    const dryRun = String(req.query?.dryRun || req.body?.dryRun || '').toLowerCase();
+    const dry = ['1', 'true', 'yes', 'sim', 's'].includes(dryRun);
+    const limitRaw = req.query?.limit ?? req.body?.limit;
+    const parsedLimit = Number.parseInt(String(limitRaw ?? ''), 10);
+    const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 3000) : 500;
+
+    const result = await sendMaintenanceAlerts({ dryRun: dry, limit });
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({ error: 'Erro ao enviar notificacoes de manutencao.' });
+  }
+};
+module.exports = { alerts, byVehicle, update, upsertVehicleItem, initializeVehicle, markDone, notifyNow };

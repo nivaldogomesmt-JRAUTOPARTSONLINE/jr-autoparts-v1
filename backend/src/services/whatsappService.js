@@ -1,5 +1,6 @@
 ﻿const axios = require('axios');
 const prisma = require('../lib/prisma');
+const { resolveNotificationPayload } = require('./notificationCenterService');
 
 const DEFAULT_COUNTRY_CODE = '55';
 
@@ -207,6 +208,25 @@ async function upsertMessageRecord({ clientId, soId, phone, content, messageId }
   });
 }
 
+async function wasWhatsAppRecentlySent({ clientId, soId = null, content, windowHours = 24 }) {
+  const safeHours = Math.max(1, Number.parseInt(String(windowHours || 24), 10) || 24);
+  const recent = new Date(Date.now() - safeHours * 60 * 60 * 1000);
+
+  const found = await prisma.whatsappMessage.findFirst({
+    where: {
+      clientId,
+      soId: soId || null,
+      content: String(content || ''),
+      createdAt: { gte: recent },
+      status: { in: ['PENDING', 'SENT'] },
+    },
+    select: { id: true, createdAt: true, status: true },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  return found || null;
+}
+
 async function getBotConversaConfig() {
   const envUrl = process.env.BOTCONVERSA_API_URL || process.env.BOTCONVERSA_API_BASE_URL || '';
   const envKey = process.env.BOTCONVERSA_API_KEY || '';
@@ -341,4 +361,67 @@ const sendWhatsAppMessage = async ({ clientId, soId, phone, content, messageId }
   }
 };
 
-module.exports = { sendWhatsAppMessage };
+const sendWhatsAppMessageWithDedupe = async ({
+  clientId,
+  soId,
+  phone,
+  content,
+  messageId,
+  dedupeHours = 24,
+  eventKey,
+  templateVariables,
+}) => {
+  const resolved = await resolveNotificationPayload({
+    eventKey,
+    fallbackContent: content,
+    variables: templateVariables || {},
+    fallbackDedupeHours: dedupeHours,
+  });
+
+  if (!resolved.enabled) {
+    return {
+      success: true,
+      skipped: true,
+      reason: resolved.reason || 'event_disabled',
+      eventKey: resolved.eventKey,
+    };
+  }
+
+  const duplicate = await wasWhatsAppRecentlySent({
+    clientId,
+    soId: soId || null,
+    content: resolved.content,
+    windowHours: resolved.dedupeHours,
+  });
+
+  if (duplicate) {
+    return {
+      success: true,
+      skipped: true,
+      reason: 'duplicate',
+      duplicateMessageId: duplicate.id,
+      eventKey: resolved.eventKey,
+    };
+  }
+
+  const result = await sendWhatsAppMessage({
+    clientId,
+    soId,
+    phone,
+    content: resolved.content,
+    messageId,
+  });
+
+  return {
+    ...result,
+    skipped: false,
+    eventKey: resolved.eventKey,
+  };
+};
+
+module.exports = {
+  sendWhatsAppMessage,
+  sendWhatsAppMessageWithDedupe,
+  wasWhatsAppRecentlySent,
+};
+

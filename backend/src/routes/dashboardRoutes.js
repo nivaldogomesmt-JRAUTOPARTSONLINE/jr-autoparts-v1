@@ -1,7 +1,7 @@
 const router = require('express').Router();
 const { getDashboard } = require('../controllers/dashboardController');
-const { authenticate, requireEmployee } = require('../middleware/auth');
+const { authenticate, requireEmployee, requireModuleAction } = require('../middleware/auth');
 
-router.get('/', authenticate, requireEmployee, getDashboard);
+router.get('/', authenticate, requireEmployee, requireModuleAction('dashboard', 'view'), getDashboard);
 
 module.exports = router;

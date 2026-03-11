@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const c = require('../controllers/trackingController');
-const { authenticate, requireEmployee, requireAction } = require('../middleware/auth');
+const { authenticate, requireEmployee, requireModuleAction } = require('../middleware/auth');
 const { safeCompare } = require('../utils/security');
 const {
   runTrackingDailyJobs,
@@ -17,7 +17,7 @@ function allowJobTokenOrEmployee(req, res, next) {
     return next();
   }
 
-  return authenticate(req, res, () => requireEmployee(req, res, next));
+  return authenticate(req, res, () => requireEmployee(req, res, () => requireModuleAction('tracking', 'edit')(req, res, next)));
 }
 
 router.post('/jobs/generate', allowJobTokenOrEmployee, async (req, res) => {
@@ -51,17 +51,17 @@ router.post('/jobs/run', allowJobTokenOrEmployee, async (req, res) => {
 
 router.use(authenticate, requireEmployee);
 
-router.get('/summary', c.summary);
+router.get('/summary', requireModuleAction('tracking', 'view'), c.summary);
 
-router.get('/devices', c.listDevices);
-router.post('/devices', requireAction('add'), c.createDevice);
-router.put('/devices/:id', requireAction('edit'), c.updateDevice);
+router.get('/devices', requireModuleAction('tracking', 'view'), c.listDevices);
+router.post('/devices', requireModuleAction('tracking', 'add'), c.createDevice);
+router.put('/devices/:id', requireModuleAction('tracking', 'edit'), c.updateDevice);
 
-router.get('/contracts', c.listContracts);
-router.post('/contracts', requireAction('add'), c.createContract);
+router.get('/contracts', requireModuleAction('tracking', 'view'), c.listContracts);
+router.post('/contracts', requireModuleAction('tracking', 'add'), c.createContract);
 
-router.get('/invoices', c.listInvoices);
-router.post('/invoices', requireAction('add'), c.createInvoice);
-router.post('/invoices/:id/pay', requireAction('edit'), c.markInvoicePaid);
+router.get('/invoices', requireModuleAction('tracking', 'view'), c.listInvoices);
+router.post('/invoices', requireModuleAction('tracking', 'add'), c.createInvoice);
+router.post('/invoices/:id/pay', requireModuleAction('tracking', 'changeStatus'), c.markInvoicePaid);
 
 module.exports = router;

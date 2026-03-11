@@ -1,4 +1,93 @@
-﻿const prisma = require('../lib/prisma');
+const prisma = require('../lib/prisma');
+const { sendWhatsAppMessageWithDedupe } = require('../services/whatsappService');
+const {
+  computeMaintenanceForecast,
+  getMaintenanceAlertLevel,
+  toIntOrNull,
+} = require('../utils/maintenance');
+
+const MAINTENANCE_RULES = [
+  {
+    type: 'oil',
+    label: 'Troca de Oleo',
+    intervalKm: 10000,
+    intervalMonths: 6,
+    match: (text) => (
+      text.includes('OLEO')
+      || text.includes('LUBRIFICANTE')
+      || text.includes('LUBRIFICACAO')
+    ),
+  },
+  {
+    type: 'belt',
+    label: 'Correia Dentada',
+    intervalKm: 60000,
+    intervalMonths: 48,
+    match: (text) => (
+      text.includes('CORREIA')
+      && (
+        text.includes('DENTADA')
+        || text.includes('SINCRONIZADORA')
+        || text.includes('DISTRIBUICAO')
+      )
+    ),
+  },
+];
+
+const DELIVERY_META_PREFIX = '[DELIVERY_META]';
+const DELIVERY_STATUS_LABELS = {
+  AWAITING_DISPATCH: 'Aguardando envio',
+  OUT_FOR_DELIVERY: 'Saiu para entrega',
+  DELIVERED: 'Entregue',
+  DELIVERY_FAILED: 'Tentativa sem sucesso',
+};
+const ORDER_PHASE_LABELS = {
+  CONFIRMED: 'Pedido confirmado',
+  PAYMENT_APPROVED: 'Pagamento aprovado',
+  IN_SEPARATION: 'Em separacao',
+  SHIPPED: 'Enviado',
+  DELIVERED: 'Entregue',
+  CANCELED: 'Cancelado',
+};
+
+const parseDeliveryMetaFromNotes = (notes) => {
+  const text = String(notes || '');
+  const idx = text.lastIndexOf(DELIVERY_META_PREFIX);
+  if (idx === -1) return null;
+  const raw = text.slice(idx + DELIVERY_META_PREFIX.length).trim();
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+};
+
+const normalizeDeliveryMeta = (meta) => {
+  if (!meta || typeof meta !== 'object') {
+    return {
+      status: null,
+      statusLabel: null,
+      orderPhase: null,
+      orderPhaseLabel: null,
+      locationUrl: null,
+      note: null,
+      updatedAt: null,
+      updatedBy: null,
+    };
+  }
+
+  return {
+    status: meta.status || null,
+    statusLabel: meta.statusLabel || (meta.status ? DELIVERY_STATUS_LABELS[meta.status] : null),
+    orderPhase: meta.orderPhase || null,
+    orderPhaseLabel: meta.orderPhaseLabel || (meta.orderPhase ? ORDER_PHASE_LABELS[meta.orderPhase] : null),
+    locationUrl: meta.locationUrl ? String(meta.locationUrl) : null,
+    note: meta.note ? String(meta.note) : null,
+    updatedAt: meta.updatedAt || null,
+    updatedBy: meta.updatedBy || null,
+  };
+};
 
 const getInvoiceBand = (daysOverdue) => {
   if (daysOverdue <= 0) return 'ON_TIME';
@@ -21,28 +110,22 @@ const normalizeTrackingInvoice = (invoice) => {
   };
 };
 
-const getAlertLevel = (maintenance, currentKm) => {
-  const now = new Date();
-  const in30days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-
-  if (maintenance.nextDate && new Date(maintenance.nextDate) < now) return 'OVERDUE';
-  if (maintenance.nextKm && currentKm && currentKm >= maintenance.nextKm) return 'OVERDUE';
-  if (maintenance.nextDate && new Date(maintenance.nextDate) <= in30days) return 'DUE_SOON';
-  if (maintenance.nextKm && currentKm && maintenance.nextKm - currentKm <= 1000) return 'DUE_SOON';
-  return null;
+const getAlertLevel = (maintenance, currentKm, options = {}) => {
+  const level = getMaintenanceAlertLevel(maintenance, currentKm, options);
+  return level === 'OK' ? null : level;
 };
 
-const getMaintenancePriority = (maintenance, currentKm) => {
-  const alertLevel = getAlertLevel(maintenance, currentKm);
+const getMaintenancePriority = (maintenance, currentKm, options = {}) => {
+  const alertLevel = getAlertLevel(maintenance, currentKm, options);
   if (alertLevel === 'OVERDUE') return 0;
   if (alertLevel === 'DUE_SOON') return 1;
   return 2;
 };
 
 const toStatusLabel = (alertLevel) => {
-  if (alertLevel === 'OVERDUE') return 'Vencido';
-  if (alertLevel === 'DUE_SOON') return 'Proximo';
-  return 'Em dia';
+  if (alertLevel === 'OVERDUE') return 'Urgencia';
+  if (alertLevel === 'DUE_SOON') return 'Atencao';
+  return 'OK';
 };
 
 const buildDueMeta = (maintenance, currentKm) => {
@@ -53,8 +136,10 @@ const buildDueMeta = (maintenance, currentKm) => {
     ? Math.floor((new Date(maintenance.nextDate).getTime() - now.getTime()) / dayMs)
     : null;
 
-  const remainingKm = maintenance.nextKm && currentKm !== null && currentKm !== undefined
-    ? maintenance.nextKm - currentKm
+  const currentKmNumber = toIntOrNull(currentKm);
+  const nextKmNumber = toIntOrNull(maintenance.nextKm);
+  const remainingKm = nextKmNumber !== null && currentKmNumber !== null
+    ? nextKmNumber - currentKmNumber
     : null;
 
   let dueBy = 'NONE';
@@ -76,25 +161,6 @@ const buildDueMeta = (maintenance, currentKm) => {
   return { dueBy, daysUntil, remainingKm };
 };
 
-
-
-const computeMaintenanceForecast = (maintenance) => {
-  let nextDate = maintenance.nextDate || null;
-  let nextKm = maintenance.nextKm || null;
-
-  if (!nextDate && maintenance.lastDate && maintenance.intervalMonths) {
-    const d = new Date(maintenance.lastDate);
-    d.setMonth(d.getMonth() + parseInt(maintenance.intervalMonths, 10));
-    nextDate = d;
-  }
-
-  if ((nextKm === null || nextKm === undefined) && maintenance.lastKm !== null && maintenance.lastKm !== undefined && maintenance.intervalKm) {
-    nextKm = Number(maintenance.lastKm) + Number(maintenance.intervalKm);
-  }
-
-  return { nextDate, nextKm };
-};
-
 const getMaintenanceSortWeight = (maintenance, currentKm) => {
   const priority = getMaintenancePriority(maintenance, currentKm);
   const nextDate = maintenance.nextDate ? new Date(maintenance.nextDate).getTime() : Number.MAX_SAFE_INTEGER;
@@ -102,6 +168,171 @@ const getMaintenanceSortWeight = (maintenance, currentKm) => {
   return [priority, nextDate, nextKm];
 };
 
+const normalizeText = (value) => (
+  String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+);
+
+const toNumber = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const buildItemsWithTotals = (items) => {
+  const rows = Array.isArray(items) ? items : [];
+
+  const enriched = rows.map((item) => {
+    const quantity = toNumber(item.quantity);
+    const unitPrice = toNumber(item.unitPrice);
+    const lineTotal = quantity * unitPrice;
+
+    return {
+      ...item,
+      quantityNumber: quantity,
+      unitPriceNumber: unitPrice,
+      lineTotal,
+    };
+  });
+
+  const calculatedTotal = enriched.reduce((sum, item) => sum + toNumber(item.lineTotal), 0);
+  return { enriched, calculatedTotal };
+};
+
+const getClosedAtFromStatus = (order) => {
+  const logs = Array.isArray(order?.statusLogs) ? order.statusLogs : [];
+  const closedLog = [...logs]
+    .reverse()
+    .find((log) => ['DONE', 'DELIVERED'].includes(log?.newStatus));
+
+  if (closedLog?.createdAt) return new Date(closedLog.createdAt);
+  if (order?.updatedAt) return new Date(order.updatedAt);
+  if (order?.createdAt) return new Date(order.createdAt);
+  return new Date();
+};
+
+const getMaintenanceResponse = ({ maintenance, type, label, currentKm, source, performedInThisOrder }) => {
+  if (!maintenance) {
+    return {
+      type,
+      label,
+      source: source || 'NOT_AVAILABLE',
+      performedInThisOrder: !!performedInThisOrder,
+      alertLevel: null,
+      statusLabel: source === 'PENDING_EXECUTION' ? 'Aguardando conclusao' : 'Nao configurado',
+      dueBy: 'NONE',
+      daysUntil: null,
+      remainingKm: null,
+      nextDate: null,
+      nextKm: null,
+    };
+  }
+
+  const alertLevel = getAlertLevel(maintenance, currentKm);
+  const dueMeta = buildDueMeta(maintenance, currentKm);
+
+  return {
+    ...maintenance,
+    source,
+    performedInThisOrder: !!performedInThisOrder,
+    alertLevel,
+    statusLabel: toStatusLabel(alertLevel),
+    ...dueMeta,
+  };
+};
+
+const buildProjectedMaintenance = ({ existing, rule, doneDate, doneKm }) => {
+  const intervalKm = toIntOrNull(existing?.intervalKm) ?? rule.intervalKm;
+  const intervalMonths = toIntOrNull(existing?.intervalMonths) ?? rule.intervalMonths;
+
+  const projected = computeMaintenanceForecast(
+    {
+      type: rule.type,
+      label: existing?.label || rule.label,
+      intervalKm,
+      intervalMonths,
+      lastDate: doneDate,
+      lastKm: doneKm,
+      nextDate: null,
+      nextKm: null,
+    },
+    { baselineDate: doneDate, baselineKm: doneKm }
+  );
+
+  return {
+    type: rule.type,
+    label: existing?.label || rule.label,
+    intervalKm,
+    intervalMonths,
+    lastDate: doneDate,
+    lastKm: doneKm,
+    nextDate: projected.nextDate,
+    nextKm: projected.nextKm,
+  };
+};
+
+
+async function notifyPortalProfileChange({ before, after }) {
+  const phone = String(after?.whatsapp || after?.phone || '').trim();
+  if (!phone) return;
+
+  const clientName = after?.name || before?.name || 'Cliente';
+  const portalUrl = `${process.env.FRONTEND_URL || ''}/portal`;
+
+  const whatsappChanged = String(before?.whatsapp || '') !== String(after?.whatsapp || '');
+  const emailChanged = String(before?.email || '') !== String(after?.email || '');
+
+  if (whatsappChanged && String(after?.whatsapp || '').trim()) {
+    const msg = `Ola, ${clientName}! Confirmamos a atualizacao do seu WhatsApp para ${after.whatsapp}.`;
+    await sendWhatsAppMessageWithDedupe({
+      clientId: after.id,
+      soId: null,
+      phone,
+      content: msg,
+      dedupeHours: 12,
+      eventKey: 'PROFILE_WHATSAPP_UPDATED',
+      templateVariables: {
+        clientName,
+        newWhatsapp: after.whatsapp,
+        portalUrl,
+      },
+    }).catch(() => {});
+  }
+
+  if (emailChanged && String(after?.email || '').trim()) {
+    const msg = `Ola, ${clientName}! Confirmamos a atualizacao do seu email para ${after.email}.`;
+    await sendWhatsAppMessageWithDedupe({
+      clientId: after.id,
+      soId: null,
+      phone,
+      content: msg,
+      dedupeHours: 12,
+      eventKey: 'PROFILE_EMAIL_UPDATED',
+      templateVariables: {
+        clientName,
+        newEmail: after.email,
+        portalUrl,
+      },
+    }).catch(() => {});
+  }
+
+  if (!whatsappChanged && !emailChanged) {
+    const msg = `Ola, ${clientName}! Seu cadastro foi atualizado com sucesso na JR Auto Parts. Portal: ${portalUrl}`;
+    await sendWhatsAppMessageWithDedupe({
+      clientId: after.id,
+      soId: null,
+      phone,
+      content: msg,
+      dedupeHours: 12,
+      eventKey: 'PROFILE_UPDATED',
+      templateVariables: {
+        clientName,
+        portalUrl,
+      },
+    }).catch(() => {});
+  }
+}
 const me = async (req, res) => {
   try {
     const client = await prisma.client.findUnique({
@@ -125,7 +356,11 @@ const me = async (req, res) => {
 
     const vehicles = client.vehicles.map((v) => {
       const enrichedMaintenances = v.maintenances.map((m) => {
-        const forecast = computeMaintenanceForecast(m);
+        const forecast = computeMaintenanceForecast(m, {
+          baselineDate: m.createdAt,
+          baselineKm: v.currentKm,
+        });
+
         const normalized = { ...m, nextDate: forecast.nextDate, nextKm: forecast.nextKm };
         const alertLevel = getAlertLevel(normalized, v.currentKm);
         const dueMeta = buildDueMeta(normalized, v.currentKm);
@@ -218,6 +453,7 @@ const me = async (req, res) => {
         name: client.name,
         email: client.email,
         phone: client.phone,
+        whatsapp: client.whatsapp,
       },
       vehicles,
       maintenances,
@@ -235,6 +471,50 @@ const me = async (req, res) => {
   }
 };
 
+const updateMe = async (req, res) => {
+  try {
+    const whatsapp = req.body?.whatsapp !== undefined ? String(req.body.whatsapp || '').trim() : undefined;
+    const phone = req.body?.phone !== undefined ? String(req.body.phone || '').trim() : undefined;
+    const email = req.body?.email !== undefined ? String(req.body.email || '').trim().toLowerCase() : undefined;
+
+    if (email !== undefined && email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'Email invalido.' });
+    }
+
+    const before = await prisma.client.findUnique({
+      where: { id: req.client.id },
+      select: { id: true, name: true, email: true, phone: true, whatsapp: true },
+    });
+
+    if (!before) return res.status(404).json({ error: 'Cliente nao encontrado.' });
+
+    const updated = await prisma.client.update({
+      where: { id: req.client.id },
+      data: {
+        ...(whatsapp !== undefined ? { whatsapp: whatsapp || null } : {}),
+        ...(phone !== undefined ? { phone: phone || null } : {}),
+        ...(email !== undefined ? { email: email || null } : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        whatsapp: true,
+      },
+    });
+
+    await notifyPortalProfileChange({ before, after: updated });
+
+    return res.json({
+      message: 'Dados atualizados com sucesso.',
+      client: updated,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao atualizar dados do cliente.' });
+  }
+};
 const vehicleDetail = async (req, res) => {
   try {
     const vehicle = await prisma.vehicle.findFirst({
@@ -264,7 +544,10 @@ const vehicleDetail = async (req, res) => {
     };
 
     const maintenances = vehicle.maintenances.map((m) => {
-      const forecast = computeMaintenanceForecast(m);
+      const forecast = computeMaintenanceForecast(m, {
+        baselineDate: m.createdAt,
+        baselineKm: vehicle.currentKm,
+      });
       const normalized = { ...m, nextDate: forecast.nextDate, nextKm: forecast.nextKm };
       const alertLevel = getAlertLevel(normalized, vehicle.currentKm);
       const dueMeta = buildDueMeta(normalized, vehicle.currentKm);
@@ -338,14 +621,150 @@ const soDetail = async (req, res) => {
       },
     });
     if (!order) return res.status(404).json({ error: 'OS nao encontrada.' });
-    res.json(order);
+
+    const { enriched: itemsWithTotals, calculatedTotal } = buildItemsWithTotals(order.items);
+    const persistedTotal = Number(order.totalPrice);
+    const displayTotal = Number.isFinite(persistedTotal) ? persistedTotal : calculatedTotal;
+
+    const serviceItems = itemsWithTotals.filter((item) => item.type === 'SERVICE');
+    const productItems = itemsWithTotals.filter((item) => item.type === 'PRODUCT');
+
+    const subtotalServices = serviceItems.reduce((sum, item) => sum + toNumber(item.lineTotal), 0);
+    const subtotalProducts = productItems.reduce((sum, item) => sum + toNumber(item.lineTotal), 0);
+    const subtotalBase = subtotalServices + subtotalProducts;
+
+    const adjustment = displayTotal - subtotalBase;
+    const additional = adjustment > 0 ? adjustment : 0;
+    const discount = adjustment < 0 ? Math.abs(adjustment) : 0;
+
+    const deliveredLog = (order.statusLogs || []).find((log) => String(log.newStatus || '').toUpperCase() === 'DELIVERED');
+    const deliveryMeta = normalizeDeliveryMeta(parseDeliveryMetaFromNotes(order.notes));
+
+    const financialSummary = {
+      subtotalServices,
+      subtotalProducts,
+      discount,
+      additional,
+      totalCalculated: calculatedTotal,
+      totalFinal: displayTotal,
+    };
+
+    const maintenances = await prisma.preventiveMaintenance.findMany({
+      where: {
+        vehicleId: order.vehicleId,
+        type: { in: MAINTENANCE_RULES.map((rule) => rule.type) },
+      },
+    });
+
+    const maintenanceByType = new Map(maintenances.map((row) => [row.type, row]));
+    const joinedOrderText = normalizeText(
+      itemsWithTotals
+        .map((item) => item.itemName || item.description || item.service?.name || item.product?.name)
+        .filter(Boolean)
+        .join(' ')
+    );
+    const orderStatus = String(order.status || '').toUpperCase();
+    const orderCompleted = ['DONE', 'DELIVERED'].includes(orderStatus);
+    const doneDate = getClosedAtFromStatus(order);
+    const doneKm = toIntOrNull(order.entryKm) ?? toIntOrNull(order.vehicle?.currentKm);
+    const referenceCurrentKm = toIntOrNull(order.vehicle?.currentKm) ?? doneKm;
+
+    const maintenanceProjection = {};
+
+    for (const rule of MAINTENANCE_RULES) {
+      const existing = maintenanceByType.get(rule.type) || null;
+      const hasMaintenanceInThisOrder = rule.match(joinedOrderText);
+      const performedInThisOrder = hasMaintenanceInThisOrder && orderCompleted;
+
+      if (performedInThisOrder) {
+        const projected = buildProjectedMaintenance({
+          existing,
+          rule,
+          doneDate,
+          doneKm,
+        });
+
+        maintenanceProjection[rule.type] = getMaintenanceResponse({
+          maintenance: projected,
+          type: rule.type,
+          label: projected.label,
+          currentKm: referenceCurrentKm,
+          source: 'ORDER_EXECUTION',
+          performedInThisOrder: true,
+        });
+        continue;
+      }
+
+      if (hasMaintenanceInThisOrder && !orderCompleted && !existing) {
+        maintenanceProjection[rule.type] = getMaintenanceResponse({
+          maintenance: null,
+          type: rule.type,
+          label: rule.label,
+          currentKm: referenceCurrentKm,
+          source: 'PENDING_EXECUTION',
+          performedInThisOrder: false,
+        });
+        continue;
+      }
+
+      if (existing) {
+        const forecast = computeMaintenanceForecast(existing, {
+          baselineDate: existing.createdAt,
+          baselineKm: referenceCurrentKm,
+        });
+
+        maintenanceProjection[rule.type] = getMaintenanceResponse({
+          maintenance: {
+            ...existing,
+            nextDate: forecast.nextDate,
+            nextKm: forecast.nextKm,
+          },
+          type: rule.type,
+          label: existing.label || rule.label,
+          currentKm: referenceCurrentKm,
+          source: 'CURRENT_PLAN',
+          performedInThisOrder: false,
+        });
+        continue;
+      }
+
+      maintenanceProjection[rule.type] = getMaintenanceResponse({
+        maintenance: null,
+        type: rule.type,
+        label: rule.label,
+        currentKm: referenceCurrentKm,
+        source: 'NOT_AVAILABLE',
+        performedInThisOrder: false,
+      });
+    }
+
+    res.json({
+      ...order,
+      items: itemsWithTotals,
+      serviceItems,
+      productItems,
+      calculatedTotal,
+      displayTotal,
+      financialSummary,
+      deliveryDate: deliveredLog?.createdAt || null,
+      deliveryMeta,
+      maintenanceProjection,
+      maintenanceProjectionContext: {
+        doneDate,
+        doneKm,
+        status: order.status,
+        orderCompleted,
+      },
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Erro ao buscar OS.' });
   }
 };
 
-module.exports = { me, vehicleDetail, soDetail };
+module.exports = { me, updateMe, vehicleDetail, soDetail };
+
+
 
 
 

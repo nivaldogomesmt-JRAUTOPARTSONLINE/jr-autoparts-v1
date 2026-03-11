@@ -1,10 +1,13 @@
-require('dotenv').config();
+﻿require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const prisma = require('./src/lib/prisma');
 const { createRateLimit } = require('./src/middleware/rateLimit');
+const { startMaintenanceRecalcSchedulerFromEnv } = require('./src/services/maintenanceSchedulerService');
 
 const app = express();
+let maintenanceScheduler = null;
+
 const allowedOrigins = [
   process.env.FRONTEND_URL || 'http://localhost:5173',
   'http://localhost:3000',
@@ -13,13 +16,13 @@ const allowedOrigins = [
 app.use(cors({
   origin(origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error('Origem não permitida pelo CORS.'));
+    return callback(new Error('Origem nao permitida pelo CORS.'));
   },
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(createRateLimit({ windowMs: 60_000, max: 300, keyPrefix: 'api', message: 'Muitas requisições. Aguarde alguns instantes.' }));
+app.use(createRateLimit({ windowMs: 60_000, max: 300, keyPrefix: 'api', message: 'Muitas requisicoes. Aguarde alguns instantes.' }));
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString(), app: 'JR Auto Parts API' });
@@ -41,6 +44,8 @@ const routes = {
   companyAssets: require('./src/routes/companyAssetRoutes'),
   digitalAccounts: require('./src/routes/digitalAccountRoutes'),
   tracking: require('./src/routes/trackingRoutes'),
+  notifications: require('./src/routes/notificationCenterRoutes'),
+  integrations: require('./src/routes/integrationLogRoutes'),
 };
 
 function mount(path, handler) {
@@ -62,9 +67,11 @@ mount('dashboard', routes.dashboard);
 mount('company-assets', routes.companyAssets);
 mount('digital-accounts', routes.digitalAccounts);
 mount('tracking', routes.tracking);
+mount('notifications', routes.notifications);
+mount('integrations', routes.integrations);
 
 app.use((req, res) => {
-  res.status(404).json({ error: 'Rota não encontrada' });
+  res.status(404).json({ error: 'Rota nao encontrada' });
 });
 
 app.use((err, req, res, next) => {
@@ -73,9 +80,9 @@ app.use((err, req, res, next) => {
     return res.status(409).json({ error: 'Registro duplicado. Verifique os dados e tente novamente.' });
   }
   if (err.code === 'P2025') {
-    return res.status(404).json({ error: 'Registro não encontrado.' });
+    return res.status(404).json({ error: 'Registro nao encontrado.' });
   }
-  if (err.message === 'Origem não permitida pelo CORS.') {
+  if (err.message === 'Origem nao permitida pelo CORS.') {
     return res.status(403).json({ error: err.message });
   }
   return res.status(err.status || 500).json({ error: err.publicMessage || 'Erro interno do servidor.' });
@@ -87,6 +94,8 @@ app.listen(PORT, async () => {
     await prisma.$connect();
     console.log(`JR Auto Parts API rodando na porta ${PORT}`);
     console.log('Banco de dados conectado');
+
+    maintenanceScheduler = startMaintenanceRecalcSchedulerFromEnv();
   } catch (e) {
     console.error('Falha ao conectar ao banco:', e.message);
     process.exit(1);
@@ -94,9 +103,17 @@ app.listen(PORT, async () => {
 });
 
 async function shutdown() {
-  await prisma.$disconnect();
+  try {
+    if (maintenanceScheduler && typeof maintenanceScheduler.stop === 'function') {
+      maintenanceScheduler.stop();
+    }
+    await prisma.$disconnect();
+  } catch (err) {
+    console.error('Erro no desligamento:', err.message);
+  }
   process.exit(0);
 }
 
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+

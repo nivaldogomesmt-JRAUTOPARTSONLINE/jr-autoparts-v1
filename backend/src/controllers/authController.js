@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const prisma = require('../lib/prisma');
 const { validatePasswordStrength, isValidEmail } = require('../utils/security');
+const { getAccessProfileForUser } = require('../services/accessProfileService');
 
 const MAX_FAILED_LOGINS = parseInt(process.env.MAX_FAILED_LOGINS || '5', 10);
 const LOCK_MINUTES = parseInt(process.env.LOGIN_LOCK_MINUTES || '15', 10);
@@ -121,7 +122,11 @@ const me = async (req, res) => {
     });
 
     if (!user) return res.status(404).json({ error: 'Usuario nao encontrado.' });
-    return res.json(publicUser(user));
+    const accessProfile = await getAccessProfileForUser(user);
+    return res.json({
+      ...publicUser(user),
+      accessProfile,
+    });
   } catch (err) {
     return res.status(500).json({ error: 'Erro ao buscar usuario.' });
   }
@@ -327,3 +332,4 @@ const listUsers = async (req, res) => {
 };
 
 module.exports = { login, me, changePassword, createUser, updateUser, removeUser, listUsers };
+

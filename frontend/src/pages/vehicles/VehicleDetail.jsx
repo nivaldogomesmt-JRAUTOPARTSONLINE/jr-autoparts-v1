@@ -4,7 +4,7 @@ import { maintenanceAPI, vehiclesAPI } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
 const ALERT_COLOR = { OVERDUE: '#dc2626', DUE_SOON: '#f59e0b', OK: '#16a34a' };
-const ALERT_LABEL = { OVERDUE: 'Vencido', DUE_SOON: 'Proximo', OK: 'Ok' };
+const ALERT_LABEL = { OVERDUE: 'Urgencia', DUE_SOON: 'Atencao', OK: 'OK' };
 
 function toDateInput(value) {
   if (!value) return '';

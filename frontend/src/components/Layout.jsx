@@ -6,29 +6,36 @@ import { BRAND } from '../config/brand';
 const BASE_NAV = [
   {
     section: 'GERAL',
-    items: [{ to: '/dashboard', icon: 'DB', label: 'Dashboard' }],
+    items: [{ to: '/dashboard', icon: 'DB', label: 'Dashboard', permission: 'module:dashboard:view' }],
   },
   {
     section: 'CADASTROS',
     items: [
-      { to: '/clientes', icon: 'CL', label: 'Clientes' },
-      { to: '/veiculos', icon: 'VH', label: 'Veiculos' },
-      { to: '/produtos', icon: 'PD', label: 'Produtos' },
-      { to: '/servicos', icon: 'SV', label: 'Servicos' },
+      { to: '/clientes', icon: 'CL', label: 'Clientes', permission: 'module:clients:view' },
+      { to: '/veiculos', icon: 'VH', label: 'Veiculos', permission: 'module:vehicles:view' },
+      { to: '/produtos', icon: 'PD', label: 'Produtos', permission: 'module:products:view' },
+      { to: '/servicos', icon: 'SV', label: 'Servicos', permission: 'module:services:view' },
     ],
   },
   {
     section: 'OPERACIONAL',
     items: [
-      { to: '/os', icon: 'OS', label: 'Ordens de Servico' },
-      { to: '/manutencao', icon: 'MN', label: 'Manutencao Prev.' },
-      { to: '/tracking', icon: 'TR', label: 'Rastreamento' },
-      { to: '/entregas', icon: 'EN', label: 'Entregas' },
+      { to: '/os', icon: 'OS', label: 'Ordens de Servico', permission: 'module:serviceOrders:view' },
+      { to: '/manutencao', icon: 'MN', label: 'Manutencao Prev.', permission: 'module:serviceOrders:view' },
+      { to: '/tracking', icon: 'TR', label: 'Rastreamento', permission: 'module:tracking:view' },
+      { to: '/entregas', icon: 'EN', label: 'Entregas', permission: 'module:deliveries:view' },
     ],
   },
   {
     section: 'COMUNICACAO',
     items: [{ to: '/mensagens', icon: 'WA', label: 'Mensagens WhatsApp' }],
+  },
+  {
+    section: 'INTEGRACOES',
+    items: [
+      { to: '/integracoes', icon: 'IE', label: 'Importar / Exportar', permission: 'module:integrations:view' },
+      { to: '/integracoes/notificacoes', icon: 'NT', label: 'Central Notificacoes', permission: 'adminOnly' },
+    ],
   },
   {
     section: 'GESTAO',
@@ -118,10 +125,10 @@ export default function Layout() {
           </button>
           <style>{`@media (max-width: 768px) { #menu-btn { display: flex !important; } }`}</style>
 
-          <span style={{ fontWeight: 600, color: '#1A3C5E' }}>{BRAND.name}</span>
+          <span style={{ fontWeight: 600, color: 'var(--primary)' }}>{BRAND.name}</span>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 13, color: '#64748b' }}>
+            <span style={{ fontSize: 13, color: 'var(--gray-500)' }}>
               {user?.role === 'ADMIN' ? 'Admin' : 'Funcionario'}
             </span>
             <span style={{ fontSize: 13, fontWeight: 600 }}>{user?.name}</span>

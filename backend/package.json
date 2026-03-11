@@ -14,7 +14,8 @@
                     "db:seed:assets":  "node scripts/seed_company_assets.js",
                     "tracking:jobs":  "node scripts/run_tracking_jobs.js",
                     "tracking:generate":  "node scripts/run_tracking_jobs.js",
-                    "products:import:csv":  "node scripts/import_products_csv.js"
+                    "products:import:csv":  "node scripts/import_products_csv.js",
+                    "vehicles:enrich:plate":  "node scripts/enrich_vehicles_by_plate.js"
                 },
     "dependencies":  {
                          "@prisma/client":  "^5.10.0",

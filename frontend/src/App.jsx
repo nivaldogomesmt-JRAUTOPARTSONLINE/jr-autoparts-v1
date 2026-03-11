@@ -12,6 +12,7 @@ import VehiclesPage from './pages/vehicles/VehiclesPage';
 import VehicleDetail from './pages/vehicles/VehicleDetail';
 import VehicleForm from './pages/vehicles/VehicleForm';
 import ProductsPage from './pages/products/ProductsPage';
+import ProductDetail from './pages/products/ProductDetail';
 import ProductForm from './pages/products/ProductForm';
 import ServicesPage from './pages/services/ServicesPage';
 import SOListPage from './pages/so/SOListPage';
@@ -24,6 +25,8 @@ import DigitalAccountsPage from './pages/admin/DigitalAccountsPage';
 import CollaboratorsPage from './pages/admin/CollaboratorsPage';
 import TrackingPage from './pages/tracking/TrackingPage';
 import DeliveriesPage from './pages/deliveries/DeliveriesPage';
+import IntegrationsHubPage from './pages/integrations/IntegrationsHubPage';
+import NotificationCenterPage from './pages/integrations/NotificationCenterPage';
 
 import PortalLogin from './pages/portal/PortalLogin';
 import PortalDashboard from './pages/portal/PortalDashboard';
@@ -65,30 +68,41 @@ function AppRoutes() {
 
       <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
         <Route index element={<Navigate to="/dashboard" replace />} />
-        <Route path="dashboard" element={<Dashboard />} />
-        <Route path="clientes" element={<ClientsPage />} />
-        <Route path="clientes/novo" element={<ClientForm />} />
-        <Route path="clientes/:id" element={<ClientDetail />} />
-        <Route path="clientes/:id/editar" element={<ClientForm />} />
-        <Route path="veiculos" element={<VehiclesPage />} />
-        <Route path="veiculos/novo" element={<VehicleForm />} />
-        <Route path="veiculos/:id" element={<VehicleDetail />} />
-        <Route path="veiculos/:id/editar" element={<VehicleForm />} />
-        <Route path="produtos" element={<ProductsPage />} />
-        <Route path="produtos/novo" element={<ProductForm />} />
-        <Route path="produtos/:id/editar" element={<ProductForm />} />
-        <Route path="servicos" element={<ServicesPage />} />
-        <Route path="os" element={<SOListPage />} />
-        <Route path="os/nova" element={<SOForm />} />
-        <Route path="os/:id" element={<SODetail />} />
-        <Route path="os/:id/editar" element={<SOForm />} />
-        <Route path="manutencao" element={<MaintenancePage />} />
+        <Route path="dashboard" element={<ActionRoute action="module:dashboard:view"><Dashboard /></ActionRoute>} />
+
+        <Route path="clientes" element={<ActionRoute action="module:clients:view"><ClientsPage /></ActionRoute>} />
+        <Route path="clientes/novo" element={<ActionRoute action="module:clients:add"><ClientForm /></ActionRoute>} />
+        <Route path="clientes/:id" element={<ActionRoute action="module:clients:view"><ClientDetail /></ActionRoute>} />
+        <Route path="clientes/:id/editar" element={<ActionRoute action="module:clients:edit"><ClientForm /></ActionRoute>} />
+
+        <Route path="veiculos" element={<ActionRoute action="module:vehicles:view"><VehiclesPage /></ActionRoute>} />
+        <Route path="veiculos/novo" element={<ActionRoute action="module:vehicles:add"><VehicleForm /></ActionRoute>} />
+        <Route path="veiculos/:id" element={<ActionRoute action="module:vehicles:view"><VehicleDetail /></ActionRoute>} />
+        <Route path="veiculos/:id/editar" element={<ActionRoute action="module:vehicles:edit"><VehicleForm /></ActionRoute>} />
+
+        <Route path="produtos" element={<ActionRoute action="module:products:view"><ProductsPage /></ActionRoute>} />
+        <Route path="produtos/novo" element={<ActionRoute action="module:products:add"><ProductForm /></ActionRoute>} />
+        <Route path="produtos/:id" element={<ActionRoute action="module:products:view"><ProductDetail /></ActionRoute>} />
+        <Route path="produtos/:id/editar" element={<ActionRoute action="module:products:edit"><ProductForm /></ActionRoute>} />
+
+        <Route path="servicos" element={<ActionRoute action="module:services:view"><ServicesPage /></ActionRoute>} />
+
+        <Route path="os" element={<ActionRoute action="module:serviceOrders:view"><SOListPage /></ActionRoute>} />
+        <Route path="os/nova" element={<ActionRoute action="module:serviceOrders:add"><SOForm /></ActionRoute>} />
+        <Route path="os/:id" element={<ActionRoute action="module:serviceOrders:view"><SODetail /></ActionRoute>} />
+        <Route path="os/:id/editar" element={<ActionRoute action="module:serviceOrders:edit"><SOForm /></ActionRoute>} />
+
+        <Route path="manutencao" element={<ActionRoute action="module:serviceOrders:view"><MaintenancePage /></ActionRoute>} />
         <Route path="mensagens" element={<MessagesPage />} />
+
         <Route path="ativos" element={<ActionRoute action="adminOnly"><CompanyAssetsPage /></ActionRoute>} />
         <Route path="contas-digitais" element={<ActionRoute action="adminOnly"><DigitalAccountsPage /></ActionRoute>} />
         <Route path="colaboradores" element={<ActionRoute action="manageUsers"><CollaboratorsPage /></ActionRoute>} />
-        <Route path="tracking" element={<TrackingPage />} />
-        <Route path="entregas" element={<DeliveriesPage />} />
+
+        <Route path="tracking" element={<ActionRoute action="module:tracking:view"><TrackingPage /></ActionRoute>} />
+        <Route path="entregas" element={<ActionRoute action="module:deliveries:view"><DeliveriesPage /></ActionRoute>} />
+        <Route path="integracoes" element={<ActionRoute action="module:integrations:view"><IntegrationsHubPage /></ActionRoute>} />
+        <Route path="integracoes/notificacoes" element={<ActionRoute action="adminOnly"><NotificationCenterPage /></ActionRoute>} />
       </Route>
 
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { portalAPI } from '../../services/api';
@@ -26,10 +26,29 @@ const SO_STATUS_COLOR = {
 };
 
 const LEVEL_STYLE = {
-  OVERDUE: { bg: '#fee2e2', color: '#b91c1c', label: 'Vencido' },
-  DUE_SOON: { bg: '#fef3c7', color: '#92400e', label: 'Proximo' },
-  OK: { bg: '#dcfce7', color: '#166534', label: 'Em dia' },
+  OVERDUE: { bg: '#fee2e2', color: '#b91c1c', label: 'Urgencia' },
+  DUE_SOON: { bg: '#fef3c7', color: '#92400e', label: 'Atencao' },
+  OK: { bg: '#dcfce7', color: '#166534', label: 'OK' },
 };
+
+const PRINT_THEMES = [
+  { value: 'resumo', label: 'Resumo' },
+  { value: 'historico', label: 'Somente historico' },
+  { value: 'completo', label: 'Completo' },
+];
+
+const PRINT_THEME_STORAGE_KEY = 'jr_print_theme_portal_dashboard';
+
+function getInitialPrintTheme() {
+  if (typeof window === 'undefined') return 'resumo';
+  try {
+    const saved = window.localStorage.getItem(PRINT_THEME_STORAGE_KEY);
+    const allowed = PRINT_THEMES.map((theme) => theme.value);
+    return allowed.includes(saved) ? saved : 'resumo';
+  } catch {
+    return 'resumo';
+  }
+}
 
 function formatDate(value) {
   if (!value) return '-';
@@ -38,12 +57,18 @@ function formatDate(value) {
 
 function formatDateTime(value) {
   if (!value) return '-';
-  return new Date(value).toLocaleDateString('pt-BR') + ' ' + new Date(value).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '-';
+  return `${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
 function formatKm(value) {
   if (value === null || value === undefined) return '-';
   return `${Number(value).toLocaleString('pt-BR')} km`;
+}
+
+function formatCurrency(value) {
+  return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
 function formatRemainingCompact(maintenance) {
@@ -181,19 +206,107 @@ function PlateVehicleCard({ vehicle }) {
   );
 }
 
+function toCsvCell(value) {
+  const text = String(value ?? '');
+  const escaped = text.replace(/"/g, '""');
+  return `"${escaped}"`;
+}
+
+function downloadTextFile(text, filename, type = 'text/csv;charset=utf-8;') {
+  const blob = new Blob([text], { type });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+function buildHistoryCsvRows({ recentOrders, filters }) {
+  const rows = [];
+  rows.push(['Secao', 'Campo', 'Valor']);
+  rows.push(['Filtros', 'Busca', filters.search || '-']);
+  rows.push(['Filtros', 'Status', filters.status || '-']);
+  rows.push(['Filtros', 'Periodo de', filters.dateFrom || '-']);
+  rows.push(['Filtros', 'Periodo ate', filters.dateTo || '-']);
+
+  rows.push([]);
+  rows.push(['Historico OS', 'OS', 'Detalhes']);
+
+  (recentOrders || []).forEach((os) => {
+    rows.push([
+      'Historico OS',
+      `#${os.number}`,
+      `${SO_STATUS_LABEL[os.status] || os.status} | ${os.vehicle?.plate || '-'} | ${formatDateTime(os.updatedAt || os.createdAt)} | ${formatCurrency(os.totalPrice)}`,
+    ]);
+  });
+
+  return rows;
+}
+
 export default function PortalDashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [profileForm, setProfileForm] = useState({ whatsapp: '', phone: '', email: '' });
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileMessage, setProfileMessage] = useState('');
+
+  const [printTheme, setPrintTheme] = useState(() => getInitialPrintTheme());
+  const [orderSearch, setOrderSearch] = useState('');
+  const [orderStatus, setOrderStatus] = useState('');
+  const [orderDateFrom, setOrderDateFrom] = useState('');
+  const [orderDateTo, setOrderDateTo] = useState('');
+
   const { logout } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    portalAPI.me().then((r) => setData(r.data)).finally(() => setLoading(false));
+    portalAPI.me().then((r) => {
+      setData(r.data);
+      setProfileForm({
+        whatsapp: r.data?.client?.whatsapp || '',
+        phone: r.data?.client?.phone || '',
+        email: r.data?.client?.email || '',
+      });
+    }).finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(PRINT_THEME_STORAGE_KEY, printTheme);
+    } catch {
+      // ignore storage errors
+    }
+  }, [printTheme]);
 
   const handleLogout = () => {
     logout();
     navigate('/portal/login');
+  };
+
+  const handleProfileSubmit = async (e) => {
+    e.preventDefault();
+    setSavingProfile(true);
+    setProfileMessage('');
+
+    try {
+      const res = await portalAPI.updateMe(profileForm);
+      const updatedClient = res.data?.client || {};
+      setData((prev) => ({
+        ...(prev || {}),
+        client: {
+          ...(prev?.client || {}),
+          ...updatedClient,
+        },
+      }));
+      setProfileMessage('Dados atualizados com sucesso. Notificacoes usarão o WhatsApp atual.');
+    } catch (err) {
+      setProfileMessage(err?.response?.data?.error || 'Falha ao atualizar dados.');
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   const overdueAlerts = useMemo(() => data?.maintenances?.filter((m) => m.alertLevel === 'OVERDUE') || [], [data]);
@@ -253,6 +366,73 @@ export default function PortalDashboard() {
     return list[0] || null;
   }, [data]);
 
+  const recentOrders = useMemo(() => (Array.isArray(data?.recentOrders) ? data.recentOrders : []), [data]);
+
+  const orderStatusOptions = useMemo(() => {
+    const set = new Set(recentOrders.map((os) => String(os.status || '').trim()).filter(Boolean));
+    return Array.from(set);
+  }, [recentOrders]);
+
+  const filteredRecentOrders = useMemo(() => {
+    const search = String(orderSearch || '').trim().toLowerCase();
+    const fromTs = orderDateFrom ? new Date(`${orderDateFrom}T00:00:00`).getTime() : null;
+    const toTs = orderDateTo ? new Date(`${orderDateTo}T23:59:59.999`).getTime() : null;
+
+    return recentOrders.filter((os) => {
+      if (orderStatus && os.status !== orderStatus) return false;
+
+      const refTs = new Date(os.updatedAt || os.createdAt).getTime();
+      if (fromTs && Number.isFinite(refTs) && refTs < fromTs) return false;
+      if (toTs && Number.isFinite(refTs) && refTs > toTs) return false;
+
+      if (search) {
+        const hay = [
+          `#${os.number || ''}`,
+          SO_STATUS_LABEL[os.status] || os.status || '',
+          os.vehicle?.plate || '',
+          os.vehicle?.brand || '',
+          os.vehicle?.model || '',
+        ].join(' ').toLowerCase();
+
+        if (!hay.includes(search)) return false;
+      }
+
+      return true;
+    });
+  }, [recentOrders, orderSearch, orderStatus, orderDateFrom, orderDateTo]);
+
+  const handlePrint = () => {
+    const html = document.documentElement;
+    html.setAttribute('data-print-context', 'portal-dashboard');
+    html.setAttribute('data-print-theme', printTheme);
+
+    const clear = () => {
+      html.removeAttribute('data-print-theme');
+      html.removeAttribute('data-print-context');
+      window.removeEventListener('afterprint', clear);
+    };
+
+    window.addEventListener('afterprint', clear);
+    window.print();
+    setTimeout(clear, 1200);
+  };
+
+  const handleExportHistoryCsv = () => {
+    const rows = buildHistoryCsvRows({
+      recentOrders: filteredRecentOrders,
+      filters: {
+        search: orderSearch,
+        status: orderStatus,
+        dateFrom: orderDateFrom,
+        dateTo: orderDateTo,
+      },
+    });
+
+    const csv = rows.map((row) => row.map(toCsvCell).join(';')).join('\n');
+    const dateTag = new Date().toISOString().slice(0, 10);
+    downloadTextFile(csv, `portal_historico_cliente_${dateTag}.csv`);
+  };
+
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -263,6 +443,33 @@ export default function PortalDashboard() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
+      <style>{`
+        .print-only { display: none; }
+
+        @media print {
+          .no-print { display: none !important; }
+          .print-only { display: block !important; }
+
+          html[data-print-context='portal-dashboard'] .print-block {
+            display: none !important;
+          }
+
+          html[data-print-context='portal-dashboard'][data-print-theme='resumo'] .print-block-resumo {
+            display: block !important;
+          }
+
+          html[data-print-context='portal-dashboard'][data-print-theme='historico'] .print-block-historico {
+            display: block !important;
+          }
+
+          html[data-print-context='portal-dashboard'][data-print-theme='completo'] .print-block-completo {
+            display: block !important;
+          }
+
+          .card { break-inside: avoid; }
+        }
+      `}</style>
+
       <div style={{ background: '#1A3C5E', color: 'white', padding: '12px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -285,10 +492,10 @@ export default function PortalDashboard() {
         </div>
 
         <div style={{ marginTop: 12 }}>
-          <div style={{ fontSize: 12, opacity: 0.9, marginBottom: 8, fontWeight: 700 }}>Ordens de Servico Recentes</div>
-          {data?.recentOrders?.length ? (
+          <div style={{ fontSize: 12, opacity: 0.9, marginBottom: 8, fontWeight: 700 }}>Atividades recentes</div>
+          {recentOrders.length ? (
             <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
-              {data.recentOrders.slice(0, 8).map((os) => (
+              {recentOrders.slice(0, 8).map((os) => (
                 <Link
                   key={os.id}
                   to={`/portal/os/${os.id}`}
@@ -311,26 +518,68 @@ export default function PortalDashboard() {
               ))}
             </div>
           ) : (
-            <div style={{ fontSize: 12, opacity: 0.75 }}>Nenhuma OS recente.</div>
+            <div style={{ fontSize: 12, opacity: 0.75 }}>Nenhuma atividade recente.</div>
           )}
         </div>
       </div>
 
       <div style={{ maxWidth: 1180, margin: '0 auto', padding: '20px 16px' }}>
-        <div style={{ marginBottom: 20 }}>
+        <div className="no-print" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap', marginBottom: 12 }}>
+          <select
+            value={printTheme}
+            onChange={(e) => setPrintTheme(e.target.value)}
+            style={{ borderRadius: 8, border: '1px solid #cbd5e1', padding: '6px 8px', minWidth: 180 }}
+          >
+            {PRINT_THEMES.map((theme) => (
+              <option key={theme.value} value={theme.value}>{theme.label}</option>
+            ))}
+          </select>
+          <button className="btn btn-outline" type="button" onClick={handleExportHistoryCsv} disabled={!filteredRecentOrders.length}>Exportar historico CSV</button>
+          <button className="btn btn-outline" type="button" onClick={handlePrint}>Imprimir</button>
+        </div>
+
+        <div className="print-only card" style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 18, fontWeight: 800, color: '#1A3C5E' }}>Portal do Cliente - {data?.client?.name || 'Cliente'}</div>
+          <div style={{ fontSize: 13, color: '#64748b' }}>Emissao: {formatDateTime(new Date())}</div>
+        </div>
+
+        <div className="print-block print-block-resumo print-block-completo" style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 22, fontWeight: 800, color: '#1A3C5E' }}>
             Ola, {data?.client?.name?.split(' ')[0]}!
           </div>
           <div style={{ color: '#718096', fontSize: 14, lineHeight: 1.45 }}>
-            Veja suas placas e acompanhe as proximas trocas com rapidez.
+            Acompanhe sua frota, proximas trocas e ordens de servico em tempo real.
           </div>
         </div>
 
+        <div className="grid-2 print-block print-block-resumo print-block-completo" style={{ marginBottom: 16 }}>
+          <div className="card">
+            <div className="card-title">Resumo da frota</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }}>
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 8 }}><div className="text-sm text-muted">Veiculos</div><div style={{ fontWeight: 800, fontSize: 18 }}>{data?.vehicles?.length || 0}</div></div>
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 8 }}><div className="text-sm text-muted">Vencidas</div><div style={{ fontWeight: 800, fontSize: 18, color: '#b91c1c' }}>{overdueAlerts.length}</div></div>
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 8 }}><div className="text-sm text-muted">A vencer</div><div style={{ fontWeight: 800, fontSize: 18, color: '#92400e' }}>{dueSoonAlerts.length}</div></div>
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 8 }}><div className="text-sm text-muted">Proxima revisao</div><div style={{ fontWeight: 700, fontSize: 13 }}>{nextReview ? `${nextReview.vehicle?.plate || '-'} - ${formatDate(nextReview.nextDate)}` : '-'}</div></div>
+            </div>
+          </div>
 
+          <div className="card no-print">
+            <div className="card-title">Atualizar meus dados</div>
+            <form onSubmit={handleProfileSubmit}>
+              <div style={{ display: 'grid', gap: 8 }}>
+                <input className="form-control" placeholder="WhatsApp" value={profileForm.whatsapp} onChange={(e) => setProfileForm((f) => ({ ...f, whatsapp: e.target.value }))} />
+                <input className="form-control" placeholder="Telefone" value={profileForm.phone} onChange={(e) => setProfileForm((f) => ({ ...f, phone: e.target.value }))} />
+                <input className="form-control" placeholder="E-mail" value={profileForm.email} onChange={(e) => setProfileForm((f) => ({ ...f, email: e.target.value }))} />
+                <button className="btn btn-primary" type="submit" disabled={savingProfile}>{savingProfile ? 'Salvando...' : 'Salvar dados'}</button>
+              </div>
+            </form>
+            {profileMessage ? <div className="text-sm" style={{ marginTop: 8, color: profileMessage.toLowerCase().includes('sucesso') ? '#166534' : '#b91c1c' }}>{profileMessage}</div> : null}
+          </div>
+        </div>
 
         {criticalPairs.length > 0 ? (
           <div
-            className="card"
+            className="card print-block print-block-resumo print-block-completo"
             style={{
               marginBottom: 16,
               border: criticalPairs[0].level === 'OVERDUE' ? '1px solid #fca5a5' : '1px solid #fde68a',
@@ -338,7 +587,7 @@ export default function PortalDashboard() {
             }}
           >
             <div style={{ fontSize: 13, fontWeight: 800, color: criticalPairs[0].level === 'OVERDUE' ? '#b91c1c' : '#92400e' }}>
-              Atencao: revisoes criticas em conjunto (oleo + correia)
+              O que foi feito recentemente: itens criticos (oleo + correia)
             </div>
             <div style={{ marginTop: 8, display: 'grid', gap: 6 }}>
               {criticalPairs.slice(0, 6).map((item) => (
@@ -350,60 +599,66 @@ export default function PortalDashboard() {
           </div>
         ) : null}
 
-        {nextReview ? (
-          <div
-            className="card"
-            style={{
-              marginBottom: 16,
-              border: nextReview.alertLevel === 'OVERDUE' ? '1px solid #fca5a5' : '1px solid #dbeafe',
-              background: nextReview.alertLevel === 'OVERDUE' ? '#fff5f5' : '#f8fbff',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Proxima revisao geral</div>
-                <div style={{ marginTop: 4, fontSize: 18, fontWeight: 800, color: '#1A3C5E' }}>
-                  {nextReview.label} - {nextReview.vehicle?.plate || '-'}
-                </div>
-                <div style={{ marginTop: 6, fontSize: 13, color: '#334155' }}>
-                  Data prevista: <b>{formatDate(nextReview.nextDate)}</b> | KM previsto: <b>{formatKm(nextReview.nextKm)}</b>
-                </div>
-              </div>
-              <span
-                style={{
-                  alignSelf: 'flex-start',
-                  background: (LEVEL_STYLE[nextReview.alertLevel] || LEVEL_STYLE.OK).bg,
-                  color: (LEVEL_STYLE[nextReview.alertLevel] || LEVEL_STYLE.OK).color,
-                  padding: '4px 10px',
-                  borderRadius: 999,
-                  fontSize: 12,
-                  fontWeight: 700,
-                }}
-              >
-                {(LEVEL_STYLE[nextReview.alertLevel] || LEVEL_STYLE.OK).label}
-              </span>
-            </div>
-          </div>
-        ) : null}
+        <div className="card print-block print-block-historico print-block-completo" style={{ marginBottom: 16 }}>
+          <div className="card-title">Historico do cliente (OS)</div>
 
-        {(overdueAlerts.length > 0 || dueSoonAlerts.length > 0) ? (
-          <div style={{ background: overdueAlerts.length > 0 ? '#fff5f5' : '#fffbeb', border: `1px solid ${overdueAlerts.length > 0 ? '#fc8181' : '#f6e05e'}`, borderRadius: 12, padding: 16, marginBottom: 20 }}>
-            <div style={{ fontWeight: 700, marginBottom: 10, color: overdueAlerts.length > 0 ? '#c53030' : '#92400e' }}>
-              {overdueAlerts.length > 0 ? 'Manutencoes vencidas' : 'Manutencoes proximas'}
-            </div>
-            {[...overdueAlerts, ...dueSoonAlerts].slice(0, 8).map((alert) => (
-              <div key={alert.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
-                <div style={{ fontSize: 13 }}>
-                  <b>{alert.label}</b> - {alert.vehicle?.plate}
-                </div>
-                <div style={{ fontSize: 12, color: '#64748b' }}>{formatDate(alert.nextDate)}</div>
-              </div>
-            ))}
+          <div className="no-print" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8, marginBottom: 10 }}>
+            <input
+              className="form-control"
+              placeholder="Buscar por OS, placa, status"
+              value={orderSearch}
+              onChange={(e) => setOrderSearch(e.target.value)}
+            />
+            <select className="form-control" value={orderStatus} onChange={(e) => setOrderStatus(e.target.value)}>
+              <option value="">Status (todos)</option>
+              {orderStatusOptions.map((status) => (
+                <option key={status} value={status}>{SO_STATUS_LABEL[status] || status}</option>
+              ))}
+            </select>
+            <input type="date" className="form-control" value={orderDateFrom} onChange={(e) => setOrderDateFrom(e.target.value)} />
+            <input type="date" className="form-control" value={orderDateTo} onChange={(e) => setOrderDateTo(e.target.value)} />
           </div>
-        ) : null}
 
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#1A3C5E', marginBottom: 12 }}>Minhas Placas</div>
+          <div className="text-sm text-muted" style={{ marginBottom: 8 }}>
+            Mostrando {filteredRecentOrders.length} de {recentOrders.length} OS.
+          </div>
+
+          {!filteredRecentOrders.length ? (
+            <div className="text-sm text-muted">Nenhuma OS para o filtro atual.</div>
+          ) : (
+            <div className="table-container">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>OS</th>
+                    <th>Veiculo</th>
+                    <th>Status</th>
+                    <th>Total</th>
+                    <th>Atualizacao</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRecentOrders.map((os) => (
+                    <tr key={os.id}>
+                      <td><Link to={`/portal/os/${os.id}`}><strong>#{os.number}</strong></Link></td>
+                      <td>{os.vehicle?.plate || '-'}{os.vehicle?.brand || os.vehicle?.model ? ` | ${os.vehicle?.brand || ''} ${os.vehicle?.model || ''}` : ''}</td>
+                      <td>
+                        <span style={{ background: `${SO_STATUS_COLOR[os.status] || '#718096'}20`, color: SO_STATUS_COLOR[os.status] || '#718096', borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
+                          {SO_STATUS_LABEL[os.status] || os.status}
+                        </span>
+                      </td>
+                      <td>{formatCurrency(os.totalPrice)}</td>
+                      <td className="text-sm text-muted">{formatDateTime(os.updatedAt || os.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="print-block print-block-resumo print-block-completo" style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#1A3C5E', marginBottom: 12 }}>Minha Frota</div>
           {data?.vehicles?.length === 0 ? (
             <div className="card" style={{ textAlign: 'center', padding: 32, color: '#718096' }}>Nenhum veiculo cadastrado.</div>
           ) : (
@@ -416,4 +671,3 @@ export default function PortalDashboard() {
     </div>
   );
 }
-

@@ -3,6 +3,23 @@ import { authAPI } from '../services/api';
 
 const AuthContext = createContext(null);
 
+function hasModuleAccess(accessProfile, moduleKey, actionKey = 'view') {
+  const modules = accessProfile?.modules;
+  if (!modules || typeof modules !== 'object') return true;
+
+  const row = modules[moduleKey];
+  if (!row || typeof row !== 'object') return true;
+
+  return !!row[actionKey];
+}
+
+function hasSensitiveAccess(accessProfile, sensitiveKey, fallback = false) {
+  const sensitive = accessProfile?.sensitive;
+  if (!sensitive || typeof sensitive !== 'object') return !!fallback;
+  if (!(sensitiveKey in sensitive)) return !!fallback;
+  return !!sensitive[sensitiveKey];
+}
+
 function canByAction(user, action) {
   if (!user) return false;
   if (action === 'adminOnly') return user.role === 'ADMIN';
@@ -10,13 +27,52 @@ function canByAction(user, action) {
   if (user.role === 'ADMIN') return true;
   if (user.role !== 'EMPLOYEE') return false;
 
-  const permissions = user.permissions;
-  if (!permissions) return true;
+  const permissions = user.permissions || {};
+  const accessProfile = user.accessProfile && typeof user.accessProfile === 'object'
+    ? user.accessProfile
+    : null;
+
+  if (typeof action === 'string' && action.startsWith('module:')) {
+    const [, moduleKey = '', moduleAction = 'view'] = action.split(':');
+    if (!moduleKey) return true;
+    if (!accessProfile) return true;
+    return hasModuleAccess(accessProfile, moduleKey, moduleAction || 'view');
+  }
+
+  if (typeof action === 'string' && action.startsWith('sensitive:')) {
+    const [, sensitiveKey = ''] = action.split(':');
+    if (!sensitiveKey) return true;
+
+    const fallbackMap = {
+      viewValues: true,
+      viewCost: false,
+      viewMargin: false,
+      manageUsers: !!permissions.canManageUsers,
+    };
+
+    return hasSensitiveAccess(accessProfile, sensitiveKey, fallbackMap[sensitiveKey]);
+  }
+
+  if (action === 'manageUsers') {
+    return hasSensitiveAccess(accessProfile, 'manageUsers', !!permissions.canManageUsers);
+  }
+
+  if (accessProfile?.modules && typeof accessProfile.modules === 'object') {
+    const rows = Object.values(accessProfile.modules);
+
+    if (action === 'add') return rows.some((row) => !!row?.add);
+    if (action === 'edit') return rows.some((row) => !!row?.edit);
+    if (action === 'delete') return rows.some((row) => !!row?.delete);
+    if (action === 'print') return rows.some((row) => !!row?.print);
+    if (action === 'export') return rows.some((row) => !!row?.export);
+    if (action === 'approve') return rows.some((row) => !!row?.approve);
+    if (action === 'changeStatus') return rows.some((row) => !!row?.changeStatus);
+  }
 
   if (action === 'add') return !!permissions.canAdd;
   if (action === 'edit') return !!permissions.canEdit;
   if (action === 'delete') return !!permissions.canDelete;
-  if (action === 'manageUsers') return !!permissions.canManageUsers;
+
   return true;
 }
 
@@ -27,8 +83,14 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const token = localStorage.getItem('jr_token');
     const savedUser = localStorage.getItem('jr_user');
+
     if (token && savedUser) {
-      setUser(JSON.parse(savedUser));
+      try {
+        setUser(JSON.parse(savedUser));
+      } catch {
+        localStorage.removeItem('jr_user');
+      }
+
       authAPI.me()
         .then((res) => {
           setUser(res.data);
@@ -36,18 +98,29 @@ export function AuthProvider({ children }) {
         })
         .catch(() => logout())
         .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
+      return;
     }
+
+    setLoading(false);
   }, []);
 
   const login = async (email, password) => {
     const res = await authAPI.login({ email, password });
     const { token, user: authenticatedUser } = res.data;
+
     localStorage.setItem('jr_token', token);
-    localStorage.setItem('jr_user', JSON.stringify(authenticatedUser));
-    setUser(authenticatedUser);
-    return authenticatedUser;
+
+    let hydratedUser = authenticatedUser;
+    try {
+      const meRes = await authAPI.me();
+      hydratedUser = meRes.data;
+    } catch {
+      hydratedUser = authenticatedUser;
+    }
+
+    localStorage.setItem('jr_user', JSON.stringify(hydratedUser));
+    setUser(hydratedUser);
+    return hydratedUser;
   };
 
   const logout = () => {

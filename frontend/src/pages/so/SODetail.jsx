@@ -20,9 +20,41 @@ const MESSAGE_STATUS = {
   PENDING: { label: 'Pendente', badge: 'badge-yellow' },
 };
 
+const PRINT_THEMES = [
+  { value: 'os', label: 'Resumo da OS' },
+  { value: 'financeiro', label: 'Financeiro (itens e total)' },
+  { value: 'fotos', label: 'Fotos da OS' },
+  { value: 'entrega', label: 'Entrega' },
+  { value: 'whatsapp', label: 'WhatsApp e historico' },
+];
+const PRINT_THEME_STORAGE_KEY = 'jr_print_theme_so_detail';
+
+function getInitialPrintTheme() {
+  if (typeof window === 'undefined') return 'os';
+  try {
+    const saved = window.localStorage.getItem(PRINT_THEME_STORAGE_KEY);
+    const allowed = PRINT_THEMES.map((theme) => theme.value);
+    return allowed.includes(saved) ? saved : 'os';
+  } catch {
+    return 'os';
+  }
+}
+
 function formatDateTime(value) {
   const d = new Date(value);
   return `${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+function formatDate(value) {
+  if (!value) return '-';
+  return new Date(value).toLocaleDateString('pt-BR');
+}
+
+function formatQty(value) {
+  const qty = Number(value);
+  if (!Number.isFinite(qty)) return '0';
+  if (Number.isInteger(qty)) return qty.toLocaleString('pt-BR');
+  return qty.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
 }
 
 export default function SODetail() {
@@ -43,6 +75,7 @@ export default function SODetail() {
   const [deliveryLocationUrl, setDeliveryLocationUrl] = useState('');
   const [deliveryNote, setDeliveryNote] = useState('');
   const [sendingDelivery, setSendingDelivery] = useState(false);
+  const [printTheme, setPrintTheme] = useState(() => getInitialPrintTheme());
 
   const load = async () => {
     setLoading(true);
@@ -67,6 +100,14 @@ export default function SODetail() {
     setDeliveryLocationUrl(os.deliveryMeta.locationUrl || '');
     setDeliveryNote(os.deliveryMeta.note || '');
   }, [os]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(PRINT_THEME_STORAGE_KEY, printTheme);
+    } catch {
+      // ignore storage errors
+    }
+  }, [printTheme]);
 
   const handleStatusChange = async (newStatus) => {
     const label = STATUS_LIST.find((s) => s.value === newStatus)?.label;
@@ -158,7 +199,19 @@ export default function SODetail() {
 
 
   const handlePrint = () => {
+    const html = document.documentElement;
+    html.setAttribute('data-print-context', 'so-detail');
+    html.setAttribute('data-print-theme', printTheme);
+
+    const clearPrintState = () => {
+      html.removeAttribute('data-print-theme');
+      html.removeAttribute('data-print-context');
+      window.removeEventListener('afterprint', clearPrintState);
+    };
+
+    window.addEventListener('afterprint', clearPrintState);
     window.print();
+    setTimeout(clearPrintState, 1200);
   };
 
   const timeline = useMemo(() => {
@@ -204,7 +257,15 @@ export default function SODetail() {
             <span style={{ marginLeft: 8 }}>{new Date(os.createdAt).toLocaleDateString('pt-BR')}</span>
           </div>
         </div>
-        <div className="no-print" style={{ display: 'flex', gap: 8 }}>
+        <div className="no-print" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span className="text-sm text-muted">Tema da impressao:</span>
+            <select className="form-control" style={{ minWidth: 220 }} value={printTheme} onChange={(e) => setPrintTheme(e.target.value)}>
+              {PRINT_THEMES.map((theme) => (
+                <option key={theme.value} value={theme.value}>{theme.label}</option>
+              ))}
+            </select>
+          </div>
           <button type="button" className="btn btn-outline btn-sm" onClick={handlePrint}>Imprimir OS</button>
           <Link to="/os" className="btn btn-ghost btn-sm">Voltar</Link>
           <Link to={`/os/${id}/editar`} className="btn btn-outline btn-sm">Editar</Link>
@@ -214,9 +275,25 @@ export default function SODetail() {
         </div>
       </div>
 
+      <div className="print-only card" style={{ marginBottom: 14 }}>
+        <div className="card-title">Resumo para Impressao</div>
+        <div className="grid-2">
+          <div>
+            <div className="text-sm text-muted">Cliente</div>
+            <div style={{ fontWeight: 700 }}>{os.client?.name || '-'}</div>
+            <div className="text-sm text-muted">{os.client?.phone || '-'}</div>
+          </div>
+          <div>
+            <div className="text-sm text-muted">Veiculo</div>
+            <div style={{ fontWeight: 700 }}>{os.vehicle?.brand} {os.vehicle?.model} ({os.vehicle?.plate})</div>
+            <div className="text-sm text-muted">Data: {formatDate(os.createdAt)}</div>
+          </div>
+        </div>
+      </div>
+
       <div className="print-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20 }}>
         <div>
-          <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card print-block print-block-os print-block-financeiro print-block-fotos print-block-entrega print-block-whatsapp" style={{ marginBottom: 16 }}>
             <div className="card-title">Dados da OS</div>
             <div className="grid-2">
               <div>
@@ -237,7 +314,7 @@ export default function SODetail() {
             ) : null}
           </div>
 
-          <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card print-block print-block-os print-block-financeiro" style={{ marginBottom: 16 }}>
             <div className="card-title">Servicos e Pecas</div>
             {os.items.length === 0 ? (
               <div className="text-muted text-sm">Nenhum item adicionado.</div>
@@ -261,7 +338,7 @@ export default function SODetail() {
                         </span>
                       </td>
                       <td>{item.itemName}</td>
-                      <td>{parseFloat(item.quantity)}</td>
+                      <td>{formatQty(item.quantity)}</td>
                       <td>R$ {parseFloat(item.unitPrice).toFixed(2).replace('.', ',')}</td>
                       <td><strong>R$ {(parseFloat(item.quantity) * parseFloat(item.unitPrice)).toFixed(2).replace('.', ',')}</strong></td>
                     </tr>
@@ -279,9 +356,9 @@ export default function SODetail() {
             )}
           </div>
 
-          <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card print-block print-block-fotos" style={{ marginBottom: 16 }}>
             <div className="card-title">Fotos da Ordem de Servico</div>
-            <div className="form-row" style={{ marginBottom: 10 }}>
+            <div className="form-row no-print" style={{ marginBottom: 10 }}>
               <div className="form-group">
                 <label className="form-label">Categoria</label>
                 <select className="form-control" value={photoCategory} onChange={(e) => setPhotoCategory(e.target.value)}>
@@ -306,7 +383,7 @@ export default function SODetail() {
                 />
               </div>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+            <div className="no-print" style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
               <button className="btn btn-primary btn-sm" onClick={handleUploadPhotos} disabled={uploadingPhotos}>
                 {uploadingPhotos ? 'Enviando...' : 'Enviar fotos'}
               </button>
@@ -335,7 +412,7 @@ export default function SODetail() {
             )}
           </div>
 
-          <div className="card">
+          <div className="card print-block print-block-whatsapp">
             <div className="card-title">Linha do Tempo da OS</div>
             {timeline.length === 0 ? (
               <div className="text-sm text-muted">Sem eventos ainda.</div>
@@ -384,7 +461,7 @@ export default function SODetail() {
         </div>
 
         <div>
-          <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card no-print" style={{ marginBottom: 16 }}>
             <div className="card-title">Atualizar Status</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {STATUS_LIST.map((s) => (
@@ -404,28 +481,42 @@ export default function SODetail() {
 
 
 
-          <div className="card" style={{ marginBottom: 16 }}>
+                    <div className="card print-block print-block-entrega" style={{ marginBottom: 16 }}>
             <div className="card-title">Campo de Entrega</div>
-            <div className="form-group">
-              <label className="form-label">Status da entrega</label>
-              <select className="form-control" value={deliveryStatus} onChange={(e) => setDeliveryStatus(e.target.value)}>
-                <option value="AWAITING_DISPATCH">Aguardando envio</option>
-                <option value="OUT_FOR_DELIVERY">Saiu para entrega</option>
-                <option value="DELIVERED">Entregue</option>
-                <option value="DELIVERY_FAILED">Tentativa sem sucesso</option>
-              </select>
+
+            <div className="no-print">
+              <div className="form-group">
+                <label className="form-label">Status da entrega</label>
+                <select className="form-control" value={deliveryStatus} onChange={(e) => setDeliveryStatus(e.target.value)}>
+                  <option value="AWAITING_DISPATCH">Aguardando envio</option>
+                  <option value="OUT_FOR_DELIVERY">Saiu para entrega</option>
+                  <option value="DELIVERED">Entregue</option>
+                  <option value="DELIVERY_FAILED">Tentativa sem sucesso</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Link de localizacao (opcional)</label>
+                <input className="form-control" placeholder="https://maps.google.com/..." value={deliveryLocationUrl} onChange={(e) => setDeliveryLocationUrl(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Observacao da entrega</label>
+                <textarea className="form-control" rows={2} value={deliveryNote} onChange={(e) => setDeliveryNote(e.target.value)} />
+              </div>
+              <button type="button" className="btn btn-primary btn-sm" onClick={handleDeliveryUpdate} disabled={sendingDelivery}>
+                {sendingDelivery ? 'Enviando...' : 'Enviar atualizacao via WhatsApp'}
+              </button>
             </div>
-            <div className="form-group">
-              <label className="form-label">Link de localizacao (opcional)</label>
-              <input className="form-control" placeholder="https://maps.google.com/..." value={deliveryLocationUrl} onChange={(e) => setDeliveryLocationUrl(e.target.value)} />
+
+            <div className="print-only" style={{ marginTop: 6 }}>
+              <div className="text-sm text-muted">Status da entrega</div>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>
+                {os.deliveryMeta?.statusLabel || '-'}
+              </div>
+              <div className="text-sm text-muted">Link de localizacao</div>
+              <div style={{ marginBottom: 6 }}>{os.deliveryMeta?.locationUrl || '-'}</div>
+              <div className="text-sm text-muted">Observacao</div>
+              <div>{os.deliveryMeta?.note || '-'}</div>
             </div>
-            <div className="form-group">
-              <label className="form-label">Observacao da entrega</label>
-              <textarea className="form-control" rows={2} value={deliveryNote} onChange={(e) => setDeliveryNote(e.target.value)} />
-            </div>
-            <button type="button" className="btn btn-primary btn-sm" onClick={handleDeliveryUpdate} disabled={sendingDelivery}>
-              {sendingDelivery ? 'Enviando...' : 'Enviar atualizacao via WhatsApp'}
-            </button>
             {os.deliveryMeta?.updatedAt ? (
               <div className="text-sm text-muted" style={{ marginTop: 8 }}>
                 Ultima atualizacao: {formatDateTime(os.deliveryMeta.updatedAt)}
@@ -433,7 +524,7 @@ export default function SODetail() {
             ) : null}
           </div>
 
-          <div className="card">
+          <div className="card print-block print-block-whatsapp">
             <div className="card-title">Resumo WhatsApp</div>
             <div className="text-sm text-muted" style={{ marginBottom: 10 }}>
               Envios automaticos por mudanca de status.
