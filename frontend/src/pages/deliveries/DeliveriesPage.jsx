@@ -252,6 +252,7 @@ function printOrders(orders) {
 
 export default function DeliveriesPage() {
   const [orders, setOrders] = useState([]);
+  const [totalFound, setTotalFound] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 280);
@@ -272,12 +273,17 @@ export default function DeliveriesPage() {
           sort: 'updated',
           limit: 250,
           includeDeliveryDetails: 'true',
+          orderPhase: phaseFilter || undefined,
+          deliveryStatus: deliveryFilter || undefined,
+          dateFrom: periodFrom || undefined,
+          dateTo: periodTo || undefined,
         }),
         dashboardAPI.get(),
       ]);
 
       const data = (soRes.data?.data || []).filter((os) => TRACKABLE_OS_STATUS.has(os.status) || os.deliveryMeta);
       setOrders(data);
+      setTotalFound(Number(soRes.data?.total || data.length));
       setTopProducts(dashRes.data?.rankings?.topProducts || []);
     } catch (err) {
       console.error(err);
@@ -288,7 +294,7 @@ export default function DeliveriesPage() {
 
   useEffect(() => {
     load();
-  }, [debouncedSearch]);
+  }, [debouncedSearch, phaseFilter, deliveryFilter, periodFrom, periodTo]);
 
   useEffect(() => {
     const nextDrafts = {};
@@ -301,24 +307,7 @@ export default function DeliveriesPage() {
     setDrafts(nextDrafts);
   }, [orders]);
 
-  const filteredOrders = useMemo(() => {
-    const fromTs = periodFrom ? new Date(`${periodFrom}T00:00:00`).getTime() : null;
-    const toTs = periodTo ? new Date(`${periodTo}T23:59:59.999`).getTime() : null;
-
-    return orders.filter((os) => {
-      if (phaseFilter && resolveOrderPhase(os) !== phaseFilter) return false;
-      if (deliveryFilter && resolveDeliveryStatus(os) !== deliveryFilter) return false;
-
-      if (fromTs || toTs) {
-        const refTs = new Date(os.deliveryMeta?.updatedAt || os.updatedAt || os.createdAt).getTime();
-        if (!Number.isFinite(refTs)) return false;
-        if (fromTs && refTs < fromTs) return false;
-        if (toTs && refTs > toTs) return false;
-      }
-
-      return true;
-    });
-  }, [orders, phaseFilter, deliveryFilter, periodFrom, periodTo]);
+  const filteredOrders = useMemo(() => orders, [orders]);
 
   const summary = useMemo(() => {
     const now = Date.now();
@@ -461,7 +450,7 @@ export default function DeliveriesPage() {
             <input type="date" className="form-control" value={periodTo} onChange={(e) => setPeriodTo(e.target.value)} />
           </div>
           <div className="text-sm text-muted" style={{ marginTop: 8 }}>
-            Mostrando {filteredOrders.length} de {orders.length} pedido(s) conforme os filtros.
+            Mostrando {filteredOrders.length} de {totalFound} pedido(s) conforme os filtros.
           </div>
           <div className="text-sm text-muted" style={{ marginTop: 4 }}>
             Atualizacoes de pedido e entrega evitam duplicidade e ficam registradas no historico de cada pedido.
@@ -574,3 +563,4 @@ export default function DeliveriesPage() {
     </div>
   );
 }
+
