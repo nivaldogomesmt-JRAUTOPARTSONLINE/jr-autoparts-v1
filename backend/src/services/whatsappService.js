@@ -22,6 +22,75 @@ function sanitizeBaseUrl(url) {
   return String(url || '').trim().replace(/\/+$/, '');
 }
 
+function parseMaybeJson(raw) {
+  if (!raw) return null;
+  const text = String(raw).trim();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeConfigUrl(rawUrl) {
+  let value = String(rawUrl || '').trim();
+  if (!value) return '';
+
+  if (!/^https?:\/\//i.test(value)) {
+    value = `https://${value}`;
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return '';
+  }
+
+  let pathname = parsed.pathname || '';
+  pathname = pathname.replace(/\/+$/, '');
+  pathname = pathname.replace(/\/swagger(?:\/.*)?$/i, '');
+  pathname = pathname.replace(/\/api-docs(?:\/.*)?$/i, '');
+  pathname = pathname.replace(/\/docs(?:\/.*)?$/i, '');
+
+  parsed.pathname = pathname || '';
+  return sanitizeBaseUrl(parsed.toString());
+}
+
+function buildBaseUrlCandidates(rawUrl) {
+  const normalized = normalizeConfigUrl(rawUrl);
+  if (!normalized) return [];
+
+  let parsed;
+  try {
+    parsed = new URL(normalized);
+  } catch {
+    return [];
+  }
+
+  const baseOrigin = `${parsed.protocol}//${parsed.host}`;
+  const cleanPath = String(parsed.pathname || '').replace(/\/+$/, '');
+  const candidates = new Set();
+
+  if (/\/api\/v1$/i.test(cleanPath)) {
+    candidates.add(`${baseOrigin}${cleanPath}`);
+  } else if (/\/api$/i.test(cleanPath)) {
+    candidates.add(`${baseOrigin}${cleanPath}/v1`);
+    candidates.add(`${baseOrigin}${cleanPath}`);
+  } else if (cleanPath) {
+    candidates.add(`${baseOrigin}${cleanPath}/api/v1`);
+    candidates.add(`${baseOrigin}${cleanPath}/api`);
+    candidates.add(`${baseOrigin}${cleanPath}`);
+  } else {
+    candidates.add(`${baseOrigin}/api/v1`);
+    candidates.add(`${baseOrigin}/api`);
+    candidates.add(baseOrigin);
+  }
+
+  return [...candidates].map((item) => sanitizeBaseUrl(item));
+}
+
 function buildHeaders(apiKey) {
   return {
     'api-key': apiKey,
@@ -56,6 +125,8 @@ async function ensureSubscriber({ baseUrl, headers, phone }) {
   const endpoints = [
     { url: `${baseUrl}/subscriber/`, body: { phone } },
     { url: `${baseUrl}/subscriber/create/`, body: { phone } },
+    { url: `${baseUrl}/subscriber`, body: { phone } },
+    { url: `${baseUrl}/subscriber/create`, body: { phone } },
   ];
 
   for (const endpoint of endpoints) {
@@ -77,6 +148,8 @@ async function sendToBotConversa({ baseUrl, headers, phone, content }) {
   const attempts = [
     { url: `${baseUrl}/subscriber/send-message/`, body: { phone, message: content } },
     { url: `${baseUrl}/subscriber/${phone}/send-message/`, body: { message: content } },
+    { url: `${baseUrl}/subscriber/send-message`, body: { phone, message: content } },
+    { url: `${baseUrl}/subscriber/${phone}/send-message`, body: { message: content } },
   ];
 
   let lastError = null;
@@ -134,13 +207,61 @@ async function upsertMessageRecord({ clientId, soId, phone, content, messageId }
   });
 }
 
+async function getBotConversaConfig() {
+  const envUrl = process.env.BOTCONVERSA_API_URL || process.env.BOTCONVERSA_API_BASE_URL || '';
+  const envKey = process.env.BOTCONVERSA_API_KEY || '';
+
+  if (String(envUrl).trim() && String(envKey).trim()) {
+    return {
+      apiUrl: String(envUrl).trim(),
+      apiKey: String(envKey).trim(),
+      source: 'env',
+    };
+  }
+
+  try {
+    const account = await prisma.digitalAccount.findFirst({
+      where: {
+        active: true,
+        platform: 'BOTCONVERSA',
+        status: 'ACTIVE',
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    if (!account) {
+      return {
+        apiUrl: String(envUrl).trim(),
+        apiKey: String(envKey).trim(),
+        source: 'env',
+      };
+    }
+
+    const notesObj = parseMaybeJson(account.notes) || {};
+    const fromNotesUrl = notesObj.apiUrl || notesObj.baseUrl || notesObj.url || '';
+    const fromNotesKey = notesObj.apiKey || notesObj.key || notesObj.token || '';
+
+    const apiUrl = String(envUrl || fromNotesUrl || account.plan || '').trim();
+    const apiKey = String(envKey || fromNotesKey || account.contact || '').trim();
+
+    return { apiUrl, apiKey, source: 'digitalAccount' };
+  } catch {
+    return {
+      apiUrl: String(envUrl).trim(),
+      apiKey: String(envKey).trim(),
+      source: 'env',
+    };
+  }
+}
+
 /**
  * Envia mensagem via BotConversa API e registra no banco.
  */
 const sendWhatsAppMessage = async ({ clientId, soId, phone, content, messageId }) => {
   const normalizedPhone = normalizePhone(phone);
-  const apiUrl = sanitizeBaseUrl(process.env.BOTCONVERSA_API_URL || process.env.BOTCONVERSA_API_BASE_URL || 'https://backend.botconversa.com.br/api/v1');
-  const apiKey = String(process.env.BOTCONVERSA_API_KEY || '').trim();
+  const config = await getBotConversaConfig();
+  const apiKey = String(config.apiKey || '').trim();
+  const baseCandidates = buildBaseUrlCandidates(config.apiUrl || 'https://backend.botconversa.com.br/api/v1');
 
   const message = await upsertMessageRecord({
     clientId,
@@ -168,20 +289,44 @@ const sendWhatsAppMessage = async ({ clientId, soId, phone, content, messageId }
     return { success: false, messageId: message.id, error: errorMsg };
   }
 
-  try {
-    await sendToBotConversa({
-      baseUrl: apiUrl,
-      headers: buildHeaders(apiKey),
-      phone: normalizedPhone,
-      content,
+  if (!baseCandidates.length) {
+    const errorMsg = 'BOTCONVERSA_API_URL invalida. Exemplo: https://backend.botconversa.com.br/api/v1';
+    await prisma.whatsappMessage.update({
+      where: { id: message.id },
+      data: { status: 'FAILED', errorMessage: errorMsg },
     });
+    return { success: false, messageId: message.id, error: errorMsg };
+  }
+
+  try {
+    let sent = false;
+    let lastErr = null;
+
+    for (const baseUrl of baseCandidates) {
+      try {
+        await sendToBotConversa({
+          baseUrl,
+          headers: buildHeaders(apiKey),
+          phone: normalizedPhone,
+          content,
+        });
+        sent = true;
+        break;
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+
+    if (!sent) {
+      throw lastErr || new Error('Falha ao enviar mensagem em todos os endpoints configurados.');
+    }
 
     await prisma.whatsappMessage.update({
       where: { id: message.id },
       data: { status: 'SENT', sentAt: new Date(), errorMessage: null },
     });
 
-    console.log(`WhatsApp enviado para ${normalizedPhone}`);
+    console.log(`WhatsApp enviado para ${normalizedPhone} (${config.source})`);
     return { success: true, messageId: message.id };
   } catch (err) {
     const errorMsg = parseErrorMessage(err);
@@ -197,5 +342,3 @@ const sendWhatsAppMessage = async ({ clientId, soId, phone, content, messageId }
 };
 
 module.exports = { sendWhatsAppMessage };
-
-

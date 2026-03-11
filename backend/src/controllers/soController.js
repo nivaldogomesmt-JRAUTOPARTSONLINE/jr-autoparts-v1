@@ -29,14 +29,25 @@ const MAINTENANCE_RULES = [
     label: 'Troca de Oleo',
     intervalKm: 10000,
     intervalMonths: 6,
-    match: (text) => text.includes('OLEO'),
+    match: (text) => (
+      text.includes('OLEO')
+      || text.includes('LUBRIFICANTE')
+      || text.includes('LUBRIFICACAO')
+    ),
   },
   {
     type: 'belt',
     label: 'Correia Dentada',
     intervalKm: 60000,
     intervalMonths: 48,
-    match: (text) => text.includes('CORREIA') && text.includes('DENTADA'),
+    match: (text) => (
+      text.includes('CORREIA')
+      && (
+        text.includes('DENTADA')
+        || text.includes('SINCRONIZADORA')
+        || text.includes('DISTRIBUICAO')
+      )
+    ),
   },
 ];
 
@@ -92,7 +103,7 @@ async function syncVehicleMaintenancesFromOrder(tx, order) {
 
   const joinedOrderText = normalizeText(
     (order.items || [])
-      .map((item) => item.itemName)
+      .map((item) => item.itemName || item.service?.name || item.product?.name)
       .filter(Boolean)
       .join(' ')
   );
@@ -167,12 +178,26 @@ function extractCloudinaryPublicId(url) {
 
 const list = async (req, res) => {
   try {
-    const { status, clientId, vehicleId, search, sort = 'created', page = 1, limit = 20 } = req.query;
-    const skip = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const { status, clientId, vehicleId, search, sort = 'created', page = 1, limit = 20, dateFrom, dateTo } = req.query;
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(1000, Math.max(1, parseInt(limit, 10) || 20));
+    const skip = (pageNum - 1) * limitNum;
+
+    let createdAt = undefined;
+    if (dateFrom || dateTo) {
+      const from = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
+      const to = dateTo ? new Date(`${dateTo}T23:59:59.999`) : null;
+      createdAt = {
+        ...(from && !Number.isNaN(from.getTime()) ? { gte: from } : {}),
+        ...(to && !Number.isNaN(to.getTime()) ? { lte: to } : {}),
+      };
+    }
+
     const where = {
       ...(status && { status }),
       ...(clientId && { clientId }),
       ...(vehicleId && { vehicleId }),
+      ...(createdAt && Object.keys(createdAt).length ? { createdAt } : {}),
       ...(search && {
         OR: [
           { number: { equals: parseInt(search, 10) || 0 } },
@@ -194,7 +219,7 @@ const list = async (req, res) => {
         },
         orderBy,
         skip,
-        take: parseInt(limit, 10),
+        take: limitNum,
       }),
       prisma.serviceOrder.count({ where }),
     ]);
@@ -202,14 +227,13 @@ const list = async (req, res) => {
     return res.json({
       data: orders.map((o) => ({ ...o, total: o.totalPrice, deliveryMeta: parseDeliveryMetaFromNotes(o.notes) })),
       total,
-      page: parseInt(page, 10),
-      pages: Math.ceil(total / parseInt(limit, 10)),
+      page: pageNum,
+      pages: Math.ceil(total / limitNum),
     });
   } catch (err) {
     return res.status(500).json({ error: 'Erro ao listar ordens de servico.' });
   }
 };
-
 const get = async (req, res) => {
   try {
     const order = await prisma.serviceOrder.findUnique({
@@ -272,7 +296,16 @@ const create = async (req, res) => {
           items: { create: parsedItems },
           statusLogs: { create: { newStatus: 'QUOTE', userId: req.user.id } },
         },
-        include: { client: true, vehicle: true, items: true },
+        include: {
+        client: true,
+        vehicle: true,
+        items: {
+          include: {
+            service: { select: { name: true } },
+            product: { select: { name: true } },
+          },
+        },
+      },
       });
 
       await tx.vehicle.update({ where: { id: vehicleId }, data: { currentKm: parsedEntryKm } });
@@ -294,7 +327,16 @@ const updateStatus = async (req, res) => {
 
     const current = await prisma.serviceOrder.findUnique({
       where: { id: req.params.id },
-      include: { client: true, vehicle: true, items: true },
+      include: {
+        client: true,
+        vehicle: true,
+        items: {
+          include: {
+            service: { select: { name: true } },
+            product: { select: { name: true } },
+          },
+        },
+      },
     });
     if (!current) return res.status(404).json({ error: 'OS nao encontrada.' });
 
@@ -325,7 +367,16 @@ const updateStatus = async (req, res) => {
             },
           },
         },
-        include: { client: true, vehicle: true, items: true },
+        include: {
+        client: true,
+        vehicle: true,
+        items: {
+          include: {
+            service: { select: { name: true } },
+            product: { select: { name: true } },
+          },
+        },
+      },
       });
 
       await syncVehicleMaintenancesFromOrder(tx, {
@@ -386,7 +437,16 @@ const update = async (req, res) => {
           notes,
           totalPrice: parseFloat(total),
         },
-        include: { client: true, vehicle: true, items: true },
+        include: {
+        client: true,
+        vehicle: true,
+        items: {
+          include: {
+            service: { select: { name: true } },
+            product: { select: { name: true } },
+          },
+        },
+      },
       });
 
       if (parsedEntryKm !== null) {
@@ -556,6 +616,8 @@ const remove = async (req, res) => {
 };
 
 module.exports = { list, get, create, update, updateStatus, sendDeliveryUpdate, remove, uploadPhotos, deletePhoto };
+
+
 
 
 

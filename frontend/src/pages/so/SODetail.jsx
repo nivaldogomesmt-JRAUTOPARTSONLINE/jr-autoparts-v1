@@ -157,6 +157,10 @@ export default function SODetail() {
   };
 
 
+  const handlePrint = () => {
+    window.print();
+  };
+
   const timeline = useMemo(() => {
     if (!os) return [];
 
@@ -200,7 +204,8 @@ export default function SODetail() {
             <span style={{ marginLeft: 8 }}>{new Date(os.createdAt).toLocaleDateString('pt-BR')}</span>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className="no-print" style={{ display: 'flex', gap: 8 }}>
+          <button type="button" className="btn btn-outline btn-sm" onClick={handlePrint}>Imprimir OS</button>
           <Link to="/os" className="btn btn-ghost btn-sm">Voltar</Link>
           <Link to={`/os/${id}/editar`} className="btn btn-outline btn-sm">Editar</Link>
           {can('delete') ? (
@@ -209,7 +214,7 @@ export default function SODetail() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20 }}>
+      <div className="print-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20 }}>
         <div>
           <div className="card" style={{ marginBottom: 16 }}>
             <div className="card-title">Dados da OS</div>
@@ -457,6 +462,11 @@ export default function SODetail() {
     </div>
   );
 }
+
+
+
+
+
 
 
 

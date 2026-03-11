@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { clientsAPI, productsAPI, servicesAPI, soAPI, vehiclesAPI } from '../../services/api';
 
@@ -17,48 +17,70 @@ export default function SOForm() {
   const [error, setError] = useState('');
   const [clientSearch, setClientSearch] = useState('');
 
+  const [productSearch, setProductSearch] = useState('');
+  const [productFocused, setProductFocused] = useState(false);
+  const [activeProductIndex, setActiveProductIndex] = useState(-1);
+  const productSearchRef = useRef(null);
+
   useEffect(() => {
     Promise.all([
       clientsAPI.list({ page: 1, limit: 5000 }),
-      productsAPI.list({ limit: 500 }),
+      productsAPI.list({ page: 1, limit: 40 }),
       servicesAPI.list(),
     ]).then(([c, p, s]) => {
-      setClients(c.data.data);
-      setProducts(p.data.data);
-      setServices(s.data);
+      setClients(c.data.data || []);
+      setProducts(p.data.data || []);
+      setServices(s.data || []);
     });
 
-    if (isEdit) {
-      soAPI.get(id).then((res) => {
-        const os = res.data;
-        setForm({
-          clientId: os.clientId,
-          vehicleId: os.vehicleId,
-          entryKm: os.entryKm || '',
-          notes: os.notes || '',
-        });
-        setItems(
-          os.items.map((i) => ({
-            type: i.type,
-            itemId: i.productId || i.serviceId,
-            itemName: i.itemName,
-            quantity: parseFloat(i.quantity),
-            unitPrice: parseFloat(i.unitPrice),
-          }))
-        );
+    if (!isEdit) return;
+
+    soAPI.get(id).then((res) => {
+      const os = res.data;
+      setForm({
+        clientId: os.clientId,
+        vehicleId: os.vehicleId,
+        entryKm: os.entryKm || '',
+        notes: os.notes || '',
       });
-    }
+      setItems(
+        (os.items || []).map((i) => ({
+          type: i.type,
+          itemId: i.productId || i.serviceId,
+          itemName: i.itemName,
+          quantity: parseFloat(i.quantity),
+          unitPrice: parseFloat(i.unitPrice),
+        }))
+      );
+    });
   }, [id, isEdit]);
 
   useEffect(() => {
-    if (form.clientId) {
-      vehiclesAPI.list({ clientId: form.clientId }).then((res) => setVehicles(res.data.data));
-    } else {
+    const timer = setTimeout(async () => {
+      try {
+        const params = { page: 1, limit: 40 };
+        if (productSearch.trim()) params.search = productSearch.trim();
+        const res = await productsAPI.list(params);
+        setProducts(res.data.data || []);
+        setActiveProductIndex(-1);
+      } catch {
+        // keep input responsive
+      }
+    }, 180);
+
+    return () => clearTimeout(timer);
+  }, [productSearch]);
+
+  useEffect(() => {
+    if (!form.clientId) {
       setVehicles([]);
+      return;
     }
+    vehiclesAPI.list({ clientId: form.clientId }).then((res) => setVehicles(res.data.data || []));
   }, [form.clientId]);
 
   const addItem = (type, item) => {
+    if (!item) return;
     setItems((prev) => [
       ...prev,
       {
@@ -69,6 +91,14 @@ export default function SOForm() {
         unitPrice: parseFloat(item.price),
       },
     ]);
+  };
+
+  const selectProduct = (product) => {
+    addItem('PRODUCT', product);
+    setProductSearch('');
+    setActiveProductIndex(-1);
+    setProductFocused(false);
+    productSearchRef.current?.focus();
   };
 
   const removeItem = (idx) => setItems((prev) => prev.filter((_, i) => i !== idx));
@@ -83,9 +113,84 @@ export default function SOForm() {
     const q = clientSearch.trim().toLowerCase();
     if (!q) return clients;
     return clients.filter((c) =>
-      [c.name, c.cpfCnpj, c.phone, c.whatsapp, c.email].filter(Boolean).join(' ').toLowerCase().includes(q)
+      [c.name, c.cpfCnpj, c.phone, c.whatsapp, c.email]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(q)
     );
   }, [clients, clientSearch]);
+
+  const productSuggestions = useMemo(() => {
+    if (!productSearch.trim()) return products.slice(0, 12);
+    return products.slice(0, 12);
+  }, [products, productSearch]);
+
+  const showSuggestions = productFocused && productSuggestions.length > 0;
+
+  const onProductKeyDown = (e) => {
+    if (!showSuggestions && e.key !== 'Enter') return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveProductIndex((prev) => {
+        const next = prev + 1;
+        return next >= productSuggestions.length ? 0 : next;
+      });
+      return;
+    }
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveProductIndex((prev) => {
+        const next = prev - 1;
+        return next < 0 ? productSuggestions.length - 1 : next;
+      });
+      return;
+    }
+
+    if (e.key === 'Enter') {
+      if (activeProductIndex >= 0 && productSuggestions[activeProductIndex]) {
+        e.preventDefault();
+        selectProduct(productSuggestions[activeProductIndex]);
+        return;
+      }
+
+      if (productSuggestions.length > 0) {
+        e.preventDefault();
+        selectProduct(productSuggestions[0]);
+        return;
+      }
+
+      const term = productSearch.trim();
+      if (!term) return;
+
+      e.preventDefault();
+      productsAPI
+        .list({ page: 1, limit: 8, search: term })
+        .then((res) => {
+          const found = res.data?.data || [];
+          const exactByBarcode = found.find(
+            (p) => String(p.barcode || '').trim().toUpperCase() === term.toUpperCase()
+          );
+          if (exactByBarcode) {
+            selectProduct(exactByBarcode);
+            return;
+          }
+          if (found[0]) {
+            selectProduct(found[0]);
+          }
+        })
+        .catch(() => {
+          // keep typing flow smooth
+        });
+    }
+
+    if (e.key === 'Escape') {
+      setProductFocused(false);
+      setActiveProductIndex(-1);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -129,7 +234,13 @@ export default function SOForm() {
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Buscar cliente</label>
-              <input className="form-control" placeholder="Digite nome, CPF/CNPJ, telefone ou email..." value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} style={{ marginBottom: 8 }} />
+              <input
+                className="form-control"
+                placeholder="Digite nome, CPF/CNPJ, telefone ou email..."
+                value={clientSearch}
+                onChange={(e) => setClientSearch(e.target.value)}
+                style={{ marginBottom: 8 }}
+              />
               <label className="form-label required">Cliente</label>
               <select
                 className="form-control"
@@ -206,87 +317,112 @@ export default function SOForm() {
             </select>
           </div>
 
-          <div style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 16, position: 'relative' }}>
             <label className="form-label">Adicionar Peca / Produto</label>
-            <select
+            <input
+              ref={productSearchRef}
               className="form-control"
+              placeholder="Buscar por nome ou codigo de barras (setas + Enter)"
+              value={productSearch}
               onChange={(e) => {
-                const p = products.find((x) => x.id === e.target.value);
-                if (p) addItem('PRODUCT', p);
-                e.target.value = '';
+                setProductSearch(e.target.value);
+                setProductFocused(true);
               }}
-            >
-              <option value="">Selecione um produto...</option>
-              {products.map((p) => (
-                <option key={p.id} value={p.id}>{p.name} - R$ {parseFloat(p.price).toFixed(2)}</option>
-              ))}
-            </select>
+              onFocus={() => setProductFocused(true)}
+              onBlur={() => setTimeout(() => setProductFocused(false), 140)}
+              onKeyDown={onProductKeyDown}
+              autoComplete="off"
+            />
+            {showSuggestions ? (
+              <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 20, background: '#fff', border: '1px solid #cbd5e1', borderRadius: 8, marginTop: 6, maxHeight: 260, overflowY: 'auto', boxShadow: '0 8px 22px rgba(15, 23, 42, .12)' }}>
+                {productSuggestions.map((p, idx) => {
+                  const active = idx === activeProductIndex;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => selectProduct(p)}
+                      style={{ width: '100%', textAlign: 'left', padding: '10px 12px', border: 'none', background: active ? '#eff6ff' : '#fff', cursor: 'pointer' }}
+                    >
+                      <div style={{ fontWeight: 600, color: '#0f172a' }}>{p.name}</div>
+                      <div className="text-sm text-muted">Cod barras: {p.barcode || 'Nao informado'} | R$ {parseFloat(p.price || 0).toFixed(2)}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+            <div className="text-sm text-muted" style={{ marginTop: 6 }}>
+              {products.length} produto(s) carregado(s) para selecao rapida.
+            </div>
           </div>
 
           {items.length > 0 ? (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Tipo</th>
-                  <th>Item</th>
-                  <th>Qtd</th>
-                  <th>Preco Unit.</th>
-                  <th>Total</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item, idx) => (
-                  <tr key={idx}>
-                    <td>
-                      <span className={`badge ${item.type === 'SERVICE' ? 'badge-blue' : 'badge-gray'}`}>
-                        {item.type === 'SERVICE' ? 'Servico' : 'Peca'}
-                      </span>
-                    </td>
-                    <td>{item.itemName}</td>
-                    <td>
-                      <input
-                        type="number"
-                        min="0.01"
-                        step="0.01"
-                        className="form-control"
-                        style={{ width: 70 }}
-                        value={item.quantity}
-                        onChange={(e) => updateItem(idx, 'quantity', e.target.value)}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        className="form-control"
-                        style={{ width: 100 }}
-                        value={item.unitPrice}
-                        onChange={(e) => updateItem(idx, 'unitPrice', e.target.value)}
-                      />
-                    </td>
-                    <td>
-                      <strong>R$ {(parseFloat(item.quantity) * parseFloat(item.unitPrice)).toFixed(2).replace('.', ',')}</strong>
-                    </td>
-                    <td>
-                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => removeItem(idx)}>x</button>
-                    </td>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Tipo</th>
+                    <th>Item</th>
+                    <th>Qtd</th>
+                    <th>Preco Unit.</th>
+                    <th>Total</th>
+                    <th></th>
                   </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <td colSpan={4} style={{ textAlign: 'right', fontWeight: 700 }}>TOTAL</td>
-                  <td style={{ fontWeight: 700, fontSize: 16, color: '#1A3C5E' }}>R$ {total.toFixed(2).replace('.', ',')}</td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            </table>
+                </thead>
+                <tbody>
+                  {items.map((item, idx) => (
+                    <tr key={idx}>
+                      <td>
+                        <span className={`badge ${item.type === 'SERVICE' ? 'badge-blue' : 'badge-gray'}`}>
+                          {item.type === 'SERVICE' ? 'Servico' : 'Peca'}
+                        </span>
+                      </td>
+                      <td>{item.itemName}</td>
+                      <td>
+                        <input
+                          type="number"
+                          min="0.01"
+                          step="0.01"
+                          className="form-control"
+                          style={{ width: 70 }}
+                          value={item.quantity}
+                          onChange={(e) => updateItem(idx, 'quantity', e.target.value)}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          className="form-control"
+                          style={{ width: 100 }}
+                          value={item.unitPrice}
+                          onChange={(e) => updateItem(idx, 'unitPrice', e.target.value)}
+                        />
+                      </td>
+                      <td>
+                        <strong>R$ {(parseFloat(item.quantity) * parseFloat(item.unitPrice)).toFixed(2).replace('.', ',')}</strong>
+                      </td>
+                      <td>
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => removeItem(idx)}>x</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: 'right', fontWeight: 700 }}>TOTAL</td>
+                    <td style={{ fontWeight: 700, fontSize: 16, color: '#1A3C5E' }}>R$ {total.toFixed(2).replace('.', ',')}</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
           ) : null}
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
           <button type="button" className="btn btn-ghost" onClick={() => navigate(-1)}>Cancelar</button>
           <button type="submit" className="btn btn-primary" disabled={loading}>
             {loading ? 'Salvando...' : isEdit ? 'Salvar Alteracoes' : 'Criar OS'}
@@ -296,4 +432,5 @@ export default function SOForm() {
     </div>
   );
 }
+
 

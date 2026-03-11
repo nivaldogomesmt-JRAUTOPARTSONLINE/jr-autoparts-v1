@@ -20,17 +20,18 @@ function ProductCard({ product }) {
         {product.photoUrl ? (
           <img src={product.photoUrl} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
-          <span style={{ fontSize: 38 }}>??</span>
+          <span style={{ fontSize: 26, color: '#64748b' }}>Sem foto</span>
         )}
       </div>
 
       <div style={{ padding: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, gap: 8 }}>
           <span className="badge badge-gray" style={{ fontSize: 10 }}>{product.category || 'Sem categoria'}</span>
           <span className={`badge ${stockClass(stock)}`} style={{ fontSize: 10 }}>Estoque: {stock}</span>
         </div>
 
         <div style={{ fontWeight: 700, color: '#0f172a', minHeight: 40, lineHeight: 1.35 }}>{product.name}</div>
+        <div className="text-sm text-muted" style={{ marginTop: 4 }}>Cod. barras: {product.barcode || 'Nao informado'}</div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
           <strong style={{ color: '#1A3C5E', fontSize: 16 }}>{money(product.price)}</strong>
@@ -49,6 +50,9 @@ export default function ProductsPage() {
   const [categories, setCategories] = useState([]);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [xmlFile, setXmlFile] = useState(null);
+  const [xmlLoading, setXmlLoading] = useState(false);
+  const [xmlFeedback, setXmlFeedback] = useState('');
 
   const load = async () => {
     setLoading(true);
@@ -72,6 +76,27 @@ export default function ProductsPage() {
     const withoutPrice = products.filter((p) => Number(p.price || 0) <= 0).length;
     return { stockTotal, lowStock, withoutPrice };
   }, [products]);
+
+  const handleImportXml = async () => {
+    if (!xmlFile) {
+      setXmlFeedback('Selecione um arquivo XML primeiro.');
+      return;
+    }
+
+    setXmlLoading(true);
+    setXmlFeedback('');
+    try {
+      const res = await productsAPI.importXml(xmlFile);
+      const data = res.data || {};
+      setXmlFeedback(`Importacao concluida. Criados: ${data.created || 0}, Atualizados: ${data.updated || 0}.`);
+      setXmlFile(null);
+      await load();
+    } catch (err) {
+      setXmlFeedback(err.response?.data?.error || 'Falha ao importar XML.');
+    } finally {
+      setXmlLoading(false);
+    }
+  };
 
   return (
     <div>
@@ -101,28 +126,44 @@ export default function ProductsPage() {
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: 10 }}>
-          <input
-            className="form-control"
-            placeholder="Buscar por nome, categoria ou descricao..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-          />
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(180px,220px)', gap: 10 }}>
+            <input
+              className="form-control"
+              placeholder="Buscar por nome, codigo de barras, categoria ou descricao..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+            />
 
-          <select
-            className="form-control"
-            value={category}
-            onChange={(e) => {
-              setCategory(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="">Todas as categorias</option>
-            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
+            <select
+              className="form-control"
+              value={category}
+              onChange={(e) => {
+                setCategory(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">Todas as categorias</option>
+              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 8 }}>
+            <input
+              type="file"
+              accept=".xml,text/xml,application/xml"
+              className="form-control"
+              onChange={(e) => setXmlFile(e.target.files?.[0] || null)}
+            />
+            <button type="button" className="btn btn-outline" onClick={handleImportXml} disabled={xmlLoading}>
+              {xmlLoading ? 'Importando...' : 'Importar XML NF'}
+            </button>
+          </div>
+
+          {xmlFeedback ? <div className="text-sm" style={{ color: xmlFeedback.includes('Falha') ? '#b91c1c' : '#065f46' }}>{xmlFeedback}</div> : null}
         </div>
       </div>
 
@@ -131,7 +172,6 @@ export default function ProductsPage() {
           <div className="loading"><div className="spinner" /></div>
         ) : products.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-state-icon">??</div>
             <div className="empty-state-text">Nenhum produto encontrado</div>
             <Link to="/produtos/novo" className="btn btn-primary btn-sm" style={{ marginTop: 12 }}>+ Cadastrar Produto</Link>
           </div>

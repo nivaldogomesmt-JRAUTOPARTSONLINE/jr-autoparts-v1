@@ -58,7 +58,7 @@ export const clientsAPI = {
   get:                (id)     => api.get(`/clients/${id}`),
   create:             (data)   => api.post('/clients', data),
   update:             (id, data) => api.put(`/clients/${id}`, data),
-  remove:             (id)     => api.delete(`/clients/${id}`),
+  remove:             (id, options = {}) => api.delete(`/clients/${id}`, { params: options }),
   grantPortalAccess:  (id, data) => api.post(`/clients/${id}/portal-access`, data),
   importFile:         (file, options = {}) => {
     const formData = new FormData();
@@ -93,7 +93,7 @@ export const vehiclesAPI = {
     formData.append('photo', file);
     return api.post(`/vehicles/${id}/photo`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
-  remove:     (id) => api.delete(`/vehicles/${id}`),
+  remove:     (id, options = {}) => api.delete(`/vehicles/${id}`, { params: options }),
   history:    (id) => api.get(`/vehicles/${id}/history`),
 };
 
@@ -103,6 +103,11 @@ export const productsAPI = {
   get:    (id)       => api.get(`/products/${id}`),
   create: (formData) => api.post('/products', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   update: (id, formData) => api.put(`/products/${id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  importXml: (file) => {
+    const formData = new FormData();
+    formData.append('xml', file);
+    return api.post('/products/import/xml', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
   remove: (id)       => api.delete(`/products/${id}`),
 };
 
@@ -130,6 +135,8 @@ export const soAPI = {
     return api.post(`/so/${id}/photos`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
   deletePhoto:  (id, photoId) => api.delete(`/so/${id}/photos/${photoId}`),
+  updateDelivery: (id, data) => api.put(`/so/${id}/delivery`, data),
+  remove:       (id) => api.delete(`/so/${id}`),
 };
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ MAINTENANCE Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
@@ -193,6 +200,14 @@ export const trackingAPI = {
   runCollect: () => api.post('/tracking/jobs/collect'),
 };
 export default api;
+
+
+
+
+
+
+
+
 
 
 
