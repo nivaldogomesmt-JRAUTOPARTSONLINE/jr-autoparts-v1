@@ -19,16 +19,17 @@ const NAV = [
   { code: 'TR', label: 'Rastreamento',      path: '/rastreamento' },
   { code: 'GU', label: 'Guincho',          path: '/guincho' },
   { code: 'EN', label: 'Entregas',          path: '/entregas' },
+  { code: 'MS', label: 'Mensagens',         path: '/mensagens' },
 
-  { section: 'INTEGRAÃÃES' },
+  { section: 'INTEGRAÃÂÃÂES' },
   { code: 'IN', label: 'Integracoes',       path: '/integracoes' },
   { code: 'IM', label: 'Importacoes',       path: '/importacoes' },
   { code: 'EX', label: 'Exportacoes',       path: '/exportacoes' },
   { code: 'LG', label: 'Logs',              path: '/logs' },
   { code: 'NT', label: 'Notificacoes',      path: '/notificacoes' },
 
-  { section: 'GESTÃO' },
-  { code: 'RL', label: 'Relatórios',        path: '/relatorios' },
+  { section: 'GESTÃÂO' },
+  { code: 'RL', label: 'RelatÃ³rios',        path: '/relatorios' },
   { code: 'AT', label: 'Ativos',            path: '/ativos' },
   { code: 'CD', label: 'Contas Digitais',   path: '/contas-digitais' },
   { code: 'US', label: 'Colaboradores',     path: '/colaboradores' },
@@ -67,7 +68,7 @@ export default function Layout() {
           {BRAND.logo ? (
             <img src={BRAND.logo} alt={BRAND.name} className="sidebar-logo-image" />
           ) : (
-            <div style={{ width: 34, height: 34, borderRadius: 7, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>ð§</div>
+            <div style={{ width: 34, height: 34, borderRadius: 7, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>Ã°ÂÂÂ§</div>
           )}
           <div className="sidebar-logo-text">
             {BRAND.name}
@@ -75,7 +76,7 @@ export default function Layout() {
           </div>
         </div>
 
-        {/* NavegaÃ§Ã£o */}
+        {/* NavegaÃÂ§ÃÂ£o */}
         <nav className="sidebar-nav">
           {NAV.map((item, i) => {
             if (item.section) {
@@ -95,16 +96,16 @@ export default function Layout() {
           })}
         </nav>
 
-        {/* RodapÃ© */}
+        {/* RodapÃÂ© */}
         <div className="sidebar-footer">
-          <div className="sidebar-user">{user?.email || 'UsuÃ¡rio'}</div>
+          <div className="sidebar-user">{user?.email || 'UsuÃÂ¡rio'}</div>
           <button className="btn btn-outline btn-sm w-full" onClick={handleLogout}>
             Sair
           </button>
         </div>
       </aside>
 
-      {/* CONTEÃDO PRINCIPAL */}
+      {/* CONTEÃÂDO PRINCIPAL */}
       <div className="main-content">
         <header className="main-header">
           <button
@@ -124,7 +125,7 @@ export default function Layout() {
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              {user?.role === 'admin' ? 'Admin' : 'UsuÃ¡rio'}
+              {user?.role === 'admin' ? 'Admin' : 'UsuÃÂ¡rio'}
             </span>
             <div style={{
               width: 30, height: 30, borderRadius: '50%',
