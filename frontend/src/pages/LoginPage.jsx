@@ -1,99 +1,93 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { BRAND } from '../config/brand';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
+  const { login } = useAuth();
+  const navigate = useNavigate();
+  const [email, setEmail] = useState('admin@jrautoparts.com');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
-  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      const user = await login(email, password);
-      if (user.role === 'CLIENT') {
-        navigate('/portal');
-      } else {
-        navigate('/dashboard');
-      }
+      await login(email, password);
+      navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.error || 'Erro ao fazer login. Verifique suas credenciais.');
+      setError(err.message || 'Email ou senha incorretos.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={{
-      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'linear-gradient(135deg, #1A3C5E 0%, #2563a8 100%)',
-      padding: '20px',
-    }}>
-      <div style={{ width: '100%', maxWidth: '380px' }}>
-        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <div style={{ fontSize: '48px', marginBottom: '8px' }}>🔧</div>
-          <h1 style={{ color: 'white', fontSize: '24px', fontWeight: 700 }}>JR Auto Parts</h1>
-          <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '14px', marginTop: '4px' }}>
-            Sistema de Gestão
-          </p>
+    <div className="login-page">
+      <div className="login-card">
+        {/* Logo */}
+        <div className="login-logo">
+          {BRAND.logo ? (
+            <img src={BRAND.logo} alt={BRAND.name} />
+          ) : (
+            <div style={{ width: 52, height: 52, borderRadius: 12, background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>🔧</div>
+          )}
+          <div className="login-logo-name">{BRAND.name}</div>
+          <div className="login-logo-sub">Sistema de Gestão</div>
         </div>
 
-        <div className="card">
-          <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '20px', textAlign: 'center' }}>
-            Entrar no Sistema
-          </h2>
+        {/* Form */}
+        <h2 className="login-title">Entrar no Sistema</h2>
 
-          {error && <div className="alert alert-error">{error}</div>}
+        {error && <div className="alert alert-error">{error}</div>}
 
-          <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label className="form-label">Email</label>
-              <input
-                type="email"
-                className="form-control"
-                placeholder="seu@email.com"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-                autoFocus
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Senha</label>
-              <input
-                type="password"
-                className="form-control"
-                placeholder="••••••••"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                required
-              />
-            </div>
-            <button
-              type="submit"
-              className="btn btn-primary btn-lg"
-              style={{ width: '100%', justifyContent: 'center', marginTop: '8px' }}
-              disabled={loading}
-            >
-              {loading ? 'Entrando...' : 'Entrar'}
-            </button>
-          </form>
-
-          <div style={{ textAlign: 'center', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
-            <Link to="/portal/login" style={{ fontSize: '13px', color: '#64748b' }}>
-              Sou cliente → Acessar meu portal
-            </Link>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label className="form-label required">Email</label>
+            <input
+              type="email"
+              className="form-control"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="seu@email.com"
+              required
+              autoFocus
+            />
           </div>
+          <div className="form-group">
+            <label className="form-label required">Senha</label>
+            <input
+              type="password"
+              className="form-control"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+            />
+          </div>
+          <button
+            type="submit"
+            className="btn btn-primary w-full btn-lg"
+            style={{ marginTop: 8 }}
+            disabled={loading}
+          >
+            {loading ? 'Entrando...' : 'Entrar'}
+          </button>
+        </form>
+
+        <div style={{ textAlign: 'center', marginTop: 20 }}>
+          <div className="divider" style={{ margin: '16px 0' }} />
+          <Link to="/portal/login" style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+            Sou cliente → Acessar meu portal
+          </Link>
         </div>
 
-        <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.5)', fontSize: '12px', marginTop: '24px' }}>
-          JR Auto Parts © {new Date().getFullYear()}
-        </p>
+        <div style={{ textAlign: 'center', marginTop: 16, fontSize: 11, color: 'var(--text-muted)' }}>
+          © {new Date().getFullYear()} {BRAND.name}
+        </div>
       </div>
     </div>
   );
