@@ -24,6 +24,8 @@ import CompanyAssetsPage from './pages/admin/CompanyAssetsPage';
 import DigitalAccountsPage from './pages/admin/DigitalAccountsPage';
 import CollaboratorsPage from './pages/admin/CollaboratorsPage';
 import TrackingPage from './pages/tracking/TrackingPage';
+import TowingPage   from './pages/towing/TowingPage';
+import ReportsPage  from './pages/reports/ReportsPage';
 import DeliveriesPage from './pages/deliveries/DeliveriesPage';
 import IntegrationsHubPage from './pages/integrations/IntegrationsHubPage';
 import NotificationCenterPage from './pages/integrations/NotificationCenterPage';
@@ -64,6 +66,8 @@ function AppRoutes() {
       <Route path="/portal" element={<PortalRoute><PortalDashboard /></PortalRoute>} />
       <Route path="/portal/veiculo/:id" element={<PortalRoute><PortalVehicle /></PortalRoute>} />
       <Route path="/portal/rastreamento" element={<PortalRoute><PortalTracking /></PortalRoute>} />
+        <Route path='/guincho'    element={<TowingPage />} />
+        <Route path='/relatorios' element={<ReportsPage />} />
       <Route path="/portal/os/:id" element={<PortalRoute><PortalSODetail /></PortalRoute>} />
 
       <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
