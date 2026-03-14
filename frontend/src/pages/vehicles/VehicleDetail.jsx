@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { maintenanceAPI, vehiclesAPI } from '../../services/api';
+import { maintenanceAPI, trackingAPI, vehiclesAPI } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
 const ALERT_COLOR = { OVERDUE: '#dc2626', DUE_SOON: '#f59e0b', OK: '#16a34a' };
 const ALERT_LABEL = { OVERDUE: 'Urgencia', DUE_SOON: 'Atencao', OK: 'OK' };
+const RASTREK_BASE_URL = 'https://painel.rastrek.com.br'; // fallback — ajuste se necessário
 
 function toDateInput(value) {
   if (!value) return '';
@@ -31,6 +32,7 @@ export default function VehicleDetail() {
   const [info, setInfo] = useState('');
   const [forms, setForms] = useState({});
   const [deleting, setDeleting] = useState(false);
+  const [trackingDevices, setTrackingDevices] = useState([]);
 
   const load = async () => {
     setLoading(true);
@@ -69,6 +71,16 @@ export default function VehicleDetail() {
     }
     setForms(next);
   }, [maint]);
+
+  useEffect(() => {
+    if (!vehicle?.id) return;
+    trackingAPI.listDevices({ search: vehicle.plate })
+      .then(res => {
+        const devs = (res.data || []).filter(d => d.vehicleId === vehicle.id);
+        setTrackingDevices(devs);
+      })
+      .catch(() => {});
+  }, [vehicle?.id, vehicle?.plate]);
 
   const maintenanceList = useMemo(() => maint?.maintenances || [], [maint]);
 
@@ -147,6 +159,17 @@ export default function VehicleDetail() {
     } finally {
       setSavingMap((prev) => ({ ...prev, __init: false }));
     }
+  };
+
+  const handleCopyImei = (imei) => {
+    if (!imei) return;
+    navigator.clipboard.writeText(imei).catch(() => {});
+  };
+
+  const handleOpenRastrek = (device) => {
+    if (device?.rastrekLink) { window.open(device.rastrekLink, '_blank', 'noopener'); return; }
+    const q = vehicle?.plate || device?.imei || '';
+    window.open(`${RASTREK_BASE_URL}?q=${encodeURIComponent(q)}`, '_blank', 'noopener');
   };
 
   if (loading) return <div className="loading"><div className="spinner" /></div>;
@@ -288,6 +311,46 @@ export default function VehicleDetail() {
                 </Link>
               ))
             )}
+          </div>
+
+          <div className="card" style={{ marginTop: 16 }}>
+            <div className="card-title">Rastreamento</div>
+            {trackingDevices.length === 0 ? (
+              <div className="text-sm text-muted">Nenhum rastreador vinculado a este veículo.</div>
+            ) : (() => {
+              const d = trackingDevices.find(x => x.status === 'ACTIVE') || trackingDevices[0];
+              const statusLabel = { ACTIVE: 'Ativo', STOCK: 'Estoque', MAINTENANCE: 'Em Manutenção', REMOVED: 'Removido' };
+              const statusBadge = { ACTIVE: 'badge-green', STOCK: 'badge-blue', MAINTENANCE: 'badge-yellow', REMOVED: 'badge-red' };
+              return (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <span className={`badge ${statusBadge[d.status] || 'badge-blue'}`}>{statusLabel[d.status] || d.status}</span>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button className="btn btn-ghost btn-sm" title="Abrir na Rastrek" onClick={() => handleOpenRastrek(d)}>🔗 Rastrek</button>
+                      <button className="btn btn-ghost btn-sm" title="Copiar IMEI" onClick={() => handleCopyImei(d.imei)}>📋 IMEI</button>
+                    </div>
+                  </div>
+                  {[
+                    ['IMEI', d.imei],
+                    ['Equipamento', d.model],
+                    ['Instalado em', d.installedAt ? new Date(d.installedAt).toLocaleDateString('pt-BR') : null],
+                    ['Chip', d.chipNumber],
+                    ['Operadora', d.carrier],
+                  ].map(([label, value]) => value ? (
+                    <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid #f8fafc', fontSize: 14 }}>
+                      <span style={{ color: '#64748b' }}>{label}</span>
+                      <span style={{ fontWeight: 600 }}>{value}</span>
+                    </div>
+                  ) : null)}
+                  {d.notes && (
+                    <div style={{ marginTop: 10, padding: '8px 10px', background: '#f8fafc', borderRadius: 6, fontSize: 13 }}>{d.notes}</div>
+                  )}
+                  {trackingDevices.length > 1 && (
+                    <div className="text-sm text-muted" style={{ marginTop: 8 }}>{trackingDevices.length} rastreadores vinculados. Exibindo o mais recente ativo.</div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
 
