@@ -5,6 +5,7 @@ const API = import.meta.env.VITE_API_URL || '';
 const token = () => localStorage.getItem('jr_token');
 
 const TIPOS = ['Instalação', 'Instalação com Bloqueio', 'Manutenção', 'Retirada'];
+const RASTREK_BASE_URL = 'https://painel.rastrek.com.br'; // fallback — ajuste se necessário
 const STATUS_CONF = {
   'Agendado':   { badge: 'badge-blue',   label: 'Agendado' },
   'Concluído':  { badge: 'badge-green',  label: 'Concluído' },
@@ -153,6 +154,20 @@ export default function TrackingPage() {
     } catch (e) { /* silent */ }
   };
 
+  const handleCopyImei = (imei) => {
+    if (!imei) return;
+    navigator.clipboard.writeText(imei).catch(() => {});
+  };
+
+  const handleOpenRastrek = (r) => {
+    if (r.rastrekLink) {
+      window.open(r.rastrekLink, '_blank', 'noopener');
+      return;
+    }
+    const q = r.plate || r.imei || '';
+    window.open(`${RASTREK_BASE_URL}?q=${encodeURIComponent(q)}`, '_blank', 'noopener');
+  };
+
   return (
     <div>
       <div className="page-header-row page-header">
@@ -177,16 +192,16 @@ export default function TrackingPage() {
                 <div className="stat-label">Total de Atendimentos</div>
                 <div className="stat-value">{stats.total}</div>
               </div>
-              <div className="stat-card" style={{ borderLeft: '4px solid var(--success)' }}>
+              <div className="stat-card" style={{ borderLeft: '4px solid var(--success)', cursor: 'pointer' }} onClick={() => setTypeFilter('Instalação')}>
                 <div className="stat-label">Instalações</div>
                 <div className="stat-value" style={{ color: 'var(--success)' }}>{stats.instalacoes}</div>
                 <div className="stat-sub">Instalação + com bloqueio</div>
               </div>
-              <div className="stat-card" style={{ borderLeft: '4px solid var(--warning)' }}>
+              <div className="stat-card" style={{ borderLeft: '4px solid var(--warning)', cursor: 'pointer' }} onClick={() => setTypeFilter('Manutenção')}>
                 <div className="stat-label">Manutenções</div>
                 <div className="stat-value" style={{ color: 'var(--warning)' }}>{stats.manutencoes}</div>
               </div>
-              <div className="stat-card" style={{ borderLeft: '4px solid var(--gray-300)' }}>
+              <div className="stat-card" style={{ borderLeft: '4px solid var(--gray-300)', cursor: 'pointer' }} onClick={() => setTypeFilter('Retirada')}>
                 <div className="stat-label">Retiradas</div>
                 <div className="stat-value">{stats.retiradas}</div>
               </div>
@@ -234,7 +249,9 @@ export default function TrackingPage() {
                         <td className="text-sm">{r.date ? new Date(r.date).toLocaleDateString('pt-BR') : '—'}</td>
                         <td className="text-sm text-muted">{r.technician || '—'}</td>
                         <td><span className={`badge ${sc.badge}`}>{sc.label}</span></td>
-                        <td>
+                        <td style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                          <button className="btn btn-ghost btn-sm" title="Abrir na Rastrek" onClick={() => handleOpenRastrek(r)}>🔗 Rastrek</button>
+                          <button className="btn btn-ghost btn-sm" title="Copiar IMEI" onClick={() => handleCopyImei(r.imei)}>📋 IMEI</button>
                           <button className="btn btn-ghost btn-sm" onClick={() => setModal(r)}>Editar</button>
                         </td>
                       </tr>
