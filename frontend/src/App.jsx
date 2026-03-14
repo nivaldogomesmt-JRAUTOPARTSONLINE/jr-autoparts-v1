@@ -66,8 +66,6 @@ function AppRoutes() {
       <Route path="/portal" element={<PortalRoute><PortalDashboard /></PortalRoute>} />
       <Route path="/portal/veiculo/:id" element={<PortalRoute><PortalVehicle /></PortalRoute>} />
       <Route path="/portal/rastreamento" element={<PortalRoute><PortalTracking /></PortalRoute>} />
-        <Route path='/guincho'    element={<TowingPage />} />
-        <Route path='/relatorios' element={<ReportsPage />} />
       <Route path="/portal/os/:id" element={<PortalRoute><PortalSODetail /></PortalRoute>} />
 
       <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
@@ -104,6 +102,9 @@ function AppRoutes() {
         <Route path="colaboradores" element={<ActionRoute action="manageUsers"><CollaboratorsPage /></ActionRoute>} />
 
         <Route path="tracking" element={<ActionRoute action="module:tracking:view"><TrackingPage /></ActionRoute>} />
+        <Route path="rastreamento" element={<ActionRoute action="module:tracking:view"><TrackingPage /></ActionRoute>} />
+        <Route path="guincho"      element={<ActionRoute action="module:towing:view"><TowingPage /></ActionRoute>} />
+        <Route path="relatorios"   element={<ActionRoute action="module:reports:view"><ReportsPage /></ActionRoute>} />
         <Route path="entregas" element={<ActionRoute action="module:deliveries:view"><DeliveriesPage /></ActionRoute>} />
         <Route path="integracoes" element={<ActionRoute action="module:integrations:view"><IntegrationsHubPage /></ActionRoute>} />
         <Route path="integracoes/notificacoes" element={<ActionRoute action="adminOnly"><NotificationCenterPage /></ActionRoute>} />
