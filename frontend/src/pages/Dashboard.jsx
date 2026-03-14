@@ -1,346 +1,285 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { dashboardAPI } from '../services/api';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { BRAND } from '../config/brand';
 
-const ALERT_COLORS = {
-  OVERDUE: { bg: '#fee2e2', color: '#b91c1c', label: 'Urgencia' },
-  DUE_SOON: { bg: '#fef3c7', color: '#92400e', label: 'Atencao' },
-};
+const API = import.meta.env.VITE_API_URL || '';
 
-function formatMoney(value) {
-  return `R$ ${Number(value || 0).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
-}
-
-function formatDate(value) {
-  if (!value) return '-';
-  return new Date(value).toLocaleDateString('pt-BR');
-}
-
-function toCsvCell(value) {
-  const text = String(value ?? '');
-  const escaped = text.replace(/"/g, '""');
-  return `"${escaped}"`;
-}
-
-function downloadTextFile(text, filename, type = 'text/plain;charset=utf-8;') {
-  const blob = new Blob([text], { type });
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  window.URL.revokeObjectURL(url);
-}
-
-function buildDashboardCsvRows(data) {
-  const rows = [];
-  const stats = data?.stats || {};
-
-  rows.push(['Secao', 'Indicador', 'Valor']);
-  rows.push(['Resumo', 'Manutencoes vencidas', stats.maintenanceOverdue || 0]);
-  rows.push(['Resumo', 'Manutencoes a vencer', stats.maintenanceDueSoon || 0]);
-  rows.push(['Resumo', 'Troca de oleo vencida', stats.oilOverdue || 0]);
-  rows.push(['Resumo', 'Troca de oleo atencao', stats.oilDueSoon || 0]);
-  rows.push(['Resumo', 'Correia vencida', stats.beltOverdue || 0]);
-  rows.push(['Resumo', 'Correia atencao', stats.beltDueSoon || 0]);
-  rows.push(['Resumo', 'OS em andamento', stats.activeOS || 0]);
-  rows.push(['Resumo', 'OS atrasadas', stats.overdueOS || 0]);
-  rows.push(['Resumo', 'Pedidos pendentes', stats.pendingDeliveries || 0]);
-  rows.push(['Resumo', 'Entregas atrasadas', stats.delayedDeliveries || 0]);
-  rows.push(['Resumo', 'OS do mes', stats.monthlyOS || 0]);
-  rows.push(['Resumo', 'Faturamento do mes', Number(stats.monthlyRevenue || 0).toFixed(2)]);
-  rows.push(['Resumo', 'Ticket medio', Number(stats.avgTicket || 0).toFixed(2)]);
-
-  rows.push([]);
-  rows.push(['Prioridades', 'Tipo', 'Descricao']);
-  (data?.priorities?.maintenance || []).slice(0, 20).forEach((item) => {
-    rows.push([
-      'Prioridades',
-      item.alertLevel || '-',
-      `${item.label || '-'} | ${item.vehicle?.plate || '-'} | ${formatDate(item.nextDate)} | ${item.nextKm || '-'} km`,
-    ]);
-  });
-
-  rows.push([]);
-  rows.push(['Operacao', 'OS', 'Cliente/Veiculo']);
-  (data?.operation?.inProgress || []).slice(0, 20).forEach((row) => {
-    rows.push(['Em andamento', `#${row.number}`, `${row.client?.name || '-'} / ${row.vehicle?.plate || '-'}`]);
-  });
-
-  rows.push([]);
-  rows.push(['Ranking', 'Item', 'Receita']);
-  (data?.rankings?.topServices || []).slice(0, 15).forEach((row) => {
-    rows.push(['Servico', row.name || '-', Number(row.revenue || 0).toFixed(2)]);
-  });
-  (data?.rankings?.topProducts || []).slice(0, 15).forEach((row) => {
-    rows.push(['Produto', row.name || '-', Number(row.revenue || 0).toFixed(2)]);
-  });
-
-  return rows;
-}
-
-function StatCard({ label, value, color, subtitle, to }) {
-  const content = (
-    <div className="card" style={{ borderLeft: `4px solid ${color}`, minHeight: 120 }}>
-      <div className="text-sm text-muted" style={{ textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>{label}</div>
-      <div style={{ fontSize: 26, fontWeight: 800, color: '#0f172a', marginTop: 6 }}>{value}</div>
-      {subtitle ? <div className="text-sm text-muted" style={{ marginTop: 8 }}>{subtitle}</div> : null}
-    </div>
-  );
-
-  return to ? <Link to={to} style={{ textDecoration: 'none' }}>{content}</Link> : content;
-}
-
-function OrderTable({ rows = [], emptyText = 'Sem registros no momento.' }) {
-  if (!rows.length) return <div className="text-sm text-muted">{emptyText}</div>;
-
+function StatCard({ label, value, sub, color, icon }) {
+  const colors = {
+    red:   { border: 'var(--danger)',  bg: 'var(--danger-light)',  text: '#991b1b' },
+    yellow:{ border: 'var(--warning)', bg: 'var(--warning-light)', text: '#92400e' },
+    green: { border: 'var(--success)', bg: 'var(--success-light)', text: '#15803d' },
+    blue:  { border: 'var(--primary)', bg: 'var(--primary-light)', text: '#1d4ed8' },
+    gray:  { border: 'var(--gray-300)',bg: 'var(--gray-50)',       text: 'var(--text-secondary)' },
+  };
+  const c = colors[color] || colors.gray;
   return (
-    <div className="table-container">
-      <table className="table">
-        <thead>
-          <tr>
-            <th>OS</th>
-            <th>Cliente</th>
-            <th>Placa</th>
-            <th>Status</th>
-            <th>Total</th>
-            <th>Atualizacao</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.id}>
-              <td><Link to={`/os/${row.id}`}><strong>#{row.number}</strong></Link></td>
-              <td>{row.client?.name || '-'}</td>
-              <td>{row.vehicle?.plate || '-'}</td>
-              <td><span className="badge badge-gray">{row.statusLabel || row.status}</span></td>
-              <td>{formatMoney(row.totalPrice)}</td>
-              <td className="text-sm text-muted">{formatDate(row.updatedAt || row.createdAt)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="stat-card" style={{ borderLeft: `4px solid ${c.border}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <span className="stat-label">{label}</span>
+        {icon && <span style={{ fontSize: 20, opacity: 0.6 }}>{icon}</span>}
+      </div>
+      <div className="stat-value" style={{ color: c.text }}>{value ?? '—'}</div>
+      {sub && <div className="stat-sub">{sub}</div>}
     </div>
   );
 }
 
-function RankingTable({ rows = [], title = 'Ranking' }) {
+function OSRow({ os, onClick }) {
+  const statusBadge = {
+    'Iniciado':  'badge-iniciado',
+    'Em andamento': 'badge-andamento',
+    'Pronto':    'badge-pronto',
+    'Entregue':  'badge-entregue',
+    'Finalizado':'badge-finalizado',
+    'Cancelado': 'badge-cancelado',
+  };
+  const cls = statusBadge[os.status] || 'badge-gray';
   return (
-    <div className="card">
-      <div className="card-title" style={{ marginBottom: 10 }}>{title}</div>
-      {!rows.length ? (
-        <div className="text-sm text-muted">Sem dados suficientes.</div>
-      ) : (
-        <div className="table-container">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Item</th>
-                <th>Qtd</th>
-                <th>Receita</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={`${title}-${row.rank}-${row.name}`}>
-                  <td><strong>{row.rank}</strong></td>
-                  <td>{row.name}</td>
-                  <td>{Number(row.quantity || 0).toLocaleString('pt-BR')}</td>
-                  <td>{formatMoney(row.revenue)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
+    <tr onClick={onClick} style={{ cursor: 'pointer' }}>
+      <td><strong style={{ color: 'var(--primary)' }}>#{os.id}</strong></td>
+      <td>{os.client_name || os.clients?.name || '—'}</td>
+      <td><span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 12 }}>{os.vehicle_plate || os.vehicles?.plate}</span></td>
+      <td><span className={`badge ${cls}`}>{os.status}</span></td>
+      <td className="text-right" style={{ fontWeight: 700 }}>
+        {os.total != null ? `R$ ${Number(os.total).toFixed(2)}` : '—'}
+      </td>
+      <td className="text-muted text-sm">{os.updated_at ? new Date(os.updated_at).toLocaleDateString('pt-BR') : '—'}</td>
+    </tr>
   );
 }
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    dashboardAPI.get()
-      .then((res) => setData(res.data))
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    const fetchData = async () => {
+      try {
+        const r = await fetch(`${API}/api/dashboard`, {
+          headers: { Authorization: 'Bearer ' + localStorage.getItem('jr_token') }
+        });
+        if (r.ok) setData(await r.json());
+      } catch (e) { /* silent */ }
+      finally { setLoading(false); }
+    };
+    fetchData();
   }, []);
 
-  const statusResumo = useMemo(() => {
-    const byStatus = data?.operation?.byStatus || {};
-    const keys = ['APPROVED', 'STARTED', 'IN_PROGRESS', 'WAITING_PART', 'FINISHING', 'DONE', 'DELIVERED'];
-    return keys
-      .filter((k) => Number(byStatus[k] || 0) > 0)
-      .map((k) => `${k}: ${byStatus[k]}`)
-      .join(' | ');
-  }, [data]);
-
-  const handlePrint = () => {
-    const html = document.documentElement;
-    html.setAttribute('data-print-context', 'dashboard');
-
-    const clear = () => {
-      html.removeAttribute('data-print-context');
-      window.removeEventListener('afterprint', clear);
-    };
-
-    window.addEventListener('afterprint', clear);
-    window.print();
-    setTimeout(clear, 1200);
-  };
-
-  const handleExportSummary = () => {
-    if (!data) return;
-    const rows = buildDashboardCsvRows(data);
-    const csv = rows.map((row) => row.map(toCsvCell).join(';')).join('\n');
-    const dateTag = new Date().toISOString().slice(0, 10);
-    downloadTextFile(csv, `dashboard_gerencial_${dateTag}.csv`, 'text/csv;charset=utf-8;');
-  };
-
-  if (loading) return <div className="loading"><div className="spinner" /></div>;
-  if (!data) return <div className="alert alert-error">Erro ao carregar dashboard.</div>;
-
-  const stats = data.stats || {};
-  const priorities = data.priorities || {};
-  const operation = data.operation || {};
-  const rankings = data.rankings || {};
-  const campaigns = data.campaigns || [];
+  const d = data || {};
+  const kpis = d.kpis || {};
+  const osAndamento = d.os_em_andamento || [];
+  const osProntas = d.os_prontas || [];
+  const osAtrasadas = d.os_atrasadas || [];
+  const osPendentePeca = d.os_aguardando_peca || [];
+  const prioridades = d.prioridades_do_dia || [];
+  const rankingClientes = d.ranking_clientes || [];
+  const rankingVeiculos = d.ranking_veiculos || [];
+  const metas = d.metas_campanhas || [];
+  const manutVencidas = d.manutencoes_vencidas || {};
+  const manutAtencao = d.manutencoes_atencao || {};
 
   return (
     <div>
-      <style>{`
-        @media print {
-          html[data-print-context='dashboard'] .no-print-dashboard {
-            display: none !important;
-          }
-          html[data-print-context='dashboard'] .card,
-          html[data-print-context='dashboard'] .table-container {
-            break-inside: avoid;
-          }
-        }
-      `}</style>
-
-      <div className="page-header">
+      {/* Cabeçalho da página */}
+      <div className="page-header-row page-header">
         <div>
-          <div className="page-title">Dashboard Gerencial</div>
-          <div className="page-subtitle">Prioridades do dia, opera��o em andamento e desempenho</div>
+          <h1 className="page-title">Dashboard Gerencial</h1>
+          <p className="page-subtitle">Prioridades do dia, operação em andamento e desempenho</p>
         </div>
-        <div className="no-print-dashboard" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button type="button" className="btn btn-outline" onClick={handlePrint}>Imprimir painel</button>
-          <button type="button" className="btn btn-outline" onClick={handleExportSummary}>Exportar resumo CSV</button>
-          <Link to="/os/nova" className="btn btn-primary">+ Nova OS</Link>
-          <Link to="/integracoes" className="btn btn-outline">Integracoes</Link>
+        <div className="page-actions">
+          <button className="btn btn-primary" onClick={() => navigate('/os/nova')}>
+            + Nova OS
+          </button>
+          <button className="btn btn-outline" onClick={() => navigate('/integracoes')}>
+            Integrações
+          </button>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 18 }}>
-        <StatCard label="Manutencoes vencidas" value={stats.maintenanceOverdue || 0} color="#dc2626" subtitle={`Oleo vencido: ${stats.oilOverdue || 0} | Correia vencida: ${stats.beltOverdue || 0}`} to="/manutencao" />
-        <StatCard label="Manutencoes a vencer" value={stats.maintenanceDueSoon || 0} color="#ca8a04" subtitle={`Oleo atencao: ${stats.oilDueSoon || 0} | Correia atencao: ${stats.beltDueSoon || 0}`} to="/manutencao" />
-        <StatCard label="OS em andamento" value={stats.activeOS || 0} color="#1d4ed8" subtitle={`OS atrasadas: ${stats.overdueOS || 0}`} to="/os" />
-        <StatCard label="Pedidos pendentes" value={stats.pendingDeliveries || 0} color="#334155" subtitle={`Entregas atrasadas: ${stats.delayedDeliveries || 0}`} to="/entregas" />
-        <StatCard label="OS do mes" value={stats.monthlyOS || 0} color="#7c3aed" subtitle={`Ticket medio: ${formatMoney(stats.avgTicket || 0)}`} />
-        <StatCard label="Faturamento do mes" value={formatMoney(stats.monthlyRevenue || 0)} color="#16a34a" subtitle="Baseado em OS concluidas/entregues" />
-      </div>
-
-      <div className="card" style={{ marginBottom: 18 }}>
-        <div className="card-title">1. Prioridades do dia</div>
-        {!priorities.maintenance?.length && !priorities.deliveries?.length ? (
-          <div className="text-sm text-muted">Nenhuma prioridade critica no momento.</div>
-        ) : (
-          <div style={{ display: 'grid', gap: 10 }}>
-            {(priorities.maintenance || []).slice(0, 6).map((row) => {
-              const style = ALERT_COLORS[row.alertLevel] || ALERT_COLORS.DUE_SOON;
-              return (
-                <div key={row.id} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: 10, display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <div>
-                    <div style={{ fontWeight: 700 }}>{row.label} - {row.vehicle?.plate || '-'}</div>
-                    <div className="text-sm text-muted">{row.vehicle?.client?.name || '-'} | Proxima data: {formatDate(row.nextDate)} | Proximo KM: {row.nextKm ?? '-'}</div>
-                  </div>
-                  <span style={{ background: style.bg, color: style.color, fontSize: 12, fontWeight: 700, borderRadius: 999, padding: '3px 10px' }}>{style.label}</span>
-                </div>
-              );
-            })}
-
-            {(priorities.deliveries || []).slice(0, 4).map((row) => (
-              <div key={`delivery-${row.id}`} style={{ border: '1px solid #fde68a', borderRadius: 10, padding: 10, background: '#fffbeb', display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                <div>
-                  <div style={{ fontWeight: 700 }}>Entrega pendente da OS #{row.number}</div>
-                  <div className="text-sm text-muted">{row.client?.name || '-'} | {row.vehicle?.plate || '-'} | Ultima atualizacao: {formatDate(row.updatedAt)}</div>
-                </div>
-                <Link to={`/os/${row.id}`} className="btn btn-outline btn-sm">Abrir OS</Link>
-              </div>
-            ))}
+      {loading ? (
+        <div className="loading"><div className="spinner" /></div>
+      ) : (
+        <>
+          {/* 1. KPIs PRINCIPAIS */}
+          <div className="section">
+            <div className="section-header"><h2 className="section-title">Indicadores do Mês</h2></div>
+            <div className="grid-4">
+              <StatCard label="Faturamento do Mês" value={kpis.faturamento_mes ? `R$ ${Number(kpis.faturamento_mes).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'} sub="Ordens entregues e finalizadas" color="blue" icon="💰" />
+              <StatCard label="OS do Mês" value={kpis.os_mes ?? 0} sub={`Ticket médio: R$ ${Number(kpis.ticket_medio || 0).toFixed(2)}`} color="blue" icon="📋" />
+              <StatCard label="OS Atrasadas" value={osAtrasadas.length} sub="Aguardando resolução" color={osAtrasadas.length > 0 ? 'red' : 'green'} icon="⏰" />
+              <StatCard label="Pedidos Pendentes" value={kpis.pedidos_pendentes ?? 0} sub="Aguardando aprovação" color={kpis.pedidos_pendentes > 0 ? 'yellow' : 'green'} icon="📦" />
+            </div>
           </div>
-        )}
-      </div>
 
-      <div className="grid-2" style={{ marginBottom: 18 }}>
-        <div className="card">
-          <div className="card-title">2. Operacao em andamento</div>
-          <div className="text-sm text-muted" style={{ marginBottom: 10 }}>{statusResumo || 'Sem registros de status.'}</div>
-          <OrderTable rows={operation.inProgress || []} emptyText="Sem OS em execucao agora." />
-        </div>
+          {/* 2. MANUTENÇÕES */}
+          <div className="section">
+            <div className="section-header"><h2 className="section-title">Manutenções Preventivas</h2></div>
+            <div className="grid-3">
+              <StatCard label="Manutenções Vencidas" value={manutVencidas.total ?? 0} sub={manutVencidas.detalhe || 'Óleo e correia'} color={manutVencidas.total > 0 ? 'red' : 'green'} icon="🔴" />
+              <StatCard label="Manutenções a Vencer" value={manutAtencao.total ?? 0} sub={manutAtencao.detalhe || 'Próximos 30 dias'} color={manutAtencao.total > 0 ? 'yellow' : 'green'} icon="🟡" />
+              <StatCard label="Em Dia" value={(d.total_veiculos ?? 0) - (manutVencidas.total ?? 0) - (manutAtencao.total ?? 0)} sub="Veículos sem pendência" color="green" icon="✅" />
+            </div>
+          </div>
 
-        <div className="card">
-          <div className="card-title">OS aguardando peca</div>
-          <OrderTable rows={operation.waitingPart || []} emptyText="Nenhuma OS aguardando peca." />
-        </div>
-      </div>
-
-      <div className="grid-2" style={{ marginBottom: 18 }}>
-        <div className="card">
-          <div className="card-title">OS prontas</div>
-          <OrderTable rows={operation.ready || []} emptyText="Sem OS prontas no momento." />
-        </div>
-
-        <div className="card">
-          <div className="card-title">OS paradas ha mais tempo</div>
-          <OrderTable rows={operation.stalled || []} emptyText="Sem OS paradas fora do SLA." />
-        </div>
-      </div>
-
-      <div className="grid-3" style={{ marginBottom: 18 }}>
-        <RankingTable title="4. Ranking servicos" rows={rankings.topServices || []} />
-        <RankingTable title="4. Ranking produtos" rows={rankings.topProducts || []} />
-        <RankingTable title="4. Ranking veiculos" rows={rankings.topVehicles || []} />
-      </div>
-
-      <div className="grid-2" style={{ marginBottom: 18 }}>
-        <div className="card">
-          <div className="card-title">5. Metas e campanhas</div>
-          {!campaigns.length ? (
-            <div className="text-sm text-muted">Sem campanhas cadastradas.</div>
-          ) : (
-            <div style={{ display: 'grid', gap: 8 }}>
-              {campaigns.map((campaign) => (
-                <div key={campaign.id} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: 10 }}>
-                  <div style={{ fontWeight: 700 }}>{campaign.name}</div>
-                  <div className="text-sm text-muted">Objetivo: {campaign.objective}</div>
-                  <div className="text-sm text-muted">Periodo: {campaign.period} | Responsavel: {campaign.owner}</div>
-                  <div className="text-sm">Meta: <b>{campaign.target}</b> | Realizado: <b>{campaign.achieved}</b> | Status: <b>{campaign.status}</b></div>
-                </div>
-              ))}
+          {/* 3. PRIORIDADES DO DIA */}
+          {prioridades.length > 0 && (
+            <div className="section">
+              <div className="section-header"><h2 className="section-title">Prioridades do Dia</h2></div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {prioridades.map((p, i) => (
+                  <div key={i} className="card card-sm" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{p.client_name || p.description}</div>
+                      {p.vehicle_plate && <div className="text-muted text-sm">Placa: {p.vehicle_plate} · Últ. atualização: {p.updated_at ? new Date(p.updated_at).toLocaleDateString('pt-BR') : '—'}</div>}
+                    </div>
+                    <button className="btn btn-primary btn-sm" onClick={() => navigate(`/os/${p.id}`)}>
+                      Abrir OS
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
-        </div>
 
-        <div className="card">
-          <div className="card-title">Acoes rapidas</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
-            <Link to="/os/nova" className="btn btn-outline">Nova OS</Link>
-            <Link to="/manutencao" className="btn btn-outline">Manutencoes</Link>
-            <Link to="/entregas" className="btn btn-outline">Pedidos/Entregas</Link>
-            <Link to="/clientes" className="btn btn-outline">Clientes</Link>
-            <Link to="/veiculos" className="btn btn-outline">Veiculos</Link>
-            <Link to="/integracoes" className="btn btn-outline">Importar/Exportar</Link>
+          {/* 4. OPERAÇÃO */}
+          <div className="section">
+            <div className="section-header">
+              <h2 className="section-title">Operação em Andamento</h2>
+              <button className="btn btn-outline btn-sm" onClick={() => navigate('/os')}>Ver todas</button>
+            </div>
+            <div className="grid-2" style={{ gap: 16 }}>
+              {/* OS em andamento */}
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)', marginBottom: 10 }}>
+                  Em andamento ({osAndamento.length})
+                </div>
+                {osAndamento.length === 0 ? (
+                  <div className="empty-state" style={{ padding: '24px 16px' }}>
+                    <div className="empty-state-icon">✅</div>
+                    <div className="empty-state-text">Nenhuma OS em andamento</div>
+                  </div>
+                ) : (
+                  <div className="table-container">
+                    <table className="table">
+                      <thead><tr><th>OS</th><th>Cliente</th><th>Placa</th><th>Status</th><th className="text-right">Total</th></tr></thead>
+                      <tbody>
+                        {osAndamento.slice(0, 5).map(os => (
+                          <OSRow key={os.id} os={os} onClick={() => navigate(`/os/${os.id}`)} />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* OS prontas / aguardando */}
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)', marginBottom: 10 }}>
+                  Prontas / Aguardando ({osProntas.length + osPendentePeca.length})
+                </div>
+                {(osProntas.length + osPendentePeca.length) === 0 ? (
+                  <div className="empty-state" style={{ padding: '24px 16px' }}>
+                    <div className="empty-state-icon">📋</div>
+                    <div className="empty-state-text">Nenhum registro</div>
+                  </div>
+                ) : (
+                  <div className="table-container">
+                    <table className="table">
+                      <thead><tr><th>OS</th><th>Cliente</th><th>Placa</th><th>Status</th><th className="text-right">Total</th></tr></thead>
+                      <tbody>
+                        {[...osProntas, ...osPendentePeca].slice(0, 5).map(os => (
+                          <OSRow key={os.id} os={os} onClick={() => navigate(`/os/${os.id}`)} />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+
+          {/* 5. RANKINGS */}
+          <div className="section">
+            <div className="section-header"><h2 className="section-title">Rankings</h2></div>
+            <div className="grid-2">
+              {/* Ranking clientes */}
+              <div className="card">
+                <div className="card-title">Top Clientes por Receita</div>
+                {rankingClientes.length === 0 ? (
+                  <div className="text-muted text-sm">Sem dados disponíveis</div>
+                ) : rankingClientes.slice(0, 5).map((c, i) => (
+                  <div key={i} className="ranking-item" onClick={() => navigate(`/clientes/${c.id}`)} style={{ cursor: 'pointer' }}>
+                    <span className={`ranking-pos ranking-pos-${i + 1}`}>{i + 1}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</div>
+                      <div className="text-muted text-sm">{c.os_count ?? 0} OS</div>
+                    </div>
+                    <div style={{ fontWeight: 700, color: 'var(--success)', fontSize: 13, flexShrink: 0 }}>
+                      R$ {Number(c.total_revenue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Ranking veículos */}
+              <div className="card">
+                <div className="card-title">Top Veículos por Receita</div>
+                {rankingVeiculos.length === 0 ? (
+                  <div className="text-muted text-sm">Sem dados disponíveis</div>
+                ) : rankingVeiculos.slice(0, 5).map((v, i) => (
+                  <div key={i} className="ranking-item" onClick={() => navigate(`/veiculos/${v.id}`)} style={{ cursor: 'pointer' }}>
+                    <span className={`ranking-pos ranking-pos-${i + 1}`}>{i + 1}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 12, fontFamily: 'monospace' }}>{v.plate}</div>
+                      <div className="text-muted text-sm">{v.brand} {v.model}</div>
+                    </div>
+                    <div style={{ fontWeight: 700, color: 'var(--success)', fontSize: 13, flexShrink: 0 }}>
+                      R$ {Number(v.total_revenue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* 6. METAS E CAMPANHAS */}
+          {metas.length > 0 && (
+            <div className="section">
+              <div className="section-header">
+                <h2 className="section-title">Metas e Campanhas</h2>
+              </div>
+              <div className="grid-2">
+                {metas.map((m, i) => {
+                  const pct = m.meta > 0 ? Math.min(100, Math.round((m.realizado / m.meta) * 100)) : 0;
+                  const color = pct >= 100 ? 'var(--success)' : pct >= 60 ? 'var(--warning)' : 'var(--danger)';
+                  return (
+                    <div key={i} className="card card-sm">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: 13 }}>{m.name}</div>
+                          <div className="text-muted text-sm">{m.objective}</div>
+                          <div className="text-muted text-sm">{m.period} · Resp: {m.responsible}</div>
+                        </div>
+                        <span className="badge" style={{ background: color + '22', color }}>{m.status || 'ACOMPANHAR'}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
+                        <span>Meta: <strong>{m.meta}</strong></span>
+                        <span>Realizado: <strong style={{ color }}>{m.realizado}</strong></span>
+                        <span><strong style={{ color }}>{pct}%</strong></span>
+                      </div>
+                      <div style={{ background: 'var(--gray-100)', borderRadius: 4, height: 6, overflow: 'hidden' }}>
+                        <div style={{ width: pct + '%', height: '100%', background: color, borderRadius: 4, transition: 'width 0.6s ease' }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
