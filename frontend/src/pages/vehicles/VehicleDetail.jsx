@@ -172,6 +172,10 @@ export default function VehicleDetail() {
     window.open(`${RASTREK_BASE_URL}?q=${encodeURIComponent(q)}`, '_blank', 'noopener');
   };
 
+  const TRACKING_STATUS_LABEL = { ACTIVE: 'Ativo', STOCK: 'Estoque', MAINTENANCE: 'Em Manutenção', REMOVED: 'Removido' };
+  const TRACKING_STATUS_BADGE = { ACTIVE: 'badge-green', STOCK: 'badge-blue', MAINTENANCE: 'badge-yellow', REMOVED: 'badge-red' };
+  const activeDevice = trackingDevices.find(d => d.status === 'ACTIVE') || trackingDevices[0] || null;
+
   if (loading) return <div className="loading"><div className="spinner" /></div>;
   if (!vehicle) return <div className="alert alert-error">Veiculo nao encontrado.</div>;
 
@@ -313,44 +317,40 @@ export default function VehicleDetail() {
             )}
           </div>
 
+
           <div className="card" style={{ marginTop: 16 }}>
             <div className="card-title">Rastreamento</div>
-            {trackingDevices.length === 0 ? (
+            {!activeDevice ? (
               <div className="text-sm text-muted">Nenhum rastreador vinculado a este veículo.</div>
-            ) : (() => {
-              const d = trackingDevices.find(x => x.status === 'ACTIVE') || trackingDevices[0];
-              const statusLabel = { ACTIVE: 'Ativo', STOCK: 'Estoque', MAINTENANCE: 'Em Manutenção', REMOVED: 'Removido' };
-              const statusBadge = { ACTIVE: 'badge-green', STOCK: 'badge-blue', MAINTENANCE: 'badge-yellow', REMOVED: 'badge-red' };
-              return (
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <span className={`badge ${statusBadge[d.status] || 'badge-blue'}`}>{statusLabel[d.status] || d.status}</span>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button className="btn btn-ghost btn-sm" title="Abrir na Rastrek" onClick={() => handleOpenRastrek(d)}>🔗 Rastrek</button>
-                      <button className="btn btn-ghost btn-sm" title="Copiar IMEI" onClick={() => handleCopyImei(d.imei)}>📋 IMEI</button>
-                    </div>
+            ) : (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <span className={`badge ${TRACKING_STATUS_BADGE[activeDevice.status] || 'badge-blue'}`}>{TRACKING_STATUS_LABEL[activeDevice.status] || activeDevice.status}</span>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button className="btn btn-ghost btn-sm" title="Abrir na Rastrek" onClick={() => handleOpenRastrek(activeDevice)}>🔗 Rastrek</button>
+                    <button className="btn btn-ghost btn-sm" title="Copiar IMEI" onClick={() => handleCopyImei(activeDevice.imei)}>📋 IMEI</button>
                   </div>
-                  {[
-                    ['IMEI', d.imei],
-                    ['Equipamento', d.model],
-                    ['Instalado em', d.installedAt ? new Date(d.installedAt).toLocaleDateString('pt-BR') : null],
-                    ['Chip', d.chipNumber],
-                    ['Operadora', d.carrier],
-                  ].map(([label, value]) => value ? (
-                    <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid #f8fafc', fontSize: 14 }}>
-                      <span style={{ color: '#64748b' }}>{label}</span>
-                      <span style={{ fontWeight: 600 }}>{value}</span>
-                    </div>
-                  ) : null)}
-                  {d.notes && (
-                    <div style={{ marginTop: 10, padding: '8px 10px', background: '#f8fafc', borderRadius: 6, fontSize: 13 }}>{d.notes}</div>
-                  )}
-                  {trackingDevices.length > 1 && (
-                    <div className="text-sm text-muted" style={{ marginTop: 8 }}>{trackingDevices.length} rastreadores vinculados. Exibindo o mais recente ativo.</div>
-                  )}
                 </div>
-              );
-            })()}
+                {[
+                  ['IMEI', activeDevice.imei],
+                  ['Equipamento', activeDevice.model],
+                  ['Instalado em', activeDevice.installedAt ? new Date(activeDevice.installedAt).toLocaleDateString('pt-BR') : null],
+                  ['Chip', activeDevice.chipNumber],
+                  ['Operadora', activeDevice.carrier],
+                ].map(([label, value]) => value ? (
+                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid #f8fafc', fontSize: 14 }}>
+                    <span style={{ color: '#64748b' }}>{label}</span>
+                    <span style={{ fontWeight: 600 }}>{value}</span>
+                  </div>
+                ) : null)}
+                {activeDevice.notes && (
+                  <div style={{ marginTop: 10, padding: '8px 10px', background: '#f8fafc', borderRadius: 6, fontSize: 13 }}>{activeDevice.notes}</div>
+                )}
+                {trackingDevices.length > 1 && (
+                  <div className="text-sm text-muted" style={{ marginTop: 8 }}>{trackingDevices.length} rastreadores vinculados. Exibindo o mais recente ativo.</div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
