@@ -1,580 +1,197 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { portalAPI } from '../../services/api';
+import { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { BRAND } from '../../config/brand';
 
-const SO_STATUS_LABEL = {
-  QUOTE: 'Orcamento',
-  APPROVED: 'Aprovado',
-  STARTED: 'Iniciado',
-  IN_PROGRESS: 'Em andamento',
-  WAITING_PART: 'Aguardando peca',
-  FINISHING: 'Finalizando',
-  DONE: 'Concluido',
-  DELIVERED: 'Entregue',
+const API = import.meta.env.VITE_API_URL || '';
+const ptoken = () => localStorage.getItem('jr_portal_token');
+
+const STATUS_BADGE = {
+  'Iniciado':    { bg:'#eff6ff', color:'#1d4ed8' },
+  'Em andamento':{ bg:'#fff7ed', color:'#c2410c' },
+  'Pronto':      { bg:'#f0fdf4', color:'#15803d' },
+  'Entregue':    { bg:'#f1f5f9', color:'#475569' },
+  'Finalizado':  { bg:'#f1f5f9', color:'#475569' },
+  'Cancelado':   { bg:'#fef2f2', color:'#991b1b' },
 };
-
-const SO_STATUS_COLOR = {
-  QUOTE: '#718096',
-  APPROVED: '#3182ce',
-  STARTED: '#F0A500',
-  IN_PROGRESS: '#F0A500',
-  WAITING_PART: '#e53e3e',
-  FINISHING: '#805ad5',
-  DONE: '#38a169',
-  DELIVERED: '#38a169',
-};
-
-const TRACKING_STATUS_LABEL = {
-  ACTIVE: 'Ativo',
-  STOCK: 'Estoque',
-  MAINTENANCE: 'Manutencao',
-  REMOVED: 'Retirado',
-};
-
-const LEVEL_STYLE = {
-  OVERDUE: { bg: '#fee2e2', color: '#b91c1c', label: 'Vencido' },
-  DUE_SOON: { bg: '#fef3c7', color: '#92400e', label: 'Atencao' },
-  OK: { bg: '#dcfce7', color: '#166534', label: 'Em dia' },
-};
-
-const DUE_BY_LABEL = {
-  DATE: 'Vence primeiro por data',
-  KM: 'Vence primeiro por quilometragem',
-  DATE_OR_KM: 'Vence por data e quilometragem',
-  NONE: 'Sem previsao de vencimento',
-};
-
-const PRINT_THEMES = [
-  { value: 'resumo', label: 'Resumo do veiculo' },
-  { value: 'manutencoes', label: 'Somente manutencoes' },
-  { value: 'historico', label: 'Somente historico' },
-  { value: 'completo', label: 'Completo' },
-];
-
-const PRINT_THEME_STORAGE_KEY = 'jr_print_theme_portal_vehicle_detail';
-
-function getInitialPrintTheme() {
-  if (typeof window === 'undefined') return 'resumo';
-  try {
-    const saved = window.localStorage.getItem(PRINT_THEME_STORAGE_KEY);
-    const allowed = PRINT_THEMES.map((theme) => theme.value);
-    return allowed.includes(saved) ? saved : 'resumo';
-  } catch {
-    return 'resumo';
-  }
-}
-
-function formatDate(value) {
-  if (!value) return '-';
-  return new Date(value).toLocaleDateString('pt-BR');
-}
-
-function formatDateTime(value) {
-  if (!value) return '-';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '-';
-  return `${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
-}
-
-function formatKm(value) {
-  if (value === null || value === undefined || value === '') return '-';
-  return `${Number(value).toLocaleString('pt-BR')} km`;
-}
-
-function formatCurrency(value) {
-  return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
-
-function normalizeLabel(value) {
-  return String(value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toUpperCase();
-}
-
-function findMaintenanceByKeywords(maintenances, keywords) {
-  if (!Array.isArray(maintenances)) return null;
-
-  const ranked = [...maintenances].sort((a, b) => {
-    const pa = a?.alertLevel === 'OVERDUE' ? 0 : (a?.alertLevel === 'DUE_SOON' ? 1 : 2);
-    const pb = b?.alertLevel === 'OVERDUE' ? 0 : (b?.alertLevel === 'DUE_SOON' ? 1 : 2);
-    if (pa !== pb) return pa - pb;
-
-    const ad = a?.nextDate ? new Date(a.nextDate).getTime() : Number.MAX_SAFE_INTEGER;
-    const bd = b?.nextDate ? new Date(b.nextDate).getTime() : Number.MAX_SAFE_INTEGER;
-    if (ad !== bd) return ad - bd;
-
-    const ak = a?.nextKm ?? Number.MAX_SAFE_INTEGER;
-    const bk = b?.nextKm ?? Number.MAX_SAFE_INTEGER;
-    return ak - bk;
-  });
-
-  return ranked.find((m) => {
-    const text = `${normalizeLabel(m?.type)} ${normalizeLabel(m?.label)}`;
-    return keywords.every((kw) => text.includes(kw));
-  }) || null;
-}
-
-function summarizeAlert(maintenance) {
-  const style = LEVEL_STYLE[maintenance?.alertLevel || 'OK'] || LEVEL_STYLE.OK;
-  return {
-    label: style.label,
-    color: style.color,
-    bg: style.bg,
-  };
-}
-
-function MetricCard({ title, main, sub }) {
-  return (
-    <div className="card" style={{ padding: 12 }}>
-      <div className="text-sm text-muted">{title}</div>
-      <div style={{ fontSize: 18, fontWeight: 800, color: '#1A3C5E', marginTop: 2 }}>{main}</div>
-      {sub ? <div className="text-sm text-muted" style={{ marginTop: 4 }}>{sub}</div> : null}
-    </div>
-  );
-}
-
-function toCsvCell(value) {
-  const text = String(value ?? '');
-  const escaped = text.replace(/"/g, '""');
-  return `"${escaped}"`;
-}
-
-function downloadTextFile(text, filename, type = 'text/csv;charset=utf-8;') {
-  const blob = new Blob([text], { type });
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  window.URL.revokeObjectURL(url);
-}
-
-function buildVehicleCsvRows({ vehicle, maintenances, serviceOrders, filters }) {
-  const rows = [];
-
-  rows.push(['Secao', 'Campo', 'Valor']);
-  rows.push(['Veiculo', 'Placa', vehicle?.plate || '-']);
-  rows.push(['Veiculo', 'Marca/Modelo', `${vehicle?.brand || ''} ${vehicle?.model || ''}`.trim() || '-']);
-  rows.push(['Veiculo', 'Ano', vehicle?.year || '-']);
-  rows.push(['Veiculo', 'KM atual', vehicle?.currentKm ?? '-']);
-  rows.push(['Veiculo', 'Ultima atualizacao', formatDateTime(vehicle?.updatedAt)]);
-
-  rows.push([]);
-  rows.push(['Filtros', 'Busca historico', filters.search || '-']);
-  rows.push(['Filtros', 'Status OS', filters.status || '-']);
-  rows.push(['Filtros', 'Periodo de', filters.dateFrom || '-']);
-  rows.push(['Filtros', 'Periodo ate', filters.dateTo || '-']);
-
-  rows.push([]);
-  rows.push(['Manutencoes', 'Item', 'Status']);
-  (maintenances || []).forEach((m) => {
-    rows.push([
-      'Manutencoes',
-      `${m.label || m.type || '-'} | Prox: ${formatDate(m.nextDate)} | ${formatKm(m.nextKm)}`,
-      m.statusLabel || '-'],
-    );
-  });
-
-  rows.push([]);
-  rows.push(['Historico OS', 'OS', 'Detalhe']);
-  (serviceOrders || []).forEach((os) => {
-    rows.push([
-      'Historico OS',
-      `#${os.number}`,
-      `${SO_STATUS_LABEL[os.status] || os.status} | ${formatDateTime(os.updatedAt || os.createdAt)} | Total: ${formatCurrency(os.totalPrice)}`,
-    ]);
-  });
-
-  return rows;
-}
 
 export default function PortalVehicle() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [data, setData] = useState(null);
+  const [vehicle, setVehicle] = useState(null);
+  const [orders, setOrders] = useState([]);
+  const [maintenance, setMaintenance] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [printTheme, setPrintTheme] = useState(() => getInitialPrintTheme());
-
-  const [historySearch, setHistorySearch] = useState('');
-  const [historyStatus, setHistoryStatus] = useState('');
-  const [historyDateFrom, setHistoryDateFrom] = useState('');
-  const [historyDateTo, setHistoryDateTo] = useState('');
 
   useEffect(() => {
-    portalAPI.vehicleDetail(id)
-      .then((r) => setData(r.data))
-      .catch(() => setError('Veiculo nao encontrado.'))
-      .finally(() => setLoading(false));
+    const load = async () => {
+      try {
+        const r = await fetch(`${API}/api/portal/vehicles/${id}`, {
+          headers: { Authorization: 'Bearer ' + ptoken() }
+        });
+        if (r.status === 401) { navigate('/portal/login'); return; }
+        if (r.ok) {
+          const d = await r.json();
+          setVehicle(d.vehicle || d);
+          setOrders(d.orders || []);
+          setMaintenance(d.maintenance || []);
+        }
+      } catch (e) { /* silent */ }
+      finally { setLoading(false); }
+    };
+    load();
   }, [id]);
 
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(PRINT_THEME_STORAGE_KEY, printTheme);
-    } catch {
-      // ignore storage errors
-    }
-  }, [printTheme]);
-
-  if (loading) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div className="spinner" style={{ width: 40, height: 40 }} />
-      </div>
-    );
-  }
-
-  if (error || !data) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12 }}>
-        <div style={{ fontSize: 36 }}>!</div>
-        <div style={{ color: '#718096' }}>{error || 'Veiculo nao encontrado.'}</div>
-        <button className="btn btn-primary" onClick={() => navigate('/portal')}>Voltar ao portal</button>
-      </div>
-    );
-  }
-
-  const { vehicle, maintenances = [], upcomingMaintenances = [], trackingDevices = [], serviceOrders = [] } = data;
-
-  const nextReview = upcomingMaintenances[0] || null;
-  const oil = findMaintenanceByKeywords(maintenances, ['OLEO']);
-  const belt = findMaintenanceByKeywords(maintenances, ['CORREIA', 'DENTADA']);
-
-  const inProgressOrders = serviceOrders.filter((os) => ['APPROVED', 'STARTED', 'IN_PROGRESS', 'WAITING_PART', 'FINISHING'].includes(os.status));
-  const finishedOrders = serviceOrders.filter((os) => ['DONE', 'DELIVERED'].includes(os.status));
-  const lastMaintenanceOrder = finishedOrders[0] || null;
-
-  const alerts = maintenances.filter((m) => ['OVERDUE', 'DUE_SOON'].includes(m.alertLevel));
-  const globalAlert = summarizeAlert(nextReview);
-
-  const historyStatusOptions = useMemo(() => {
-    const set = new Set(serviceOrders.map((os) => String(os.status || '').trim()).filter(Boolean));
-    return Array.from(set);
-  }, [serviceOrders]);
-
-  const filteredServiceOrders = useMemo(() => {
-    const fromTs = historyDateFrom ? new Date(`${historyDateFrom}T00:00:00`).getTime() : null;
-    const toTs = historyDateTo ? new Date(`${historyDateTo}T23:59:59.999`).getTime() : null;
-    const search = String(historySearch || '').trim().toLowerCase();
-
-    return serviceOrders.filter((os) => {
-      if (historyStatus && os.status !== historyStatus) return false;
-
-      const refTs = new Date(os.updatedAt || os.createdAt).getTime();
-      if (fromTs && Number.isFinite(refTs) && refTs < fromTs) return false;
-      if (toTs && Number.isFinite(refTs) && refTs > toTs) return false;
-
-      if (search) {
-        const hay = [
-          `#${os.number || ''}`,
-          SO_STATUS_LABEL[os.status] || os.status || '',
-          os.status || '',
-          vehicle.plate || '',
-        ].join(' ').toLowerCase();
-        if (!hay.includes(search)) return false;
-      }
-
-      return true;
-    });
-  }, [serviceOrders, historyStatus, historyDateFrom, historyDateTo, historySearch, vehicle.plate]);
-
-  const timelineRows = useMemo(
-    () => [...filteredServiceOrders]
-      .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime())
-      .slice(0, 12),
-    [filteredServiceOrders],
-  );
-
-  const handlePrintDetails = () => {
-    const html = document.documentElement;
-    html.setAttribute('data-print-context', 'portal-vehicle-detail');
-    html.setAttribute('data-print-theme', printTheme);
-
-    const clearPrintState = () => {
-      html.removeAttribute('data-print-theme');
-      html.removeAttribute('data-print-context');
-      window.removeEventListener('afterprint', clearPrintState);
-    };
-
-    window.addEventListener('afterprint', clearPrintState);
-    window.print();
-    setTimeout(clearPrintState, 1200);
+  const st = vehicle?.maintenance_status;
+  const statusConf = {
+    urgencia: { color: 'var(--danger)',  bg: '#fef2f2', label: 'Manutenção Vencida',  icon: '🔴' },
+    atencao:  { color: 'var(--warning)', bg: '#fffbeb', label: 'Próxima Manutenção',  icon: '🟡' },
+    em_dia:   { color: 'var(--success)', bg: '#f0fdf4', label: 'Em Dia',               icon: '✅' },
   };
+  const sc = statusConf[st] || statusConf.em_dia;
 
-  const handleExportCsv = () => {
-    const rows = buildVehicleCsvRows({
-      vehicle,
-      maintenances,
-      serviceOrders: filteredServiceOrders,
-      filters: {
-        search: historySearch,
-        status: historyStatus,
-        dateFrom: historyDateFrom,
-        dateTo: historyDateTo,
-      },
-    });
-
-    const csv = rows.map((row) => row.map(toCsvCell).join(';')).join('\n');
-    const dateTag = new Date().toISOString().slice(0, 10);
-    const plateTag = String(vehicle.plate || 'veiculo').replace(/[^a-zA-Z0-9_-]/g, '_');
-    downloadTextFile(csv, `portal_veiculo_${plateTag}_${dateTag}.csv`);
-  };
+  const alerts = maintenance.filter(m => m.status === 'vencida' || m.status === 'atencao');
+  const totalSpent = orders.reduce((s, o) => s + (o.total || 0), 0);
+  const openOS = orders.filter(o => !['Entregue','Finalizado','Cancelado'].includes(o.status));
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
-      <style>{`
-        .print-only { display: none; }
+    <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
+      {/* Header */}
+      <header style={{ background: 'var(--primary)', padding: '14px 24px', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button onClick={() => navigate('/portal/dashboard')}
+          style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: 8, cursor: 'pointer', fontSize: 16 }}>
+          ←
+        </button>
+        {BRAND.logo && <img src={BRAND.logo} alt="" style={{ width: 28, height: 28, borderRadius: 5, background: '#fff', padding: 2 }} />}
+        <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>Detalhe do Veículo</div>
+      </header>
 
-        @media print {
-          .no-print { display: none !important; }
-          .print-only { display: block !important; }
-          body { background: #fff !important; }
+      {loading ? (
+        <div className="loading"><div className="spinner" /></div>
+      ) : !vehicle ? (
+        <div className="empty-state"><div className="empty-state-text">Veículo não encontrado</div></div>
+      ) : (
+        <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 16px' }}>
 
-          html[data-print-context='portal-vehicle-detail'] .print-block {
-            display: none !important;
-          }
+          {/* Card principal do veículo */}
+          <div className="card" style={{ marginBottom: 20, borderTop: `4px solid ${sc.color}` }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+              <div>
+                <div style={{ fontFamily: 'monospace', fontSize: 28, fontWeight: 900, letterSpacing: '0.06em', color: 'var(--text-primary)' }}>
+                  {vehicle.plate}
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-secondary)', marginTop: 4 }}>
+                  {vehicle.brand} {vehicle.model} {vehicle.year && `· ${vehicle.year}`}
+                </div>
+                {vehicle.color && <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>{vehicle.color}</div>}
+              </div>
+              <div style={{ background: sc.bg, color: sc.color, borderRadius: 10, padding: '8px 14px', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                {sc.icon} {sc.label}
+              </div>
+            </div>
 
-          html[data-print-context='portal-vehicle-detail'][data-print-theme='resumo'] .print-block-resumo {
-            display: block !important;
-          }
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 20 }}>
+              <div style={{ background: 'var(--gray-50)', borderRadius: 10, padding: '12px 14px' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 4 }}>OS Abertas</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--primary)' }}>{openOS.length}</div>
+              </div>
+              <div style={{ background: 'var(--gray-50)', borderRadius: 10, padding: '12px 14px' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 4 }}>Total OS</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)' }}>{orders.length}</div>
+              </div>
+              <div style={{ background: 'var(--gray-50)', borderRadius: 10, padding: '12px 14px' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 4 }}>Gasto Total</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--success)' }}>
+                  R$ {totalSpent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </div>
+              </div>
+            </div>
+          </div>
 
-          html[data-print-context='portal-vehicle-detail'][data-print-theme='manutencoes'] .print-block-manutencoes {
-            display: block !important;
-          }
+          {/* Alertas de manutenção */}
+          {alerts.length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--danger)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                ⚠️ Atenção neste veículo
+              </h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {alerts.map((m, i) => (
+                  <div key={i} style={{
+                    background: m.status === 'vencida' ? '#fef2f2' : '#fffbeb',
+                    border: `1px solid ${m.status === 'vencida' ? '#fca5a5' : '#fcd34d'}`,
+                    borderRadius: 10, padding: '12px 16px',
+                    display: 'flex', alignItems: 'center', gap: 12
+                  }}>
+                    <span style={{ fontSize: 20 }}>{m.status === 'vencida' ? '🔴' : '🟡'}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: m.status === 'vencida' ? '#991b1b' : '#92400e' }}>{m.name}</div>
+                      <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                        {m.status === 'vencida' ? `Vencida: ${m.due_date ? new Date(m.due_date).toLocaleDateString('pt-BR') : '—'}` : `Previsto: ${m.due_date ? new Date(m.due_date).toLocaleDateString('pt-BR') : '—'}`}
+                      </div>
+                    </div>
+                    <a href={`https://wa.me/55${(BRAND.phone||'').replace(/D/g,'')}?text=Olá! Preciso agendar manutenção do veículo ${vehicle.plate}: ${m.name}`}
+                      target="_blank" rel="noreferrer"
+                      style={{ background: '#16a34a', color: '#fff', padding: '6px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600, textDecoration: 'none', flexShrink: 0 }}>
+                      Agendar
+                    </a>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
-          html[data-print-context='portal-vehicle-detail'][data-print-theme='historico'] .print-block-historico {
-            display: block !important;
-          }
+          {/* Ações rápidas */}
+          <div style={{ display: 'flex', gap: 10, marginBottom: 24, flexWrap: 'wrap' }}>
+            <a href={`https://wa.me/55${(BRAND.phone||'').replace(/D/g,'')}?text=Olá! Preciso de um serviço para o veículo ${vehicle.plate}`}
+              target="_blank" rel="noreferrer"
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, padding: '12px 16px', background: '#fff', border: '1.5px solid var(--border)', borderRadius: 10, fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', textDecoration: 'none', cursor: 'pointer', minWidth: 75 }}>
+              <span style={{ fontSize: 20 }}>💬</span> WhatsApp
+            </a>
+            <a href={`https://wa.me/55${(BRAND.phone||'').replace(/D/g,'')}?text=Olá! Gostaria de agendar revisão do veículo ${vehicle.plate}`}
+              target="_blank" rel="noreferrer"
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, padding: '12px 16px', background: '#fff', border: '1.5px solid var(--border)', borderRadius: 10, fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', textDecoration: 'none', cursor: 'pointer', minWidth: 75 }}>
+              <span style={{ fontSize: 20 }}>📅</span> Agendar
+            </a>
+          </div>
 
-          html[data-print-context='portal-vehicle-detail'][data-print-theme='completo'] .print-block-completo {
-            display: block !important;
-          }
-
-          .card { break-inside: avoid; }
-        }
-      `}</style>
-
-      <div style={{ background: '#1A3C5E', color: 'white', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button
-            onClick={() => navigate('/portal')}
-            style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', borderRadius: 8, padding: '6px 10px', cursor: 'pointer' }}
-          >
-            Voltar
-          </button>
+          {/* Histórico de OS */}
           <div>
-            <div style={{ fontWeight: 700 }}>{vehicle.plate}</div>
-            <div style={{ opacity: 0.75, fontSize: 12 }}>{vehicle.brand} {vehicle.model} {vehicle.year ? `- ${vehicle.year}` : ''}</div>
-          </div>
-        </div>
-
-        <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <select
-            value={printTheme}
-            onChange={(e) => setPrintTheme(e.target.value)}
-            style={{ borderRadius: 8, border: 0, padding: '6px 8px', minWidth: 190 }}
-          >
-            {PRINT_THEMES.map((theme) => (
-              <option key={theme.value} value={theme.value}>{theme.label}</option>
-            ))}
-          </select>
-          <button className="btn btn-outline btn-sm" onClick={handleExportCsv}>Exportar CSV</button>
-          <button className="btn btn-outline btn-sm" onClick={handlePrintDetails}>Imprimir</button>
-        </div>
-      </div>
-
-      <div style={{ maxWidth: 980, margin: '0 auto', padding: '20px 16px', display: 'grid', gap: 12 }}>
-        <div className="print-only card" style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: 18, fontWeight: 800, color: '#1A3C5E' }}>Veiculo {vehicle.plate}</div>
-          <div style={{ fontSize: 13, color: '#64748b' }}>
-            {vehicle.brand} {vehicle.model} {vehicle.year ? `- ${vehicle.year}` : ''} | Emissao: {formatDateTime(new Date())}
-          </div>
-        </div>
-
-        <div className="card print-block print-block-resumo print-block-completo">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
-            <div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: '#1A3C5E' }}>{vehicle.plate}</div>
-              <div style={{ color: '#4a5568', fontWeight: 600 }}>{vehicle.brand} {vehicle.model}</div>
-            </div>
-            <span style={{ background: globalAlert.bg, color: globalAlert.color, padding: '4px 10px', borderRadius: 999, fontSize: 12, fontWeight: 700 }}>
-              Status geral: {globalAlert.label}
-            </span>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginTop: 12 }}>
-            <div>
-              <div className="text-sm text-muted">KM atual</div>
-              <div style={{ fontWeight: 700 }}>{formatKm(vehicle.currentKm)}</div>
-            </div>
-            <div>
-              <div className="text-sm text-muted">Ultima atualizacao</div>
-              <div style={{ fontWeight: 700 }}>{formatDateTime((serviceOrders[0]?.updatedAt || serviceOrders[0]?.createdAt || vehicle.updatedAt))}</div>
-            </div>
-            <div>
-              <div className="text-sm text-muted">Proxima revisao</div>
-              <div style={{ fontWeight: 700 }}>{nextReview ? `${formatDate(nextReview.nextDate)} | ${formatKm(nextReview.nextKm)}` : 'Nao configurada'}</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="print-block print-block-resumo print-block-completo" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 10 }}>
-          <MetricCard title="Prox. troca de oleo" main={oil ? formatDate(oil.nextDate) : 'Nao configurada'} sub={oil ? formatKm(oil.nextKm) : ''} />
-          <MetricCard title="Prox. troca de correia" main={belt ? formatDate(belt.nextDate) : 'Nao configurada'} sub={belt ? formatKm(belt.nextKm) : ''} />
-          <MetricCard title="Proxima revisao" main={nextReview ? formatDate(nextReview.nextDate) : 'Nao configurada'} sub={nextReview ? formatKm(nextReview.nextKm) : ''} />
-          <MetricCard title="OS em andamento" main={inProgressOrders.length} sub="Ordens abertas" />
-          <MetricCard title="Ultima manutencao" main={lastMaintenanceOrder ? `OS #${lastMaintenanceOrder.number}` : '-'} sub={lastMaintenanceOrder ? formatDate(lastMaintenanceOrder.updatedAt || lastMaintenanceOrder.createdAt) : 'Sem historico'} />
-        </div>
-
-        <div className="card print-block print-block-manutencoes print-block-completo">
-          <div className="card-title">Atencao neste veiculo</div>
-          {!alerts.length ? (
-            <div className="text-sm text-muted">Nenhuma pendencia critica no momento.</div>
-          ) : (
-            <div style={{ display: 'grid', gap: 8 }}>
-              {alerts.map((m) => {
-                const style = summarizeAlert(m);
-                return (
-                  <div key={m.id} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 10, display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                    <div>
-                      <div style={{ fontWeight: 700 }}>{m.label}</div>
-                      <div className="text-sm text-muted">{DUE_BY_LABEL[m.dueBy || 'NONE']}</div>
-                      <div className="text-sm text-muted">Prox. data: {formatDate(m.nextDate)} | Prox. KM: {formatKm(m.nextKm)}</div>
+            <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ width: 3, height: 16, background: 'var(--primary)', borderRadius: 2, display: 'inline-block' }} />
+              Histórico de Ordens de Serviço
+            </h2>
+            {orders.length === 0 ? (
+              <div className="empty-state" style={{ padding: '28px 16px' }}>
+                <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
+                <div style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Nenhuma OS encontrada</div>
+              </div>
+            ) : (
+              <div style={{ background: '#fff', borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden' }}>
+                {orders.map((o, i) => {
+                  const sb = STATUS_BADGE[o.status] || { bg: '#f1f5f9', color: '#475569' };
+                  return (
+                    <div key={o.id} onClick={() => navigate(`/portal/os/${o.id}`)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderBottom: i < orders.length - 1 ? '1px solid var(--border)' : 'none', cursor: 'pointer' }}>
+                      <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 12, color: 'var(--primary)', flexShrink: 0 }}>
+                        #{o.id}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>OS #{o.id}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 1 }}>
+                          {o.updated_at ? new Date(o.updated_at).toLocaleDateString('pt-BR') : '—'}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: sb.color, background: sb.bg, padding: '2px 8px', borderRadius: 12, marginBottom: 4 }}>{o.status}</div>
+                        {o.total != null && <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--success)' }}>R$ {Number(o.total).toFixed(2)}</div>}
+                      </div>
                     </div>
-                    <span style={{ background: style.bg, color: style.color, borderRadius: 999, padding: '3px 8px', fontSize: 12, fontWeight: 700 }}>{style.label}</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        <div className="card print-block print-block-manutencoes print-block-historico print-block-completo">
-          <div className="card-title">Historico de manutencoes</div>
-          {!maintenances.length ? (
-            <div className="text-sm text-muted">Sem manutencoes cadastradas.</div>
-          ) : (
-            <div className="table-container">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Item</th>
-                    <th>Ultima</th>
-                    <th>Proxima</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {maintenances.map((m) => {
-                    const style = summarizeAlert(m);
-                    return (
-                      <tr key={m.id}>
-                        <td><strong>{m.label || m.type}</strong></td>
-                        <td>{formatDate(m.lastDate)} | {formatKm(m.lastKm)}</td>
-                        <td>{formatDate(m.nextDate)} | {formatKm(m.nextKm)}</td>
-                        <td><span style={{ background: style.bg, color: style.color, borderRadius: 999, padding: '3px 8px', fontSize: 12, fontWeight: 700 }}>{style.label}</span></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        <div className="card no-print">
-          <div className="card-title">Filtros do historico</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
-            <input
-              className="form-control"
-              placeholder="Buscar por numero/status"
-              value={historySearch}
-              onChange={(e) => setHistorySearch(e.target.value)}
-            />
-            <select className="form-control" value={historyStatus} onChange={(e) => setHistoryStatus(e.target.value)}>
-              <option value="">Status (todos)</option>
-              {historyStatusOptions.map((status) => (
-                <option key={status} value={status}>{SO_STATUS_LABEL[status] || status}</option>
-              ))}
-            </select>
-            <input type="date" className="form-control" value={historyDateFrom} onChange={(e) => setHistoryDateFrom(e.target.value)} />
-            <input type="date" className="form-control" value={historyDateTo} onChange={(e) => setHistoryDateTo(e.target.value)} />
-          </div>
-          <div className="text-sm text-muted" style={{ marginTop: 8 }}>
-            Mostrando {filteredServiceOrders.length} de {serviceOrders.length} OS.
-          </div>
-        </div>
-
-        <div className="grid-2 print-block print-block-historico print-block-completo">
-          <div className="card">
-            <div className="card-title">Historico de OS</div>
-            {!filteredServiceOrders.length ? (
-              <div className="text-sm text-muted">Nenhuma OS registrada para este filtro.</div>
-            ) : (
-              <div style={{ display: 'grid', gap: 8 }}>
-                {filteredServiceOrders.slice(0, 12).map((os) => (
-                  <Link key={os.id} to={`/portal/os/${os.id}`} style={{ textDecoration: 'none', color: 'inherit', borderBottom: '1px solid #f1f5f9', paddingBottom: 8 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                      <div style={{ fontWeight: 700 }}>OS #{os.number}</div>
-                      <span style={{ background: `${SO_STATUS_COLOR[os.status] || '#718096'}20`, color: SO_STATUS_COLOR[os.status] || '#718096', borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
-                        {SO_STATUS_LABEL[os.status] || os.status}
-                      </span>
-                    </div>
-                    <div className="text-sm text-muted">{formatDateTime(os.updatedAt || os.createdAt)}</div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="card">
-            <div className="card-title">Linha do tempo</div>
-            {!timelineRows.length ? (
-              <div className="text-sm text-muted">Sem atividades para o filtro atual.</div>
-            ) : (
-              <div style={{ display: 'grid', gap: 8 }}>
-                {timelineRows.map((row) => (
-                  <div key={`timeline-${row.id}`} style={{ borderLeft: '3px solid #cbd5e1', paddingLeft: 10 }}>
-                    <div style={{ fontWeight: 700 }}>OS #{row.number} - {SO_STATUS_LABEL[row.status] || row.status}</div>
-                    <div className="text-sm text-muted">{formatDateTime(row.updatedAt || row.createdAt)}</div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
         </div>
-
-        <div className="grid-2 print-block print-block-historico print-block-completo">
-          <div className="card">
-            <div className="card-title">Rastreadores vinculados</div>
-            {!trackingDevices.length ? (
-              <div className="text-sm text-muted">Nenhum rastreador vinculado.</div>
-            ) : (
-              <div style={{ display: 'grid', gap: 8 }}>
-                {trackingDevices.map((d) => (
-                  <div key={d.id} style={{ borderBottom: '1px solid #f1f5f9', paddingBottom: 8 }}>
-                    <div style={{ fontWeight: 700 }}>{d.model}</div>
-                    <div className="text-sm text-muted">IMEI: {d.imei}</div>
-                    <div className="text-sm text-muted">Status: {TRACKING_STATUS_LABEL[d.status] || d.status} | Instalado em: {formatDate(d.installedAt)}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="card no-print">
-            <div className="card-title">Acoes rapidas</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
-              <Link to="/portal" className="btn btn-outline">Voltar para frota</Link>
-              <Link to="/portal/rastreamento" className="btn btn-outline">Abrir rastreamento</Link>
-              {serviceOrders[0] ? <Link to={`/portal/os/${serviceOrders[0].id}`} className="btn btn-outline">Ultima OS</Link> : <button className="btn btn-outline" disabled>Ultima OS</button>}
-            </div>
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
