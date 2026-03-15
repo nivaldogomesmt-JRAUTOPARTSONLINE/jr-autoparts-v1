@@ -129,9 +129,12 @@ export default function Dashboard() {
               <div className="section-header"><h2 className="section-title">Prioridades do Dia</h2></div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {prioridades.map((p, i) => (
-                  <div key={i} className="card card-sm" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+               <div key={i} className="card card-sm" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderLeft: '3px solid var(--danger)', paddingLeft: 14 }}>
                     <div>
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>{p.client_name || p.description}</div>
+                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                     <div style={{ fontWeight: 600, fontSize: 13 }}>{p.client_name || p.description}</div>
+                     {p.status && <span className="badge badge-orange" style={{ fontSize: 10 }}>{p.status}</span>}
+                   </div>
                       {p.vehicle_plate && <div className="text-muted text-sm">Placa: {p.vehicle_plate} · Últ. atualização: {p.updated_at ? new Date(p.updated_at).toLocaleDateString('pt-BR') : '—'}</div>}
                     </div>
                     <button className="btn btn-primary btn-sm" onClick={() => navigate(`/os/${p.id}`)}>
