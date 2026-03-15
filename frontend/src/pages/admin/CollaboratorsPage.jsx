@@ -622,6 +622,7 @@ export default function CollaboratorsPage() {
         ) : items.length === 0 ? (
           <div className="empty-state"><div className="empty-state-text">Nenhum colaborador encontrado</div></div>
         ) : (
+          <>
 
       {/* ─── Filtros ─── */}
       <div className="card" style={{ marginBottom: 16, padding: '12px 16px' }}>
@@ -703,6 +704,7 @@ export default function CollaboratorsPage() {
               ))}
             </tbody>
           </table>
+          </>
         )}
       </div>
 
