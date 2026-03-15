@@ -30,6 +30,71 @@ const SAMPLE_VARIABLES = {
   daysOverdue: 7,
 };
 
+const MODULE_ORDER = ['OS', 'ENTREGA', 'MANUTENCAO', 'CADASTRO', 'RASTREAMENTO'];
+
+const MODULE_META = {
+  OS:           { label: 'Ordens de Serviço',  color: '#2563eb', bg: '#eff6ff' },
+  ENTREGA:      { label: 'Entregas',               color: '#7c3aed', bg: '#f5f3ff' },
+  MANUTENCAO:   { label: 'Manutenção',   color: '#d97706', bg: '#fffbeb' },
+  CADASTRO:     { label: 'Cadastro',               color: '#059669', bg: '#ecfdf5' },
+  RASTREAMENTO: { label: 'Rastreamento',           color: '#dc2626', bg: '#fef2f2' },
+};
+
+const DISPATCH_SOURCE = {
+  OS_STATUS_STARTED:                    'soController.js',
+  OS_STATUS_IN_PROGRESS:                'soController.js',
+  OS_STATUS_WAITING_PART:               'soController.js',
+  OS_STATUS_FINISHING:                  'soController.js',
+  OS_STATUS_DONE:                       'soController.js',
+  OS_STATUS_DELIVERED:                  'soController.js',
+  DELIVERY_STATUS_AWAITING_DISPATCH:    'soController.js',
+  DELIVERY_STATUS_OUT_FOR_DELIVERY:     'soController.js',
+  DELIVERY_STATUS_DELIVERED:            'soController.js',
+  DELIVERY_STATUS_DELIVERY_FAILED:      'soController.js',
+  ORDER_PHASE_CONFIRMED:                'soController.js',
+  ORDER_PHASE_PAYMENT_APPROVED:         'soController.js',
+  ORDER_PHASE_IN_SEPARATION:            'soController.js',
+  ORDER_PHASE_SHIPPED:                  'soController.js',
+  ORDER_PHASE_DELIVERED:                'soController.js',
+  ORDER_PHASE_CANCELED:                 'soController.js',
+  MAINTENANCE_DUE_SOON:                 'maintenanceNotificationService.js',
+  MAINTENANCE_OVERDUE:                  'maintenanceNotificationService.js',
+  TRACKING_BILLING_UPCOMING:            'trackingBillingService.js',
+  TRACKING_BILLING_LIGHT:               'trackingBillingService.js',
+  TRACKING_BILLING_INTENSIVE:           'trackingBillingService.js',
+  TRACKING_BILLING_CRITICAL:            'trackingBillingService.js',
+  TRACKING_BILLING_RECOVERY:            'trackingBillingService.js',
+};
+
+const TITLE_LABELS = {
+  OS_STATUS_STARTED:                    'OS Iniciada',
+  OS_STATUS_IN_PROGRESS:                'OS Em Andamento',
+  OS_STATUS_WAITING_PART:               'OS Aguardando Peça',
+  OS_STATUS_FINISHING:                  'OS Em Finalização',
+  OS_STATUS_DONE:                       'OS Concluída',
+  OS_STATUS_DELIVERED:                  'OS Entregue ao Cliente',
+  DELIVERY_STATUS_AWAITING_DISPATCH:    'Entrega Aguardando Despacho',
+  DELIVERY_STATUS_OUT_FOR_DELIVERY:     'Saiu para Entrega',
+  DELIVERY_STATUS_DELIVERED:            'Entrega Realizada',
+  DELIVERY_STATUS_DELIVERY_FAILED:      'Tentativa de Entrega Falhou',
+  ORDER_PHASE_CONFIRMED:                'Pedido Confirmado',
+  ORDER_PHASE_PAYMENT_APPROVED:         'Pagamento Aprovado',
+  ORDER_PHASE_IN_SEPARATION:            'Pedido em Separação',
+  ORDER_PHASE_SHIPPED:                  'Pedido Despachado',
+  ORDER_PHASE_DELIVERED:                'Pedido Entregue',
+  ORDER_PHASE_CANCELED:                 'Pedido Cancelado',
+  MAINTENANCE_DUE_SOON:                 'Manutenção Próxima do Vencimento',
+  MAINTENANCE_OVERDUE:                  'Manutenção Vencida',
+  PROFILE_WHATSAPP_UPDATED:             'WhatsApp do Cliente Atualizado',
+  PROFILE_EMAIL_UPDATED:                'E-mail do Cliente Atualizado',
+  PROFILE_UPDATED:                      'Dados do Cliente Atualizados',
+  TRACKING_BILLING_UPCOMING:            'Cobrança de Rastreamento Próxima',
+  TRACKING_BILLING_LIGHT:               'Cobrança Rastreamento — Leve',
+  TRACKING_BILLING_INTENSIVE:           'Cobrança Rastreamento — Intensiva',
+  TRACKING_BILLING_CRITICAL:            'Cobrança Rastreamento — Crítica',
+  TRACKING_BILLING_RECOVERY:            'Cobrança Rastreamento — Recuperação',
+};
+
 export default function NotificationCenterPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -67,18 +132,24 @@ export default function NotificationCenterPage() {
     return ['ALL', ...uniq];
   }, [events]);
 
-  const filtered = useMemo(() => {
-    const token = String(debouncedSearch || '').trim().toLowerCase();
-    return events.filter((ev) => {
-      if (moduleFilter !== 'ALL' && (ev.module || 'GERAL') !== moduleFilter) return false;
-      if (!token) return true;
-      return [ev.key, ev.title, ev.module, ev.template]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-        .includes(token);
-    });
+  const grouped = useMemo(() => {
+    const search = debouncedSearch.toLowerCase();
+    const modulesToShow = moduleFilter === 'ALL' ? MODULE_ORDER : [moduleFilter];
+    return modulesToShow
+      .map(mod => {
+        const modEvents = events.filter(ev => {
+          if (ev.module !== mod) return false;
+          if (moduleFilter === 'ALL' && search && !ev.key.toLowerCase().includes(search) && !(TITLE_LABELS[ev.key] || ev.label || '').toLowerCase().includes(search)) return false;
+          if (moduleFilter !== 'ALL' && search && !ev.key.toLowerCase().includes(search) && !(TITLE_LABELS[ev.key] || ev.label || '').toLowerCase().includes(search)) return false;
+          return true;
+        });
+        return { module: mod, events: modEvents };
+      })
+      .filter(g => g.events.length > 0);
   }, [events, debouncedSearch, moduleFilter]);
+
+  const totalActive = events.filter(e => e.enabled).length;
+  const totalDispatching = events.filter(e => e.enabled && DISPATCH_SOURCE[e.key]).length;
 
   const setEventField = (key, field, value) => {
     setEvents((prev) => prev.map((ev) => (ev.key === key ? { ...ev, [field]: value } : ev)));
@@ -129,101 +200,168 @@ export default function NotificationCenterPage() {
     }
   };
 
+
   return (
-    <div>
+    <div className="page-container">
       <div className="page-header">
         <div>
-          <div className="page-title">Central de Notificacoes</div>
-          <div className="page-subtitle">Gerencie eventos, templates e janela de dedupe do WhatsApp</div>
+          <h1>Central de Notificações</h1>
+          <p className="page-subtitle">
+            {totalActive} ativo{totalActive !== 1 ? 's' : ''}{' · '}{totalDispatching} disparando{' · '}{events.length} configurados
+          </p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button type="button" className="btn btn-outline" onClick={load} disabled={loading || saving}>Recarregar</button>
-          <button type="button" className="btn btn-primary" onClick={saveAll} disabled={loading || saving}>{saving ? 'Salvando...' : 'Salvar alteracoes'}</button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {feedback && (
+            <span style={{ fontSize: 13, color: feedback.startsWith('❌') ? '#dc2626' : '#16a34a' }}>
+              {feedback}
+            </span>
+          )}
+          <button className="btn btn-primary" onClick={saveAll} disabled={saving}>
+            {saving ? 'Salvando...' : '💾 Salvar'}
+          </button>
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: 10 }}>
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
           <input
-            className="form-control"
-            placeholder="Buscar por modulo, chave, titulo ou template..."
+            className="input"
+            placeholder="Buscar evento..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={e => setSearch(e.target.value)}
+            style={{ flex: 1, minWidth: 180 }}
           />
-          <select className="form-control" value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)}>
-            {modules.map((m) => (
-              <option key={m} value={m}>{m === 'ALL' ? 'Todos os modulos' : m}</option>
+          <select
+            className="input"
+            value={moduleFilter}
+            onChange={e => setModuleFilter(e.target.value)}
+            style={{ width: 190 }}
+          >
+            <option value="ALL">Todos os módulos</option>
+            {modules.map(m => (
+              <option key={m} value={m}>{MODULE_META[m]?.label || m}</option>
             ))}
           </select>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+            {totalActive} ativos · {totalDispatching} disparando
+          </span>
         </div>
-        <div className="text-sm text-muted" style={{ marginTop: 8 }}>
-          Ultima atualizacao: {updatedAt ? new Date(updatedAt).toLocaleString('pt-BR') : '-'} {updatedBy ? `por ${updatedBy}` : ''}
-        </div>
-        {feedback ? <div className="text-sm" style={{ marginTop: 8 }}>{feedback}</div> : null}
       </div>
 
-      <div className="card">
-        {loading ? (
-          <div className="loading"><div className="spinner" /></div>
-        ) : !filtered.length ? (
-          <div className="empty-state"><div className="empty-state-text">Nenhum evento encontrado.</div></div>
-        ) : (
-          <div style={{ display: 'grid', gap: 12 }}>
-            {filtered.map((ev) => (
-              <div key={ev.key} style={{ border: '1px solid var(--gray-200)', borderRadius: 10, padding: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 8 }}>
-                  <div>
-                    <div style={{ fontWeight: 700 }}>{ev.title}</div>
-                    <div className="text-sm text-muted">{ev.module} | {ev.key}</div>
-                  </div>
-                  <label className="text-sm" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <input
-                      type="checkbox"
-                      checked={!!ev.active}
-                      onChange={(e) => setEventField(ev.key, 'active', e.target.checked)}
-                    />
-                    Ativo
-                  </label>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr auto', gap: 8, alignItems: 'center' }}>
-                  <input
-                    className="form-control"
-                    type="number"
-                    min={1}
-                    max={720}
-                    value={ev.dedupeHours}
-                    onChange={(e) => setEventField(ev.key, 'dedupeHours', e.target.value)}
-                  />
-                  <textarea
-                    className="form-control"
-                    rows={3}
-                    value={ev.template || ''}
-                    onChange={(e) => setEventField(ev.key, 'template', e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => previewEvent(ev.key, ev.template || '')}
-                  >
-                    Previa
-                  </button>
-                </div>
-                <div className="text-xs text-muted" style={{ marginTop: 6 }}>
-                  Dedupe (horas) | Template com variaveis: {'{clientName}'}, {'{plate}'}, {'{soNumber}'}, {'{statusLabel}'}, {'{nextDate}'}, {'{nextKm}'}, {'{amount}'}.
-                </div>
-                {preview.key === ev.key && preview.text ? (
-                  <div style={{ marginTop: 8, padding: 8, borderRadius: 8, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                    <div className="text-xs text-muted" style={{ marginBottom: 4 }}>Previa</div>
-                    <div className="text-sm" style={{ whiteSpace: 'pre-wrap' }}>{preview.text}</div>
-                  </div>
-                ) : null}
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>Carregando...</div>
+      ) : grouped.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>Nenhum evento encontrado.</div>
+      ) : (
+        grouped.map(({ module: mod, events: modEvents }) => {
+          const meta = MODULE_META[mod] || { label: mod, color: '#6b7280', bg: '#f9fafb' };
+          return (
+            <div key={mod} style={{ marginBottom: 28 }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '8px 14px', borderRadius: 8, marginBottom: 12,
+                background: meta.bg, borderLeft: '4px solid ' + meta.color,
+              }}>
+                <span style={{ fontWeight: 700, color: meta.color, fontSize: 14 }}>{meta.label}</span>
+                <span style={{ fontSize: 12, color: '#6b7280' }}>
+                  {modEvents.filter(e => e.enabled).length}/{modEvents.length} ativos
+                </span>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+
+              {modEvents.map(ev => {
+                const isDispatching = !!DISPATCH_SOURCE[ev.key];
+                const dispatchFile = DISPATCH_SOURCE[ev.key];
+                const titleLabel = TITLE_LABELS[ev.key] || ev.label || ev.key;
+                const dotColor = !ev.enabled ? '#9ca3af' : isDispatching ? '#16a34a' : '#ca8a04';
+                return (
+                  <div key={ev.key} style={{
+                    background: '#fff', border: '1px solid var(--border)',
+                    borderRadius: 10, padding: '14px 16px', marginBottom: 10,
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+                      <span style={{
+                        width: 8, height: 8, borderRadius: '50%',
+                        background: dotColor, display: 'inline-block', flexShrink: 0,
+                      }} />
+                      <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{titleLabel}</span>
+                      <span style={{ fontSize: 11, color: '#9ca3af', fontFamily: 'monospace' }}>{ev.key}</span>
+                      <span style={{
+                        fontSize: 11, padding: '2px 7px', borderRadius: 99,
+                        background: '#dcfce7', color: '#15803d', fontWeight: 600,
+                      }}>💬 WhatsApp</span>
+                      {isDispatching ? (
+                        <span title={'Disparado em ' + dispatchFile} style={{
+                          fontSize: 11, padding: '2px 7px', borderRadius: 99,
+                          background: '#dcfce7', color: '#15803d', fontWeight: 600,
+                        }}>✅ Disparando</span>
+                      ) : (
+                        <span style={{
+                          fontSize: 11, padding: '2px 7px', borderRadius: 99,
+                          background: '#fef9c3', color: '#854d0e', fontWeight: 600,
+                        }}>⚙️ Configurado</span>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 10, flexWrap: 'wrap' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13 }}>
+                        <input
+                          type="checkbox"
+                          checked={!!ev.enabled}
+                          onChange={e => setEventField(ev.key, 'enabled', e.target.checked)}
+                        />
+                        Ativo
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                        <span style={{ color: '#6b7280' }}>Dedupe:</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={ev.dedupeHours ?? 24}
+                          onChange={e => setEventField(ev.key, 'dedupeHours', Number(e.target.value))}
+                          style={{ width: 60, padding: '2px 6px', border: '1px solid var(--border)', borderRadius: 5, fontSize: 13 }}
+                        />
+                        <span style={{ color: '#9ca3af' }}>h</span>
+                      </label>
+                    </div>
+
+                    <textarea
+                      value={ev.template || ''}
+                      onChange={e => setEventField(ev.key, 'template', e.target.value)}
+                      rows={3}
+                      style={{
+                        width: '100%', fontSize: 12, fontFamily: 'monospace',
+                        border: '1px solid var(--border)', borderRadius: 6,
+                        padding: '6px 8px', resize: 'vertical', boxSizing: 'border-box',
+                        background: '#fafafa',
+                      }}
+                      placeholder="Template da mensagem..."
+                    />
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 6 }}>
+                      <button
+                        className="btn btn-secondary"
+                        style={{ fontSize: 12, padding: '4px 12px', flexShrink: 0 }}
+                        onClick={() => previewEvent(ev.key, ev.template)}
+                      >
+                        👁 Preview
+                      </button>
+                      {preview.key === ev.key && preview.text && (
+                        <div style={{
+                          flex: 1, background: '#f0fdf4', border: '1px solid #bbf7d0',
+                          borderRadius: 6, padding: '6px 10px', fontSize: 12,
+                          color: '#166534', whiteSpace: 'pre-wrap',
+                        }}>
+                          {preview.text}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })
+      )}
     </div>
   );
-}
 
+}
