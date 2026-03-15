@@ -237,6 +237,10 @@ select.form-control { appearance: none; background-image: url("data:image/svg+xm
 .badge-cancelado  { background: var(--danger-light); color: #991b1b; }
 .badge-finalizado { background: #f0fdfa; color: #0f766e; }
 
+.badge-orange { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+.tr-late { background: rgba(239,68,68,0.04) !important; }
+.tr-late td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
+
 .table-container { background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); overflow: hidden; box-shadow: var(--shadow); }
 .table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .table th { background: var(--gray-50); padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); white-space: nowrap; }
