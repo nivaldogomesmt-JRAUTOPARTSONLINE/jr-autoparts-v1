@@ -12,7 +12,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 48,
-    template: 'Olá, {clientName}! O serviço do seu {brand} {model} ({plate}) foi iniciado. OS #{soNumber}. Acompanhe: {portalUrl}',
+    template: 'Olá, {clientName}! O serviço do seu {brand} {model} ({plate}) foi iniciado. OS #{soNumber}.\nAcompanhe em tempo real: {portalUrl}',
   },
   {
     key: 'OS_STATUS_IN_PROGRESS',
@@ -21,7 +21,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 48,
-    template: 'Olá, {clientName}! Seu {brand} {model} ({plate}) está em andamento. OS #{soNumber}.',
+    template: 'Olá, {clientName}! Seu {brand} {model} ({plate}) está em execução. Nossa equipe está trabalhando nele. OS #{soNumber}.',
   },
   {
     key: 'OS_STATUS_WAITING_PART',
@@ -30,7 +30,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 48,
-    template: 'Olá, {clientName}! Seu {brand} {model} ({plate}) aguarda peça para continuar. OS #{soNumber}. Logo te avisamos.',
+    template: 'Olá, {clientName}! O serviço do seu {brand} {model} ({plate}) está pausado aguardando peça. OS #{soNumber}. Assim que chegar, continuamos e te avisamos!',
   },
   {
     key: 'OS_STATUS_FINISHING',
@@ -39,7 +39,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 48,
-    template: 'Olá, {clientName}! O serviço do seu {brand} {model} ({plate}) está na fase final. Quase pronto! OS #{soNumber}.',
+    template: 'Olá, {clientName}! Quase pronto! O serviço do seu {brand} {model} ({plate}) está na fase final. OS #{soNumber}.',
   },
   {
     key: 'OS_STATUS_DONE',
@@ -48,7 +48,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 48,
-    template: 'Olá, {clientName}! O serviço do seu {brand} {model} ({plate}) foi concluído. OS #{soNumber}. Em breve entramos em contato para combinar a entrega.',
+    template: 'Olá, {clientName}! O serviço do seu {brand} {model} ({plate}) está pronto. OS #{soNumber}. Entraremos em contato para combinar a retirada.',
   },
   {
     key: 'OS_STATUS_DELIVERED',
@@ -57,7 +57,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 48,
-    template: 'Olá, {clientName}! Seu {brand} {model} ({plate}) foi entregue com sucesso. Obrigado pela preferência! Acesse: {portalUrl}',
+    template: 'Olá, {clientName}! Seu {brand} {model} ({plate}) foi entregue. Obrigado pela preferência! Seu histórico: {portalUrl}',
   },
   {
     key: 'DELIVERY_STATUS_AWAITING_DISPATCH',
@@ -66,7 +66,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 24,
-    template: 'Ola, {clientName}! Atualizacao de entrega da OS #{soNumber} ({plate}): {deliveryStatusLabel}.{locationLine}{noteLine}',
+    template: 'Olá, {clientName}! Atualização da entrega — OS #{soNumber} ({plate}): {deliveryStatusLabel}.{locationLine}{noteLine}',
   },
   {
     key: 'DELIVERY_STATUS_OUT_FOR_DELIVERY',
@@ -75,7 +75,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 24,
-    template: 'Ola, {clientName}! Atualizacao de entrega da OS #{soNumber} ({plate}): {deliveryStatusLabel}.{locationLine}{noteLine}',
+    template: 'Olá, {clientName}! Seu veículo ({plate}) está a caminho — OS #{soNumber}: {deliveryStatusLabel}.{locationLine}{noteLine}',
   },
   {
     key: 'DELIVERY_STATUS_DELIVERED',
@@ -84,7 +84,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 24,
-    template: 'Ola, {clientName}! Atualizacao de entrega da OS #{soNumber} ({plate}): {deliveryStatusLabel}.{locationLine}{noteLine}',
+    template: 'Olá, {clientName}! Entrega da OS #{soNumber} ({plate}) concluída: {deliveryStatusLabel}.{locationLine}{noteLine}',
   },
   {
     key: 'DELIVERY_STATUS_DELIVERY_FAILED',
@@ -93,7 +93,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 24,
-    template: 'Ola, {clientName}! Atualizacao de entrega da OS #{soNumber} ({plate}): {deliveryStatusLabel}.{locationLine}{noteLine}',
+    template: 'Olá, {clientName}! Não foi possível concluir a entrega — OS #{soNumber} ({plate}): {deliveryStatusLabel}.{locationLine}{noteLine}',
   },  {
     key: 'ORDER_PHASE_CONFIRMED',
     module: 'ENTREGA',
@@ -101,7 +101,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 24,
-    template: 'Ola, {clientName}! Pedido da OS #{soNumber} ({plate}) atualizado: {orderPhaseLabel}.{noteLine}',
+    template: 'Olá, {clientName}! Pedido da OS #{soNumber} ({plate}) confirmado: {orderPhaseLabel}.{noteLine}',
   },
   {
     key: 'ORDER_PHASE_PAYMENT_APPROVED',
@@ -110,7 +110,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 24,
-    template: 'Ola, {clientName}! Pagamento do pedido da OS #{soNumber} ({plate}) foi aprovado. Status: {orderPhaseLabel}.{noteLine}',
+    template: 'Olá, {clientName}! Pagamento aprovado — pedido da OS #{soNumber} ({plate}): {orderPhaseLabel}.{noteLine}',
   },
   {
     key: 'ORDER_PHASE_IN_SEPARATION',
@@ -119,7 +119,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 24,
-    template: 'Ola, {clientName}! Pedido da OS #{soNumber} ({plate}) esta em separacao. Status: {orderPhaseLabel}.{noteLine}',
+    template: 'Olá, {clientName}! Pedido da OS #{soNumber} ({plate}) em separação: {orderPhaseLabel}.{noteLine}',
   },
   {
     key: 'ORDER_PHASE_SHIPPED',
@@ -128,7 +128,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 24,
-    template: 'Ola, {clientName}! Pedido da OS #{soNumber} ({plate}) foi enviado. Status: {orderPhaseLabel}.{noteLine}',
+    template: 'Olá, {clientName}! Pedido da OS #{soNumber} ({plate}) enviado: {orderPhaseLabel}.{noteLine}',
   },
   {
     key: 'ORDER_PHASE_DELIVERED',
@@ -137,7 +137,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 24,
-    template: 'Ola, {clientName}! Pedido da OS #{soNumber} ({plate}) foi entregue. Status: {orderPhaseLabel}.{noteLine}',
+    template: 'Olá, {clientName}! Pedido da OS #{soNumber} ({plate}) entregue: {orderPhaseLabel}.{noteLine}',
   },
   {
     key: 'ORDER_PHASE_CANCELED',
@@ -146,7 +146,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 24,
-    template: 'Ola, {clientName}! Pedido da OS #{soNumber} ({plate}) foi cancelado. Status: {orderPhaseLabel}.{noteLine}',
+    template: 'Olá, {clientName}! Pedido da OS #{soNumber} ({plate}) cancelado: {orderPhaseLabel}.{noteLine}',
   },
   {
     key: 'MAINTENANCE_DUE_SOON',
@@ -155,7 +155,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 72,
-    template: 'Olá, {clientName}! A manutenção *{maintenanceLabel}* do veículo {plate} está próxima.\nNível: {alertLabel}.\nPrevisão: {nextDate} ou {nextKm}.\nAcompanhe: {portalUrl}',
+    template: 'Olá, {clientName}! A manutenção *{maintenanceLabel}* do {plate} está se aproximando.\nPrevisão: {nextDate} ou {nextKm}.\nAgende pelo portal: {portalUrl}',
   },
   {
     key: 'MAINTENANCE_OVERDUE',
@@ -164,7 +164,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 168,
-    template: 'Olá, {clientName}! A manutenção *{maintenanceLabel}* do veículo {plate} está vencida.\nNível: {alertLabel}.\nPrevisão: {nextDate} ou {nextKm}.\nAgende agora: {portalUrl}',
+    template: 'Olá, {clientName}! Atenção: a manutenção *{maintenanceLabel}* do {plate} está vencida.\nPrevisão: {nextDate} ou {nextKm}.\nAgende agora: {portalUrl}',
   },
   {
     key: 'PROFILE_WHATSAPP_UPDATED',
@@ -173,7 +173,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 12,
-    template: 'Ola, {clientName}! Confirmamos a atualizacao do seu WhatsApp para {newWhatsapp}. Se voce nao reconhece esta alteracao, entre em contato com a JR Auto Parts.',
+    template: 'Olá, {clientName}! Seu WhatsApp foi atualizado para {newWhatsapp}. Se não foi você, entre em contato conosco imediatamente.',
   },
   {
     key: 'PROFILE_EMAIL_UPDATED',
@@ -182,7 +182,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 12,
-    template: 'Ola, {clientName}! Confirmamos a atualizacao do seu email para {newEmail}. Se voce nao reconhece esta alteracao, entre em contato com a JR Auto Parts.',
+    template: 'Olá, {clientName}! Seu e-mail foi atualizado para {newEmail}. Se não foi você, entre em contato conosco imediatamente.',
   },
   {
     key: 'PROFILE_UPDATED',
@@ -191,7 +191,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 12,
-    template: 'Ola, {clientName}! Seu cadastro foi atualizado com sucesso na JR Auto Parts. Portal: {portalUrl}',
+    template: 'Olá, {clientName}! Seu cadastro foi atualizado. Acesse o portal: {portalUrl}',
   },
   {
     key: 'TRACKING_BILLING_UPCOMING',
@@ -200,7 +200,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 20,
-    template: 'Ola, {clientName}. A mensalidade de rastreamento {referenceMonth} do veiculo {plate} vence em {dueDate}. Valor: R$ {amount}.',
+    template: 'Olá, {clientName}! A mensalidade de rastreamento ({referenceMonth}) do {plate} vence em {dueDate}. Valor: R$ {amount}.',
   },
   {
     key: 'TRACKING_BILLING_LIGHT',
@@ -209,7 +209,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 20,
-    template: 'Ola, {clientName}. Mensalidade {referenceMonth} do veiculo {plate} esta em atraso ({daysOverdue} dia(s)). Valor: R$ {amount}. Vencimento: {dueDate}.',
+    template: 'Olá, {clientName}! A mensalidade {referenceMonth} do {plate} está em atraso ({daysOverdue} dias). Valor: R$ {amount}. Regularize em breve.',
   },
   {
     key: 'TRACKING_BILLING_INTENSIVE',
@@ -218,7 +218,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 20,
-    template: 'Ola, {clientName}. Atencao: mensalidade {referenceMonth} do veiculo {plate} segue em aberto ({daysOverdue} dias). Valor: R$ {amount}. Regularize com a JR Auto Parts.',
+    template: 'Olá, {clientName}! Atenção: a mensalidade {referenceMonth} do {plate} segue em aberto há {daysOverdue} dias. Valor: R$ {amount}. Entre em contato para regularizar.',
   },
   {
     key: 'TRACKING_BILLING_CRITICAL',
@@ -227,7 +227,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 20,
-    template: 'Ola, {clientName}. Seu contrato de rastreamento do veiculo {plate} esta em atraso critico ({daysOverdue} dias). Valor pendente: R$ {amount}.',
+    template: 'Olá, {clientName}! Seu contrato de rastreamento do {plate} está em atraso crítico ({daysOverdue} dias). Valor pendente: R$ {amount}. Regularize para evitar suspensão.',
   },
   {
     key: 'TRACKING_BILLING_RECOVERY',
@@ -236,7 +236,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 20,
-    template: 'Ola, {clientName}. Contrato de rastreamento do veiculo {plate} com atraso superior a 90 dias ({daysOverdue} dias). Entre em contato para evitar medidas de retirada do equipamento.',
+    template: 'Olá, {clientName}! O contrato de rastreamento do {plate} está em atraso há {daysOverdue} dias. Entre em contato urgente para evitar retirada do equipamento.',
   },
   {
     key: 'TRACKING_INSTALL_DONE',
@@ -245,7 +245,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 1,
-    template: 'OlÃ¡ {clientName}, o rastreador foi instalado com sucesso no veÃ­culo {plate} (modelo {model}). Em caso de dÃºvidas, entre em contato conosco.',
+    template: 'Olá, {clientName}! O rastreador foi instalado com sucesso no {plate} ({model}). Qualquer dúvida, estamos à disposição.',
   },
   {
     key: 'TRACKING_MAINTENANCE_DONE',
@@ -254,7 +254,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 1,
-    template: 'OlÃ¡ {clientName}, a manutenÃ§Ã£o do rastreador do veÃ­culo {plate} (modelo {model}) foi concluÃ­da com sucesso.',
+    template: 'Olá, {clientName}! A manutenção do rastreador do {plate} ({model}) foi concluída. Tudo funcionando!',
   },
   {
     key: 'TRACKING_REMOVAL_DONE',
@@ -263,7 +263,7 @@ const DEFAULT_EVENTS = [
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 1,
-    template: 'OlÃ¡ {clientName}, o rastreador do veÃ­culo {plate} (modelo {model}) foi retirado. Em caso de dÃºvidas, estamos Ã  disposiÃ§Ã£o.',
+    template: 'Olá, {clientName}! O rastreador do {plate} ({model}) foi retirado. Obrigado pela confiança!',
   },
 ];
 
