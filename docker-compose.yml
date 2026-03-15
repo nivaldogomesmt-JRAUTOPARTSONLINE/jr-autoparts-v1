@@ -9,6 +9,40 @@ services:
       - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/init-evolution-db.sql:/docker-entrypoint-initdb.d/init-evolution-db.sql:ro
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  evolution-api:
+    image: evoapicloud/evolution-api:v2.3.7
+    ports:
+      - "8087:8080"
+    depends_on:
+      - db
+      - redis
+    environment:
+      SERVER_URL: http://localhost:8087
+      AUTHENTICATION_TYPE: apikey
+      AUTHENTICATION_API_KEY: jr-autoparts-evo-global-key-change-me
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://postgres:postgres@db:5432/evolution
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://redis:6379/0
+      LOG_LEVEL: WARN
+    volumes:
+      - evolution_instances:/evolution/instances
+    restart: unless-stopped
 
   backend:
     build: ./backend
@@ -23,6 +57,11 @@ services:
       JWT_SECRET: jrautoparts-docker-dev-secret
       FRONTEND_URL: http://localhost:8080
       PORT: "3001"
+      WHATSAPP_PROVIDER: evolution
+      EVOLUTION_API_URL: http://evolution-api:8080
+      EVOLUTION_API_KEY: jr-autoparts-evo-global-key-change-me
+      EVOLUTION_INSTANCE_NAME: jrautoparts
+      EVOLUTION_WEBHOOK_URL: http://backend:3001/api/webhooks/evolution
 
   frontend:
     build: ./frontend
@@ -33,3 +72,5 @@ services:
 
 volumes:
   pgdata:
+  redisdata:
+  evolution_instances:

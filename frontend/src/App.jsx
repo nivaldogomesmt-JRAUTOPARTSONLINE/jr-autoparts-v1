@@ -29,6 +29,7 @@ import ReportsPage  from './pages/reports/ReportsPage';
 import DeliveriesPage from './pages/deliveries/DeliveriesPage';
 import IntegrationsHubPage from './pages/integrations/IntegrationsHubPage';
 import EfiBoletoTestPage from './pages/integrations/EfiBoletoTestPage';
+import EvolutionWhatsAppPage from './pages/integrations/EvolutionWhatsAppPage';
 import NotificationCenterPage from './pages/integrations/NotificationCenterPage';
 
 import PortalLogin from './pages/portal/PortalLogin';
@@ -108,6 +109,7 @@ function AppRoutes() {
         <Route path="entregas" element={<ActionRoute action="module:deliveries:view"><DeliveriesPage /></ActionRoute>} />
         <Route path="integracoes" element={<ActionRoute action="module:integrations:view"><IntegrationsHubPage /></ActionRoute>} />
         <Route path="integracoes/efi-teste" element={<ActionRoute action="module:integrations:view"><EfiBoletoTestPage /></ActionRoute>} />
+        <Route path="integracoes/evolution-whatsapp" element={<ActionRoute action="adminOnly"><EvolutionWhatsAppPage /></ActionRoute>} />
         <Route path="integracoes/notificacoes" element={<ActionRoute action="adminOnly"><NotificationCenterPage /></ActionRoute>} />
         <Route path="notificacoes"  element={<ActionRoute action="adminOnly"><NotificationCenterPage /></ActionRoute>} />
         <Route path="importacoes"   element={<ActionRoute action="module:integrations:view"><IntegrationsHubPage /></ActionRoute>} />
