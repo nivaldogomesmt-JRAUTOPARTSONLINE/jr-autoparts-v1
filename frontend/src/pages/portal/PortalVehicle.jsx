@@ -21,6 +21,7 @@ export default function PortalVehicle() {
   const [orders, setOrders] = useState([]);
   const [maintenance, setMaintenance] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [trackingDevices, setTrackingDevices] = useState([]);
 
   useEffect(() => {
     const load = async () => {
@@ -34,6 +35,7 @@ export default function PortalVehicle() {
           setVehicle(d.vehicle || d);
           setOrders(d.orders || []);
           setMaintenance(d.maintenance || []);
+          setTrackingDevices(d.trackingDevices || []);
         }
       } catch (e) { /* silent */ }
       finally { setLoading(false); }
@@ -43,15 +45,17 @@ export default function PortalVehicle() {
 
   const st = vehicle?.maintenance_status;
   const statusConf = {
-    urgencia: { color: 'var(--danger)',  bg: '#fef2f2', label: 'Manutenção Vencida',  icon: '🔴' },
-    atencao:  { color: 'var(--warning)', bg: '#fffbeb', label: 'Próxima Manutenção',  icon: '🟡' },
-    em_dia:   { color: 'var(--success)', bg: '#f0fdf4', label: 'Em Dia',               icon: '✅' },
+    urgencia: { color: 'var(--danger)',  bg: '#fef2f2', label: 'ManutenÃ§Ã£o Vencida',  icon: 'ð´' },
+    atencao:  { color: 'var(--warning)', bg: '#fffbeb', label: 'PrÃ³xima ManutenÃ§Ã£o',  icon: 'ð¡' },
+    em_dia:   { color: 'var(--success)', bg: '#f0fdf4', label: 'Em Dia',               icon: 'â' },
   };
   const sc = statusConf[st] || statusConf.em_dia;
 
   const alerts = maintenance.filter(m => m.status === 'vencida' || m.status === 'atencao');
   const totalSpent = orders.reduce((s, o) => s + (o.total || 0), 0);
   const openOS = orders.filter(o => !['Entregue','Finalizado','Cancelado'].includes(o.status));
+  const RASTREK_BASE_URL = 'https://painel.rastrek.com.br';
+  const activeDevice = trackingDevices.find(d => d.status === 'ACTIVE') || null;
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
@@ -59,20 +63,20 @@ export default function PortalVehicle() {
       <header style={{ background: 'var(--primary)', padding: '14px 24px', display: 'flex', alignItems: 'center', gap: 12 }}>
         <button onClick={() => navigate('/portal/dashboard')}
           style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: 8, cursor: 'pointer', fontSize: 16 }}>
-          ←
+          â
         </button>
         {BRAND.logo && <img src={BRAND.logo} alt="" style={{ width: 28, height: 28, borderRadius: 5, background: '#fff', padding: 2 }} />}
-        <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>Detalhe do Veículo</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>Detalhe do VeÃ­culo</div>
       </header>
 
       {loading ? (
         <div className="loading"><div className="spinner" /></div>
       ) : !vehicle ? (
-        <div className="empty-state"><div className="empty-state-text">Veículo não encontrado</div></div>
+        <div className="empty-state"><div className="empty-state-text">VeÃ­culo nÃ£o encontrado</div></div>
       ) : (
         <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 16px' }}>
 
-          {/* Card principal do veículo */}
+          {/* Card principal do veÃ­culo */}
           <div className="card" style={{ marginBottom: 20, borderTop: `4px solid ${sc.color}` }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
               <div>
@@ -80,7 +84,7 @@ export default function PortalVehicle() {
                   {vehicle.plate}
                 </div>
                 <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-secondary)', marginTop: 4 }}>
-                  {vehicle.brand} {vehicle.model} {vehicle.year && `· ${vehicle.year}`}
+                  {vehicle.brand} {vehicle.model} {vehicle.year && `Â· ${vehicle.year}`}
                 </div>
                 {vehicle.color && <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>{vehicle.color}</div>}
               </div>
@@ -107,11 +111,11 @@ export default function PortalVehicle() {
             </div>
           </div>
 
-          {/* Alertas de manutenção */}
+          {/* Alertas de manutenÃ§Ã£o */}
           {alerts.length > 0 && (
             <div style={{ marginBottom: 20 }}>
               <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--danger)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                ⚠️ Atenção neste veículo
+                â ï¸ AtenÃ§Ã£o neste veÃ­culo
               </h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {alerts.map((m, i) => (
@@ -121,14 +125,14 @@ export default function PortalVehicle() {
                     borderRadius: 10, padding: '12px 16px',
                     display: 'flex', alignItems: 'center', gap: 12
                   }}>
-                    <span style={{ fontSize: 20 }}>{m.status === 'vencida' ? '🔴' : '🟡'}</span>
+                    <span style={{ fontSize: 20 }}>{m.status === 'vencida' ? 'ð´' : 'ð¡'}</span>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 700, fontSize: 13, color: m.status === 'vencida' ? '#991b1b' : '#92400e' }}>{m.name}</div>
                       <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
-                        {m.status === 'vencida' ? `Vencida: ${m.due_date ? new Date(m.due_date).toLocaleDateString('pt-BR') : '—'}` : `Previsto: ${m.due_date ? new Date(m.due_date).toLocaleDateString('pt-BR') : '—'}`}
+                        {m.status === 'vencida' ? `Vencida: ${m.due_date ? new Date(m.due_date).toLocaleDateString('pt-BR') : 'â'}` : `Previsto: ${m.due_date ? new Date(m.due_date).toLocaleDateString('pt-BR') : 'â'}`}
                       </div>
                     </div>
-                    <a href={`https://wa.me/55${(BRAND.phone||'').replace(/D/g,'')}?text=Olá! Preciso agendar manutenção do veículo ${vehicle.plate}: ${m.name}`}
+                    <a href={`https://wa.me/55${(BRAND.phone||'').replace(/D/g,'')}?text=OlÃ¡! Preciso agendar manutenÃ§Ã£o do veÃ­culo ${vehicle.plate}: ${m.name}`}
                       target="_blank" rel="noreferrer"
                       style={{ background: '#16a34a', color: '#fff', padding: '6px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600, textDecoration: 'none', flexShrink: 0 }}>
                       Agendar
@@ -139,29 +143,69 @@ export default function PortalVehicle() {
             </div>
           )}
 
-          {/* Ações rápidas */}
+          {/* AÃ§Ãµes rÃ¡pidas */}
           <div style={{ display: 'flex', gap: 10, marginBottom: 24, flexWrap: 'wrap' }}>
-            <a href={`https://wa.me/55${(BRAND.phone||'').replace(/D/g,'')}?text=Olá! Preciso de um serviço para o veículo ${vehicle.plate}`}
+            <a href={`https://wa.me/55${(BRAND.phone||'').replace(/D/g,'')}?text=OlÃ¡! Preciso de um serviÃ§o para o veÃ­culo ${vehicle.plate}`}
               target="_blank" rel="noreferrer"
               style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, padding: '12px 16px', background: '#fff', border: '1.5px solid var(--border)', borderRadius: 10, fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', textDecoration: 'none', cursor: 'pointer', minWidth: 75 }}>
-              <span style={{ fontSize: 20 }}>💬</span> WhatsApp
+              <span style={{ fontSize: 20 }}>ð¬</span> WhatsApp
             </a>
-            <a href={`https://wa.me/55${(BRAND.phone||'').replace(/D/g,'')}?text=Olá! Gostaria de agendar revisão do veículo ${vehicle.plate}`}
+            <a href={`https://wa.me/55${(BRAND.phone||'').replace(/D/g,'')}?text=OlÃ¡! Gostaria de agendar revisÃ£o do veÃ­culo ${vehicle.plate}`}
               target="_blank" rel="noreferrer"
               style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, padding: '12px 16px', background: '#fff', border: '1.5px solid var(--border)', borderRadius: 10, fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', textDecoration: 'none', cursor: 'pointer', minWidth: 75 }}>
-              <span style={{ fontSize: 20 }}>📅</span> Agendar
+              <span style={{ fontSize: 20 }}>ð</span> Agendar
             </a>
           </div>
 
-          {/* Histórico de OS */}
+          {/* Rastreamento */}
+          {activeDevice && (
+            <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 18px', marginBottom: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}>
+                  <span style={{ width: 3, height: 16, background: 'var(--primary)', borderRadius: 2, display: 'inline-block' }} />
+                  Rastreamento
+                </h2>
+                <span style={{ background: '#f0fdf4', color: '#15803d', borderRadius: 20, padding: '3px 10px', fontSize: 12, fontWeight: 700 }}>
+                  🟢 Ativo
+                </span>
+              </div>
+              {activeDevice.model && (
+                <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 14 }}>
+                  {activeDevice.model}
+                  {activeDevice.installedAt && ` · instalado em ${new Date(activeDevice.installedAt).toLocaleDateString('pt-BR')}`}
+                </div>
+              )}
+              <a
+                href={`${RASTREK_BASE_URL}?q=${encodeURIComponent(vehicle?.plate || '')}`}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  background: 'var(--primary)',
+                  color: '#fff',
+                  padding: '9px 18px',
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                }}
+              >
+                🔗 Abrir rastreamento
+              </a>
+            </div>
+          )}
+
+          {/* HistÃ³rico de OS */}
           <div>
             <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ width: 3, height: 16, background: 'var(--primary)', borderRadius: 2, display: 'inline-block' }} />
-              Histórico de Ordens de Serviço
+              HistÃ³rico de Ordens de ServiÃ§o
             </h2>
             {orders.length === 0 ? (
               <div className="empty-state" style={{ padding: '28px 16px' }}>
-                <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
+                <div style={{ fontSize: 28, marginBottom: 8 }}>ð</div>
                 <div style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Nenhuma OS encontrada</div>
               </div>
             ) : (
@@ -177,7 +221,7 @@ export default function PortalVehicle() {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontWeight: 600, fontSize: 13 }}>OS #{o.id}</div>
                         <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 1 }}>
-                          {o.updated_at ? new Date(o.updated_at).toLocaleDateString('pt-BR') : '—'}
+                          {o.updated_at ? new Date(o.updated_at).toLocaleDateString('pt-BR') : 'â'}
                         </div>
                       </div>
                       <div style={{ textAlign: 'right', flexShrink: 0 }}>
