@@ -20,7 +20,7 @@ const PROFILE_PRESETS = {
     permissions: { canAdd: true, canEdit: true, canDelete: false, canManageUsers: false },
   },
   MECHANIC: {
-    label: 'Mecanico',
+    label: 'Mecânico',
     permissions: { canAdd: true, canEdit: true, canDelete: false, canManageUsers: false },
   },
   STOCK_KEEPER: {
@@ -44,8 +44,16 @@ const PROFILE_PRESETS = {
     permissions: { canAdd: true, canEdit: true, canDelete: false, canManageUsers: false },
   },
   RENTAL: {
-    label: 'Locacao',
+    label: 'Locação',
     permissions: { canAdd: true, canEdit: true, canDelete: false, canManageUsers: false },
+  },
+  COBRADOR: {
+    label: 'Cobrança',
+    permissions: { canAdd: false, canEdit: false, canDelete: false, canManageUsers: false },
+  },
+  ENTREGADOR: {
+    label: 'Entregador',
+    permissions: { canAdd: false, canEdit: true,  canDelete: false, canManageUsers: false },
   },
   CUSTOM: {
     label: 'Personalizado',
@@ -56,13 +64,13 @@ const PROFILE_PRESETS = {
 const ACCESS_MODULES = [
   { key: 'dashboard', label: 'Dashboard' },
   { key: 'clients', label: 'Clientes' },
-  { key: 'vehicles', label: 'Veiculos' },
+  { key: 'vehicles', label: 'Veículos' },
   { key: 'products', label: 'Produtos' },
-  { key: 'services', label: 'Servicos' },
-  { key: 'serviceOrders', label: 'Ordens de Servico' },
+  { key: 'services', label: 'Serviços' },
+  { key: 'serviceOrders', label: 'Ordens de Serviço' },
   { key: 'deliveries', label: 'Entregas/Pedidos' },
   { key: 'tracking', label: 'Rastreamento' },
-  { key: 'integrations', label: 'Integracoes' },
+  { key: 'integrations', label: 'Integrações' },
   { key: 'collaborators', label: 'Colaboradores' },
 ];
 
@@ -75,6 +83,17 @@ const ACCESS_ACTIONS = [
   { key: 'export', label: 'Exportar' },
   { key: 'approve', label: 'Aprovar' },
   { key: 'changeStatus', label: 'Alterar status' },
+];
+
+const ACCESS_PROFILES = [
+  { value: 'ADMIN_TOTAL',  label: 'Admin Total'   },
+  { value: 'GESTAO',       label: 'Gestão'         },
+  { value: 'OPERACIONAL',  label: 'Operacional'   },
+  { value: 'FINANCEIRO',   label: 'Financeiro'    },
+  { value: 'COMERCIAL',    label: 'Comercial'     },
+  { value: 'TECNICO',      label: 'Técnico'        },
+  { value: 'LEITURA',      label: 'Leitura'       },
+  { value: 'CUSTOM',       label: 'Personalizado' },
 ];
 
 const DEFAULT_CREATE = {
@@ -215,6 +234,9 @@ export default function CollaboratorsPage() {
   const [accessHistory, setAccessHistory] = useState([]);
   const [accessReason, setAccessReason] = useState('');
   const [accessForm, setAccessForm] = useState(() => normalizeAccessProfile({}, { canAdd: true, canEdit: true, canDelete: false, canManageUsers: false }));
+  const [filterText,   setFilterText]   = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterRole,   setFilterRole]   = useState('');
 
   const canCreateAdmin = isAdmin();
 
@@ -228,6 +250,17 @@ export default function CollaboratorsPage() {
 
     return [{ value: 'EMPLOYEE', label: 'Colaborador' }];
   }, [canCreateAdmin]);
+
+  const clearFilters = () => { setFilterText(''); setFilterStatus(''); setFilterRole(''); };
+
+  const filteredItems = useMemo(() => items.filter((item) => {
+    const txt = filterText.toLowerCase();
+    const matchText   = !filterText   || item.name.toLowerCase().includes(txt) || (item.email||'').toLowerCase().includes(txt);
+    const matchStatus = !filterStatus || (filterStatus === 'active' ? item.active : !item.active);
+    const matchRole   = !filterRole   || item.role === filterRole;
+    return matchText && matchStatus && matchRole;
+  }), [items, filterText, filterStatus, filterRole]);
+
 
   const profileOptions = useMemo(
     () => Object.entries(PROFILE_PRESETS).map(([value, cfg]) => ({ value, label: cfg.label })),
@@ -456,14 +489,17 @@ export default function CollaboratorsPage() {
     <div>
       <div className="page-header">
         <div>
-          <div className="page-title">Colaboradores e Permissoes</div>
-          <div className="page-subtitle">Fun��o/cargo, perfil de acesso, permiss�es detalhadas por m�dulo e hist�rico de altera��es</div>
+          <div className="page-title">Colaboradores e Permissões</div>
+          <div className="page-subtitle">Função/cargo, perfil de acesso, permissões detalhadas por módulo e histórico de alterações</div>
         </div>
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
         <h3 style={{ marginBottom: 10 }}>Novo colaborador</h3>
         <form onSubmit={submitCreate}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
+            Dados pessoais e acesso
+          </div>
           <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
             <input
               className="form-control"
@@ -508,11 +544,14 @@ export default function CollaboratorsPage() {
             </select>
           </div>
 
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginTop: 8, marginBottom: 4 }}>
+            Permissões básicas
+          </div>
           <div style={{ display: 'flex', gap: 16, marginTop: 12, flexWrap: 'wrap' }}>
             <label><input type="checkbox" checked={createForm.canAdd} onChange={(e) => setCreateForm({ ...createForm, accessProfile: 'CUSTOM', canAdd: e.target.checked })} /> Adicionar</label>
             <label><input type="checkbox" checked={createForm.canEdit} onChange={(e) => setCreateForm({ ...createForm, accessProfile: 'CUSTOM', canEdit: e.target.checked })} /> Editar</label>
             <label><input type="checkbox" checked={createForm.canDelete} onChange={(e) => setCreateForm({ ...createForm, accessProfile: 'CUSTOM', canDelete: e.target.checked })} /> Excluir</label>
-            <label><input type="checkbox" checked={createForm.canManageUsers} disabled={!canCreateAdmin} onChange={(e) => setCreateForm({ ...createForm, accessProfile: 'CUSTOM', canManageUsers: e.target.checked })} /> Gerenciar usuarios</label>
+            <label><input type="checkbox" checked={createForm.canManageUsers} disabled={!canCreateAdmin} onChange={(e) => setCreateForm({ ...createForm, accessProfile: 'CUSTOM', canManageUsers: e.target.checked })} /> Gerenciar usuários</label>
           </div>
 
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
@@ -566,11 +605,11 @@ export default function CollaboratorsPage() {
               <label><input type="checkbox" checked={editForm.canAdd} onChange={(e) => setEditForm({ ...editForm, accessProfile: 'CUSTOM', canAdd: e.target.checked })} /> Adicionar</label>
               <label><input type="checkbox" checked={editForm.canEdit} onChange={(e) => setEditForm({ ...editForm, accessProfile: 'CUSTOM', canEdit: e.target.checked })} /> Editar</label>
               <label><input type="checkbox" checked={editForm.canDelete} onChange={(e) => setEditForm({ ...editForm, accessProfile: 'CUSTOM', canDelete: e.target.checked })} /> Excluir</label>
-              <label><input type="checkbox" checked={editForm.canManageUsers} disabled={!canCreateAdmin} onChange={(e) => setEditForm({ ...editForm, accessProfile: 'CUSTOM', canManageUsers: e.target.checked })} /> Gerenciar usuarios</label>
+              <label><input type="checkbox" checked={editForm.canManageUsers} disabled={!canCreateAdmin} onChange={(e) => setEditForm({ ...editForm, accessProfile: 'CUSTOM', canManageUsers: e.target.checked })} /> Gerenciar usuários</label>
             </div>
 
             <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-              <button className="btn btn-primary" disabled={savingEdit}>{savingEdit ? 'Salvando...' : 'Salvar alteracoes'}</button>
+              <button className="btn btn-primary" disabled={savingEdit}>{savingEdit ? 'Salvando...' : 'Salvar alterações'}</button>
               <button type="button" className="btn btn-ghost" onClick={cancelEdit}>Cancelar</button>
             </div>
           </form>
@@ -583,26 +622,74 @@ export default function CollaboratorsPage() {
         ) : items.length === 0 ? (
           <div className="empty-state"><div className="empty-state-text">Nenhum colaborador encontrado</div></div>
         ) : (
+
+      {/* ─── Filtros ─── */}
+      <div className="card" style={{ marginBottom: 16, padding: '12px 16px' }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <input
+            className="form-control"
+            style={{ maxWidth: 240, flex: '1 1 200px' }}
+            placeholder="Buscar por nome ou e-mail…"
+            value={filterText}
+            onChange={e => setFilterText(e.target.value)}
+          />
+          <select className="form-control" style={{ maxWidth: 200 }} value={filterRole} onChange={e => setFilterRole(e.target.value)}>
+            <option value="">Todos os níveis</option>
+            <option value="ADMIN">Administrador</option>
+            <option value="EMPLOYEE">Colaborador</option>
+          </select>
+          <select className="form-control" style={{ maxWidth: 180 }} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+            <option value="">Todos os status</option>
+            <option value="active">Ativos</option>
+            <option value="inactive">Inativos</option>
+          </select>
+          {(filterText || filterRole || filterStatus) && (
+            <button className="btn btn-ghost btn-sm" onClick={clearFilters}>
+              ✕ Limpar filtros
+            </button>
+          )}
+        </div>
+      </div>
+
           <table className="table">
             <thead>
               <tr>
-                <th>Nome</th>
-                <th>Perfil</th>
-                <th>Status</th>
-                <th>Permissoes</th>
-                <th></th>
+          <th>Colaborador</th>
+          <th>Tipo de usuário</th>
+          <th>Perfil de Acesso</th>
+          <th>Status</th>
+          <th>Permissões</th>
+          <th>Ações</th>
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
+              {filteredItems.map((item) => (
                 <tr key={item.id}>
                   <td className="text-sm">
                     <strong>{item.name}</strong>
                     <div className="text-muted">{item.email}</div>
                   </td>
-                  <td className="text-sm">{toRoleLabel(item.role)}</td>
-                  <td className="text-sm">{item.active ? 'Ativo' : 'Inativo'}</td>
-                  <td className="text-sm">{permissionsLabel(item)}</td>
+          <td className="text-sm">
+            <span className="badge badge-blue" style={{ fontWeight: 500, fontSize: 11 }}>
+              {toRoleLabel(item.role)}
+            </span>
+          </td>
+          <td className="text-sm" style={{ color: 'var(--text-muted)' }}>
+            {item.permissions?.accessProfile
+              ? (ACCESS_PROFILES.find(p => p.value === item.permissions.accessProfile)?.label || item.permissions.accessProfile)
+              : 'Padrão'}
+          </td>
+          <td>
+            <span className={`badge ${item.active ? 'badge-green' : 'badge-gray'}`}>
+              {item.active ? 'Ativo' : 'Inativo'}
+            </span>
+          </td>
+          <td className="text-sm" style={{ letterSpacing: 2 }}>
+            {item.permissions?.canAdd && <span title="Cadastrar" style={{ color: 'var(--primary)' }}>✚</span>}
+            {item.permissions?.canEdit && <span title="Editar">✏️</span>}
+            {item.permissions?.canDelete && <span title="Excluir" style={{ color: 'var(--danger)' }}>🗑</span>}
+            {item.permissions?.canManageUsers && <span title="Gerenciar usuários">👥</span>}
+          </td>
                   <td>
                     <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                       <button className="btn btn-ghost btn-sm" onClick={() => startEdit(item)}>Editar</button>
@@ -623,7 +710,7 @@ export default function CollaboratorsPage() {
         <div className="modal-overlay" onClick={closeAccessModal}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 1100, width: '98%' }}>
             <div className="modal-header">
-              <div className="modal-title">Permissoes detalhadas: {accessTarget.name}</div>
+              <div className="modal-title">Permissões detalhadas: {accessTarget.name}</div>
               <button className="btn btn-ghost btn-sm" onClick={closeAccessModal}>Fechar</button>
             </div>
 
@@ -634,12 +721,12 @@ export default function CollaboratorsPage() {
                 <>
                   <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', marginBottom: 12 }}>
                     <div>
-                      <label className="form-label">Funcao/Cargo</label>
+                      <label className="form-label">Função/Cargo</label>
                       <input
                         className="form-control"
                         value={accessForm.jobTitle}
                         onChange={(e) => setAccessForm((prev) => ({ ...prev, jobTitle: e.target.value }))}
-                        placeholder="Ex.: Consultor tecnico"
+                        placeholder="Ex.: Consultor técnico"
                       />
                     </div>
 
@@ -658,22 +745,22 @@ export default function CollaboratorsPage() {
                   </div>
 
                   <div className="card" style={{ marginBottom: 12, padding: 12 }}>
-                    <div style={{ fontWeight: 700, marginBottom: 8 }}>Permissoes sensiveis</div>
+                    <div style={{ fontWeight: 700, marginBottom: 8 }}>Permissões sensiveis</div>
                     <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                       <label><input type="checkbox" checked={!!accessForm.sensitive?.viewValues} onChange={(e) => setAccessForm((prev) => ({ ...prev, sensitive: { ...prev.sensitive, viewValues: e.target.checked }, accessProfile: 'CUSTOM' }))} /> Ver valores</label>
                       <label><input type="checkbox" checked={!!accessForm.sensitive?.viewCost} onChange={(e) => setAccessForm((prev) => ({ ...prev, sensitive: { ...prev.sensitive, viewCost: e.target.checked }, accessProfile: 'CUSTOM' }))} /> Ver custo</label>
                       <label><input type="checkbox" checked={!!accessForm.sensitive?.viewMargin} onChange={(e) => setAccessForm((prev) => ({ ...prev, sensitive: { ...prev.sensitive, viewMargin: e.target.checked }, accessProfile: 'CUSTOM' }))} /> Ver margem</label>
-                      <label><input type="checkbox" checked={!!accessForm.sensitive?.manageUsers} disabled={!canCreateAdmin} onChange={(e) => setAccessForm((prev) => ({ ...prev, sensitive: { ...prev.sensitive, manageUsers: e.target.checked }, accessProfile: 'CUSTOM' }))} /> Gerenciar usuarios</label>
+                      <label><input type="checkbox" checked={!!accessForm.sensitive?.manageUsers} disabled={!canCreateAdmin} onChange={(e) => setAccessForm((prev) => ({ ...prev, sensitive: { ...prev.sensitive, manageUsers: e.target.checked }, accessProfile: 'CUSTOM' }))} /> Gerenciar usuários</label>
                     </div>
                   </div>
 
                   <div className="card" style={{ marginBottom: 12, padding: 12 }}>
-                    <div style={{ fontWeight: 700, marginBottom: 8 }}>Permissoes por modulo e acao</div>
+                    <div style={{ fontWeight: 700, marginBottom: 8 }}>Permissões por modulo e acao</div>
                     <div className="table-container" style={{ maxHeight: 340, overflowY: 'auto' }}>
                       <table className="table">
                         <thead>
                           <tr>
-                            <th>Modulo</th>
+                            <th>Módulo</th>
                             {ACCESS_ACTIONS.map((action) => <th key={action.key}>{action.label}</th>)}
                           </tr>
                         </thead>
@@ -703,7 +790,7 @@ export default function CollaboratorsPage() {
                   </div>
 
                   <div className="card" style={{ marginBottom: 12, padding: 12 }}>
-                    <label className="form-label">Motivo da alteracao (opcional)</label>
+                    <label className="form-label">Motivo da alteração (opcional)</label>
                     <textarea
                       className="form-control"
                       rows={2}
