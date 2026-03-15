@@ -217,6 +217,7 @@ export default function ReportsPage() {
         <button className="btn btn-primary" onClick={() => { setEditing(null); setModalOpen(true); }}>
           + Novo Relatório
         </button>
+         <button className="btn btn-ghost btn-sm no-print" onClick={() => window.print()}>🖨️ Imprimir</button>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 24 }}>
