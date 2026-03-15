@@ -195,6 +195,7 @@ export default function VehicleDetail() {
           </button>
           <Link to={`/veiculos/${id}/editar`} className="btn btn-outline btn-sm">Editar</Link>
           <Link to={`/os/nova?vehicleId=${id}`} className="btn btn-primary btn-sm">+ Nova OS</Link>
+           <button className="btn btn-ghost btn-sm no-print" onClick={() => window.print()}>🖨️ Imprimir</button>
           {can('delete') ? (
             <button className="btn btn-danger btn-sm" onClick={removeVehicle} disabled={deleting}>
               {deleting ? 'Excluindo...' : 'Excluir'}
