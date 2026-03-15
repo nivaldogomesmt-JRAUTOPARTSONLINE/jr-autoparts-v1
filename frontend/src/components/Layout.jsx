@@ -23,6 +23,7 @@ const NAV = [
 
   { section: 'INTEGRAÇÕES' },
   { code: '🔌', label: 'Integrações', path: '/integracoes' },
+  { code: '🧪', label: 'Teste Efí Boleto', path: '/integracoes/efi-teste' },
   { code: '📥', label: 'Importações', path: '/importacoes' },
   { code: '📤', label: 'Exportações', path: '/exportacoes' },
   { code: '📄', label: 'Logs',                  path: '/logs' },

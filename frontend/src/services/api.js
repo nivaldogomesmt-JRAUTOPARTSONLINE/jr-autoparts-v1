@@ -198,6 +198,10 @@ export const integrationLogsAPI = {
   list: (params) => api.get('/integrations/logs', { params }),
   create: (data) => api.post('/integrations/logs', data),
 };
+
+export const efiAPI = {
+  listBoletos: (params) => api.get('/efi/boletos', { params }),
+};
 export const portalAPI = {
   me:            ()         => api.get('/portal/me'),
   updateMe:      (data)     => api.put('/portal/me', data),
