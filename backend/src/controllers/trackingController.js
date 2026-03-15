@@ -1,4 +1,6 @@
 const prisma = require('../lib/prisma');
+const { resolveNotificationPayload } = require('../services/notificationCenterService');
+const { sendWhatsAppMessageWithDedupe } = require('../services/whatsappService');
 
 const toDate = (v) => (v ? new Date(v) : null);
 
@@ -123,6 +125,14 @@ const createDevice = async (req, res) => {
 const updateDevice = async (req, res) => {
   try {
     const { clientId, vehicleId, model, imei, chipNumber, carrier, status, installedAt, notes } = req.body;
+
+    // fetch current status before update to detect real transition
+    const existing = await prisma.trackingDevice.findUnique({
+      where: { id: req.params.id },
+      select: { status: true },
+    });
+    const previousStatus = existing?.status;
+
     const updated = await prisma.trackingDevice.update({
       where: { id: req.params.id },
       data: {
@@ -137,6 +147,48 @@ const updateDevice = async (req, res) => {
         notes,
       },
     });
+
+    // dispatch WhatsApp notification only on real status transition
+    const STATUS_EVENT_MAP = {
+      ACTIVE: 'TRACKING_INSTALL_DONE',
+      MAINTENANCE: 'TRACKING_MAINTENANCE_DONE',
+      REMOVED: 'TRACKING_REMOVAL_DONE',
+    };
+    if (status && STATUS_EVENT_MAP[status] && previousStatus !== status) {
+      try {
+        const device = await prisma.trackingDevice.findUnique({
+          where: { id: req.params.id },
+          include: {
+            client: { select: { id: true, name: true, whatsapp: true } },
+            vehicle: { select: { plate: true } },
+          },
+        });
+        if (device?.client?.whatsapp) {
+          const eventKey = STATUS_EVENT_MAP[status];
+          const templateVariables = {
+            clientName: device.client.name || '',
+            plate: device.vehicle?.plate || '',
+            model: device.model || '',
+            imei: device.imei || '',
+          };
+          const preview = await resolveNotificationPayload(eventKey, null, templateVariables, 1);
+          if (preview?.enabled) {
+            await sendWhatsAppMessageWithDedupe(
+              device.clientId,
+              null,
+              device.client.whatsapp,
+              preview.content,
+              preview.dedupeHours,
+              eventKey,
+              templateVariables,
+            );
+          }
+        }
+      } catch (notifErr) {
+        console.error('[tracking-notif]', notifErr?.message);
+      }
+    }
+
     return res.json(updated);
   } catch (err) {
     return res.status(500).json({ error: 'Erro ao atualizar rastreador.' });
