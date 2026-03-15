@@ -360,4 +360,25 @@ select.form-control { appearance: none; background-image: url("data:image/svg+xm
 @media (max-width: 1100px) { .grid-4 { grid-template-columns: repeat(2, 1fr); } .grid-3 { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 768px) { .sidebar { transform: translateX(-100%); } .sidebar.open { transform: translateX(0); } .main-content { margin-left: 0; } .main-body { padding: 16px; } .form-row-2, .form-row-3 { grid-template-columns: 1fr; } .os-info-grid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 700px) { .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; } }
-@media print { .sidebar, .main-header, .no-print { display: none !important; } .main-content { margin-left: 0; } .card { box-shadow: none; border: 1px solid #ddd; } }
+@media print {
+  @page { margin: 16mm 12mm; }
+  body { print-color-adjust: exact; -webkit-print-color-adjust: exact; font-size: 12px; }
+  .sidebar, .main-header, .no-print { display: none !important; }
+  .main-content { margin-left: 0 !important; }
+  .main-body { padding: 0 !important; }
+  .card { box-shadow: none !important; border: 1px solid #ddd !important; break-inside: avoid; margin-bottom: 12px !important; }
+  .card-title { font-size: 13px !important; font-weight: 700; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; margin-bottom: 8px; }
+  .page-header { padding: 0 0 12px !important; border-bottom: 2px solid #1e3a8a; margin-bottom: 16px !important; }
+  .page-title { font-size: 18px !important; color: #1e3a8a !important; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  th, td { border: 1px solid #ddd; padding: 5px 8px; text-align: left; }
+  th { background: #f3f4f6 !important; font-weight: 700; }
+  tr:nth-child(even) { background: #fafafa !important; }
+  .badge { border: 1px solid currentColor !important; background: transparent !important; font-size: 10px !important; }
+  .btn { display: none !important; }
+  a { color: inherit !important; text-decoration: none !important; }
+  .print-block { display: block !important; }
+  .print-block-os ~ .print-block:not(.print-block-os) { display: none !important; }
+  .section { margin-bottom: 16px !important; }
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: repeat(2, 1fr) !important; gap: 8px !important; }
+}
