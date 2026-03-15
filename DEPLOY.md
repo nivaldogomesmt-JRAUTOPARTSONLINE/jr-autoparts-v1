@@ -93,6 +93,9 @@ BOTCONVERSA_API_KEY   = [do painel BotConversa]
 BOTCONVERSA_API_URL   = https://backend.botconversa.com.br/api/v1
 WHATSAPP_FROM_NUMBER  = 5565992812000
 BOT_SECRET_TOKEN      = [crie um token secreto]
+EFI_CLIENT_ID         = [Client_Id da aplicação Efí - API Cobranças]
+EFI_CLIENT_SECRET     = [Client_Secret da aplicação Efí - API Cobranças]
+EFI_ENV               = homologation
 ```
 
 **Como gerar o JWT_SECRET:**

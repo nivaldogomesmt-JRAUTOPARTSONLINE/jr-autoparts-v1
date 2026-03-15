@@ -12,7 +12,7 @@ export default defineConfig(({ mode }) => {
         // Só ativa o proxy em desenvolvimento quando VITE_API_URL não está definido
         ...(!env.VITE_API_URL && {
           '/api': {
-            target: 'http://localhost:3001',
+            target: env.VITE_PROXY_TARGET || 'http://localhost:3001',
             changeOrigin: true,
           },
         }),
