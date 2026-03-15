@@ -282,7 +282,7 @@ export default function NotificationCenterPage() {
                 return (
                   <div key={ev.key} style={{
                     background: '#fff', border: '1px solid var(--border)',
-                    borderRadius: 10, padding: '14px 16px', marginBottom: 10,
+                    borderRadius: 10, padding: '14px 16px', marginBottom: 10, borderLeft: '3px solid ' + dotColor,
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
                       <span style={{
@@ -338,7 +338,7 @@ export default function NotificationCenterPage() {
                         width: '100%', fontSize: 12, fontFamily: 'monospace',
                         border: '1px solid var(--border)', borderRadius: 6,
                         padding: '6px 8px', resize: 'vertical', boxSizing: 'border-box',
-                        background: '#fafafa',
+                        background: '#fafafa', minHeight: 52, maxHeight: 120,
                       }}
                       placeholder="Template da mensagem..."
                     />
