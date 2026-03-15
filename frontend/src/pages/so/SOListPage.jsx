@@ -66,6 +66,7 @@ export default function SOListPage() {
         <div className="page-actions">
           <button className="btn btn-primary" onClick={() => navigate('/os/nova')}>+ Nova OS</button>
           <button className="btn btn-outline btn-sm" onClick={() => navigate('/integracoes')}>Exportar</button>
+           <button className="btn btn-ghost btn-sm no-print" onClick={() => window.print()}>🖨️ Imprimir</button>
         </div>
       </div>
 
