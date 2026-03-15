@@ -65,10 +65,10 @@ export default function Layout() {
       <aside className={`sidebar${sidebarOpen ? ' open' : ''}`}>
         {/* Logo */}
         <div className="sidebar-logo">
-          {BRAND.logo ? (
-            <img src={BRAND.logo} alt={BRAND.name} className="sidebar-logo-image" />
+          {BRAND.logoUrl ? (
+            <img src={BRAND.logoUrl} alt={BRAND.name} className="sidebar-logo-image" />
           ) : (
-            <div style={{ width: 34, height: 34, borderRadius: 7, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>Ã°ÂÂÂ§</div>
+            <div style={{ width: 34, height: 34, borderRadius: 7, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#1e3a8a', flexShrink: 0 }}>JR</div>
           )}
           <div className="sidebar-logo-text">
             {BRAND.name}
@@ -98,7 +98,7 @@ export default function Layout() {
 
         {/* RodapÃÂ© */}
         <div className="sidebar-footer">
-          <div className="sidebar-user">{user?.email || 'UsuÃÂ¡rio'}</div>
+          <div className="sidebar-user">{user?.email || 'Usuário'}</div>
           <button className="btn btn-outline btn-sm w-full" onClick={handleLogout}>
             Sair
           </button>
@@ -125,7 +125,7 @@ export default function Layout() {
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              {user?.role === 'admin' ? 'Admin' : 'UsuÃÂ¡rio'}
+              {user?.role === 'admin' ? 'Admin' : 'Usuário'}
             </span>
             <div style={{
               width: 30, height: 30, borderRadius: '50%',
