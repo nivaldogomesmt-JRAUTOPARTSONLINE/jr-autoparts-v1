@@ -238,6 +238,33 @@ const DEFAULT_EVENTS = [
     dedupeHours: 20,
     template: 'Ola, {clientName}. Contrato de rastreamento do veiculo {plate} com atraso superior a 90 dias ({daysOverdue} dias). Entre em contato para evitar medidas de retirada do equipamento.',
   },
+  {
+    key: 'TRACKING_INSTALL_DONE',
+    module: 'RASTREAMENTO',
+    title: 'Instalação concluída',
+    channel: 'WHATSAPP',
+    active: true,
+    dedupeHours: 1,
+    template: 'Olá {clientName}, o rastreador foi instalado com sucesso no veículo {plate} (modelo {model}). Em caso de dúvidas, entre em contato conosco.',
+  },
+  {
+    key: 'TRACKING_MAINTENANCE_DONE',
+    module: 'RASTREAMENTO',
+    title: 'Manutenção concluída',
+    channel: 'WHATSAPP',
+    active: true,
+    dedupeHours: 1,
+    template: 'Olá {clientName}, a manutenção do rastreador do veículo {plate} (modelo {model}) foi concluída com sucesso.',
+  },
+  {
+    key: 'TRACKING_REMOVAL_DONE',
+    module: 'RASTREAMENTO',
+    title: 'Retirada concluída',
+    channel: 'WHATSAPP',
+    active: true,
+    dedupeHours: 1,
+    template: 'Olá {clientName}, o rastreador do veículo {plate} (modelo {model}) foi retirado. Em caso de dúvidas, estamos à disposição.',
+  },
 ];
 
 const ALLOWED_CHANNELS = new Set(['WHATSAPP']);
