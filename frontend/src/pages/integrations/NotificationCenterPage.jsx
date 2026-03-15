@@ -33,9 +33,9 @@ const SAMPLE_VARIABLES = {
 const MODULE_ORDER = ['OS', 'ENTREGA', 'MANUTENCAO', 'CADASTRO', 'RASTREAMENTO'];
 
 const MODULE_META = {
-  OS:           { label: 'Ordens de Serviço',  color: '#2563eb', bg: '#eff6ff' },
+  OS:           { label: 'Ordens de ServiÃ§o',  color: '#2563eb', bg: '#eff6ff' },
   ENTREGA:      { label: 'Entregas',               color: '#7c3aed', bg: '#f5f3ff' },
-  MANUTENCAO:   { label: 'Manutenção',   color: '#d97706', bg: '#fffbeb' },
+  MANUTENCAO:   { label: 'ManutenÃ§Ã£o',   color: '#d97706', bg: '#fffbeb' },
   CADASTRO:     { label: 'Cadastro',               color: '#059669', bg: '#ecfdf5' },
   RASTREAMENTO: { label: 'Rastreamento',           color: '#dc2626', bg: '#fef2f2' },
 };
@@ -64,14 +64,17 @@ const DISPATCH_SOURCE = {
   TRACKING_BILLING_INTENSIVE:           'trackingBillingService.js',
   TRACKING_BILLING_CRITICAL:            'trackingBillingService.js',
   TRACKING_BILLING_RECOVERY:            'trackingBillingService.js',
+  TRACKING_INSTALL_DONE:                'trackingController.js',
+  TRACKING_MAINTENANCE_DONE:            'trackingController.js',
+  TRACKING_REMOVAL_DONE:                'trackingController.js',
 };
 
 const TITLE_LABELS = {
   OS_STATUS_STARTED:                    'OS Iniciada',
   OS_STATUS_IN_PROGRESS:                'OS Em Andamento',
-  OS_STATUS_WAITING_PART:               'OS Aguardando Peça',
-  OS_STATUS_FINISHING:                  'OS Em Finalização',
-  OS_STATUS_DONE:                       'OS Concluída',
+  OS_STATUS_WAITING_PART:               'OS Aguardando PeÃ§a',
+  OS_STATUS_FINISHING:                  'OS Em FinalizaÃ§Ã£o',
+  OS_STATUS_DONE:                       'OS ConcluÃ­da',
   OS_STATUS_DELIVERED:                  'OS Entregue ao Cliente',
   DELIVERY_STATUS_AWAITING_DISPATCH:    'Entrega Aguardando Despacho',
   DELIVERY_STATUS_OUT_FOR_DELIVERY:     'Saiu para Entrega',
@@ -79,20 +82,23 @@ const TITLE_LABELS = {
   DELIVERY_STATUS_DELIVERY_FAILED:      'Tentativa de Entrega Falhou',
   ORDER_PHASE_CONFIRMED:                'Pedido Confirmado',
   ORDER_PHASE_PAYMENT_APPROVED:         'Pagamento Aprovado',
-  ORDER_PHASE_IN_SEPARATION:            'Pedido em Separação',
+  ORDER_PHASE_IN_SEPARATION:            'Pedido em SeparaÃ§Ã£o',
   ORDER_PHASE_SHIPPED:                  'Pedido Despachado',
   ORDER_PHASE_DELIVERED:                'Pedido Entregue',
   ORDER_PHASE_CANCELED:                 'Pedido Cancelado',
-  MAINTENANCE_DUE_SOON:                 'Manutenção Próxima do Vencimento',
-  MAINTENANCE_OVERDUE:                  'Manutenção Vencida',
+  MAINTENANCE_DUE_SOON:                 'ManutenÃ§Ã£o PrÃ³xima do Vencimento',
+  MAINTENANCE_OVERDUE:                  'ManutenÃ§Ã£o Vencida',
   PROFILE_WHATSAPP_UPDATED:             'WhatsApp do Cliente Atualizado',
   PROFILE_EMAIL_UPDATED:                'E-mail do Cliente Atualizado',
   PROFILE_UPDATED:                      'Dados do Cliente Atualizados',
-  TRACKING_BILLING_UPCOMING:            'Cobrança de Rastreamento Próxima',
-  TRACKING_BILLING_LIGHT:               'Cobrança Rastreamento — Leve',
-  TRACKING_BILLING_INTENSIVE:           'Cobrança Rastreamento — Intensiva',
-  TRACKING_BILLING_CRITICAL:            'Cobrança Rastreamento — Crítica',
-  TRACKING_BILLING_RECOVERY:            'Cobrança Rastreamento — Recuperação',
+  TRACKING_BILLING_UPCOMING:            'CobranÃ§a de Rastreamento PrÃ³xima',
+  TRACKING_BILLING_LIGHT:               'CobranÃ§a Rastreamento â Leve',
+  TRACKING_BILLING_INTENSIVE:           'CobranÃ§a Rastreamento â Intensiva',
+  TRACKING_BILLING_CRITICAL:            'CobranÃ§a Rastreamento â CrÃ­tica',
+  TRACKING_BILLING_RECOVERY:            'CobranÃ§a Rastreamento â RecuperaÃ§Ã£o',
+  TRACKING_INSTALL_DONE:                'Instalação de Rastreador Concluída',
+  TRACKING_MAINTENANCE_DONE:            'Manutenção de Rastreador Concluída',
+  TRACKING_REMOVAL_DONE:                'Retirada de Rastreador Concluída',
 };
 
 export default function NotificationCenterPage() {
@@ -205,19 +211,19 @@ export default function NotificationCenterPage() {
     <div className="page-container">
       <div className="page-header">
         <div>
-          <h1>Central de Notificações</h1>
+          <h1>Central de NotificaÃ§Ãµes</h1>
           <p className="page-subtitle">
-            {totalActive} ativo{totalActive !== 1 ? 's' : ''}{' · '}{totalDispatching} disparando{' · '}{events.length} configurados
+            {totalActive} ativo{totalActive !== 1 ? 's' : ''}{' Â· '}{totalDispatching} disparando{' Â· '}{events.length} configurados
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {feedback && (
-            <span style={{ fontSize: 13, color: feedback.startsWith('❌') ? '#dc2626' : '#16a34a' }}>
+            <span style={{ fontSize: 13, color: feedback.startsWith('â') ? '#dc2626' : '#16a34a' }}>
               {feedback}
             </span>
           )}
           <button className="btn btn-primary" onClick={saveAll} disabled={saving}>
-            {saving ? 'Salvando...' : '💾 Salvar'}
+            {saving ? 'Salvando...' : 'ð¾ Salvar'}
           </button>
         </div>
       </div>
@@ -237,13 +243,13 @@ export default function NotificationCenterPage() {
             onChange={e => setModuleFilter(e.target.value)}
             style={{ width: 190 }}
           >
-            <option value="ALL">Todos os módulos</option>
+            <option value="ALL">Todos os mÃ³dulos</option>
             {modules.map(m => (
               <option key={m} value={m}>{MODULE_META[m]?.label || m}</option>
             ))}
           </select>
           <span style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-            {totalActive} ativos · {totalDispatching} disparando
+            {totalActive} ativos Â· {totalDispatching} disparando
           </span>
         </div>
       </div>
@@ -288,17 +294,17 @@ export default function NotificationCenterPage() {
                       <span style={{
                         fontSize: 11, padding: '2px 7px', borderRadius: 99,
                         background: '#dcfce7', color: '#15803d', fontWeight: 600,
-                      }}>💬 WhatsApp</span>
+                      }}>ð¬ WhatsApp</span>
                       {isDispatching ? (
                         <span title={'Disparado em ' + dispatchFile} style={{
                           fontSize: 11, padding: '2px 7px', borderRadius: 99,
                           background: '#dcfce7', color: '#15803d', fontWeight: 600,
-                        }}>✅ Disparando</span>
+                        }}>â Disparando</span>
                       ) : (
                         <span style={{
                           fontSize: 11, padding: '2px 7px', borderRadius: 99,
                           background: '#fef9c3', color: '#854d0e', fontWeight: 600,
-                        }}>⚙️ Configurado</span>
+                        }}>âï¸ Configurado</span>
                       )}
                     </div>
 
@@ -342,7 +348,7 @@ export default function NotificationCenterPage() {
                         style={{ fontSize: 12, padding: '4px 12px', flexShrink: 0 }}
                         onClick={() => previewEvent(ev.key, ev.template)}
                       >
-                        👁 Preview
+                        ð Preview
                       </button>
                       {preview.key === ev.key && preview.text && (
                         <div style={{
