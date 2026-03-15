@@ -38,3 +38,10 @@ services:
         value: "5565992812000"
       - key: BOT_SECRET_TOKEN
         generateValue: true
+      # --- Efi (Gerencia Net) ---
+      - key: EFI_CLIENT_ID
+        sync: false
+      - key: EFI_CLIENT_SECRET
+        sync: false
+      - key: EFI_ENV
+        value: production
