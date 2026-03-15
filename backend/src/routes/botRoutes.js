@@ -15,3 +15,16 @@ router.get('/so', c.checkSO);
 router.get('/portal-link', c.clientPortalLink);
 
 module.exports = router;
+
+
+// ── Bot webhook endpoints (added by bot-impl) ────────────────────────────────
+const botWebhookController = require('../controllers/botWebhookController');
+
+router.post('/triage',                botWebhookController.triage);
+router.post('/boleto/resolve-client', botWebhookController.resolveClientForBoleto);
+router.post('/boleto/open',           botWebhookController.openBoletos);
+router.post('/service-intake',        botWebhookController.serviceIntake);
+router.post('/towing-intake',         botWebhookController.towingIntake);
+router.post('/tracking-install',      botWebhookController.trackingInstall);
+router.post('/tracking-support',      botWebhookController.trackingSupport);
+router.post('/handoff',               botWebhookController.handoff);
