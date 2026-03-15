@@ -377,11 +377,11 @@ export default function IntegrationsHubPage() {
 
       <div className="grid-2" style={{ marginBottom: 16 }}>
         <div id={SECTION_ID_BY_TAB.integracoes} className="card" style={getSectionCardStyle('integracoes')}>
-          <div className="card-title">1. Integracoes</div>
           <div className="card-title">1. Integrações</div>
-            <Link to="/mensagens" className="btn btn-outline">WhatsApp</Link>
+          <div style={{ display: 'grid', gap: 8 }}>
             <Link to="/mensagens" className="btn btn-outline">WhatsApp / BotConversa</Link>
             <Link to="/integracoes/notificacoes" className="btn btn-outline">Central de Notificações</Link>
+            <Link to="/tracking" className="btn btn-outline">Rastreamento / APIs externas</Link>
             <button type="button" className="btn btn-outline" disabled>XML / NF (via importacao)</button>
             <button type="button" className="btn btn-outline" disabled>Pedidos online / marketplaces (estrutura pronta)</button>
           </div>
