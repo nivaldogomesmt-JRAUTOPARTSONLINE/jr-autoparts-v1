@@ -4,9 +4,9 @@ import { clientsAPI, integrationLogsAPI, productsAPI, soAPI, vehiclesAPI } from 
 import useDebouncedValue from '../../hooks/useDebouncedValue';
 
 const HUB_TABS = [
-  { key: 'integracoes', label: '1. Integracoes' },
-  { key: 'importacoes', label: '2. Importacoes' },
-  { key: 'exportacoes', label: '3. Exportacoes' },
+  { key: 'integracoes', label: '1. Integrações' },
+  { key: 'importacoes', label: '2. Importações' },
+  { key: 'exportacoes', label: '3. Exportações' },
   { key: 'logs', label: '4. Logs' },
 ];
 
@@ -26,8 +26,8 @@ function formatLogWhen(iso) {
 
 function shortStatusLabel(status) {
   if (status === 'UPDATED') return 'Atualizado';
-  if (status === 'PREVIEW') return 'Previsao';
-  if (status === 'SKIPPED_COMPLETE') return 'Ja completo';
+  if (status === 'PREVIEW') return 'Previsão';
+  if (status === 'SKIPPED_COMPLETE') return 'Já completo';
   if (status === 'NO_DATA') return 'Sem novidade';
   if (status === 'ERROR') return 'Erro';
   return status || '-';
@@ -378,17 +378,17 @@ export default function IntegrationsHubPage() {
       <div className="grid-2" style={{ marginBottom: 16 }}>
         <div id={SECTION_ID_BY_TAB.integracoes} className="card" style={getSectionCardStyle('integracoes')}>
           <div className="card-title">1. Integracoes</div>
-          <div style={{ display: 'grid', gap: 8 }}>
+          <div className="card-title">1. Integrações</div>
             <Link to="/mensagens" className="btn btn-outline">WhatsApp</Link>
-            <Link to="/integracoes/notificacoes" className="btn btn-outline">Central de notificacoes</Link>
-            <Link to="/tracking" className="btn btn-outline">Rastreamento / APIs externas</Link>
+            <Link to="/mensagens" className="btn btn-outline">WhatsApp / BotConversa</Link>
+            <Link to="/integracoes/notificacoes" className="btn btn-outline">Central de Notificações</Link>
             <button type="button" className="btn btn-outline" disabled>XML / NF (via importacao)</button>
             <button type="button" className="btn btn-outline" disabled>Pedidos online / marketplaces (estrutura pronta)</button>
           </div>
         </div>
 
         <div id={SECTION_ID_BY_TAB.importacoes} className="card" style={getSectionCardStyle('importacoes')}>
-          <div className="card-title">2. Importacoes</div>
+          <div className="card-title">2. Importações</div>
           <div style={{ display: 'grid', gap: 12 }}>
             <div>
               <div className="text-sm text-muted" style={{ marginBottom: 6 }}>Produtos via XML</div>
@@ -496,7 +496,7 @@ export default function IntegrationsHubPage() {
 
       <div className="grid-2" style={{ marginBottom: 16 }}>
         <div id={SECTION_ID_BY_TAB.exportacoes} className="card" style={getSectionCardStyle('exportacoes')}>
-          <div className="card-title">3. Exportacoes</div>
+          <div className="card-title">3. Exportações</div>
           <div style={{ display: 'grid', gap: 10 }}>
             <input
               className="form-control"
@@ -590,7 +590,7 @@ export default function IntegrationsHubPage() {
         </div>
 
         <div id={SECTION_ID_BY_TAB.logs} className="card" style={getSectionCardStyle('logs')}>
-          <div className="card-title">4. Logs de operacoes</div>
+          <div className="card-title">4. Logs de operações</div>
           <input
             className="form-control"
             placeholder="Buscar em logs por operacao, usuario, motivo..."
