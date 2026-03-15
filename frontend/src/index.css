@@ -125,11 +125,8 @@ input, select, textarea { font-family: inherit; }
 .nav-item:hover { background: var(--sidebar-hover); color: #fff; text-decoration: none; }
 .nav-item.active { background: var(--sidebar-active); color: #fff; border-left-color: #60a5fa; font-weight: 600; }
 .nav-item-code {
-  font-size: 10px; font-weight: 700;
-  background: rgba(255,255,255,0.1);
-  border-radius: 3px; padding: 1px 5px;
-  color: rgba(255,255,255,0.6); flex-shrink: 0;
-  min-width: 22px; text-align: center;
+  font-size: 15px; flex-shrink: 0;
+  width: 22px; text-align: center;
 }
 
 .sidebar-footer {
@@ -238,7 +235,7 @@ select.form-control { appearance: none; background-image: url("data:image/svg+xm
 .badge-pronto     { background: var(--success-light); color: #15803d; }
 .badge-entregue   { background: var(--gray-100); color: var(--gray-600); }
 .badge-cancelado  { background: var(--danger-light); color: #991b1b; }
-.badge-finalizado { background: var(--gray-100); color: var(--gray-600); }
+.badge-finalizado { background: #f0fdfa; color: #0f766e; }
 
 .table-container { background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); overflow: hidden; box-shadow: var(--shadow); }
 .table { width: 100%; border-collapse: collapse; font-size: 13px; }
