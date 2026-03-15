@@ -202,6 +202,15 @@ export const integrationLogsAPI = {
 export const efiAPI = {
   listBoletos: (params) => api.get('/efi/boletos', { params }),
 };
+
+export const evolutionAPI = {
+  getStatus: () => api.get('/evolution/status'),
+  getQrCode: (trigger = false) => api.get('/evolution/qrcode', { params: trigger ? { trigger: 'true' } : {} }),
+  createInstance: () => api.post('/evolution/create-instance'),
+  setWebhook: (data) => api.post('/evolution/set-webhook', data),
+  logout: () => api.delete('/evolution/logout'),
+  disconnectReset: () => api.post('/evolution/disconnect-reset'),
+};
 export const portalAPI = {
   me:            ()         => api.get('/portal/me'),
   updateMe:      (data)     => api.put('/portal/me', data),

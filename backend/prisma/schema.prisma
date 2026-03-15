@@ -252,7 +252,7 @@ model PreventiveMaintenance {
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ MENSAGENS WHATSAPP Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 model WhatsappMessage {
   id           String        @id @default(uuid())
-  clientId     String        @map("client_id")
+  clientId     String?       @map("client_id")
   soId         String?       @map("so_id")
   phone        String
   content      String
@@ -260,7 +260,7 @@ model WhatsappMessage {
   attempts     Int           @default(0)
   errorMessage String?       @map("error_message")
   sentAt       DateTime?     @map("sent_at")
-  client       Client        @relation(fields: [clientId], references: [id])
+  client       Client?       @relation(fields: [clientId], references: [id])
   serviceOrder ServiceOrder? @relation(fields: [soId], references: [id])
   createdAt    DateTime      @default(now()) @map("created_at")
 
@@ -271,6 +271,7 @@ enum MessageStatus {
   PENDING
   SENT
   FAILED
+  RECEIVED
 }
 
 // â€”â€” ATIVOS DA EMPRESA â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
@@ -335,6 +336,7 @@ enum DigitalAccountType {
   WHATSAPP_BUSINESS
   OLX
   BOTCONVERSA
+  EVOLUTION_API
   INSTAGRAM
   FACEBOOK
   CHATGPT

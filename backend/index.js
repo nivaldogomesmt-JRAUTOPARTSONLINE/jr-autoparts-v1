@@ -47,6 +47,8 @@ const routes = {
   notifications: require('./src/routes/notificationCenterRoutes'),
   integrations: require('./src/routes/integrationLogRoutes'),
   efi: require('./src/routes/efiRoutes'),
+  evolution: require('./src/routes/evolutionRoutes'),
+  'webhooks/evolution': require('./src/routes/evolutionWebhookRoutes'),
 };
 
 function mount(path, handler) {
@@ -71,6 +73,8 @@ mount('tracking', routes.tracking);
 mount('notifications', routes.notifications);
 mount('integrations', routes.integrations);
 mount('efi', routes.efi);
+mount('evolution', routes.evolution);
+mount('webhooks/evolution', routes['webhooks/evolution']);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Rota nao encontrada' });

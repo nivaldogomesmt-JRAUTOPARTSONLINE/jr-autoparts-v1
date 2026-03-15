@@ -1,6 +1,7 @@
-﻿const axios = require('axios');
+const axios = require('axios');
 const prisma = require('../lib/prisma');
 const { resolveNotificationPayload } = require('./notificationCenterService');
+const evolutionApiProvider = require('./evolutionApiProvider');
 
 const DEFAULT_COUNTRY_CODE = '55';
 
@@ -274,14 +275,17 @@ async function getBotConversaConfig() {
   }
 }
 
+function getWhatsAppProvider() {
+  const provider = String(process.env.WHATSAPP_PROVIDER || 'botconversa').trim().toLowerCase();
+  return provider === 'evolution' ? 'evolution' : 'botconversa';
+}
+
 /**
- * Envia mensagem via BotConversa API e registra no banco.
+ * Envia mensagem via provider configurado (BotConversa ou Evolution API) e registra no banco.
  */
 const sendWhatsAppMessage = async ({ clientId, soId, phone, content, messageId }) => {
   const normalizedPhone = normalizePhone(phone);
-  const config = await getBotConversaConfig();
-  const apiKey = String(config.apiKey || '').trim();
-  const baseCandidates = buildBaseUrlCandidates(config.apiUrl || 'https://backend.botconversa.com.br/api/v1');
+  const provider = getWhatsAppProvider();
 
   const message = await upsertMessageRecord({
     clientId,
@@ -300,25 +304,57 @@ const sendWhatsAppMessage = async ({ clientId, soId, phone, content, messageId }
     return { success: false, messageId: message.id, error: errorMsg };
   }
 
-  if (!apiKey) {
-    const errorMsg = 'BOTCONVERSA_API_KEY nao configurada no backend.';
-    await prisma.whatsappMessage.update({
-      where: { id: message.id },
-      data: { status: 'FAILED', errorMessage: errorMsg },
-    });
-    return { success: false, messageId: message.id, error: errorMsg };
-  }
-
-  if (!baseCandidates.length) {
-    const errorMsg = 'BOTCONVERSA_API_URL invalida. Exemplo: https://backend.botconversa.com.br/api/v1';
-    await prisma.whatsappMessage.update({
-      where: { id: message.id },
-      data: { status: 'FAILED', errorMessage: errorMsg },
-    });
-    return { success: false, messageId: message.id, error: errorMsg };
-  }
-
   try {
+    if (provider === 'evolution') {
+      const apiUrl = String(process.env.EVOLUTION_API_URL || '').trim();
+      const apiKey = String(process.env.EVOLUTION_API_KEY || '').trim();
+      const instanceName = String(process.env.EVOLUTION_INSTANCE_NAME || '').trim();
+
+      if (!apiUrl || !apiKey || !instanceName) {
+        const errorMsg = 'EVOLUTION_API_URL, EVOLUTION_API_KEY e EVOLUTION_INSTANCE_NAME devem estar configurados.';
+        await prisma.whatsappMessage.update({
+          where: { id: message.id },
+          data: { status: 'FAILED', errorMessage: errorMsg },
+        });
+        return { success: false, messageId: message.id, error: errorMsg };
+      }
+
+      await evolutionApiProvider.sendTextMessage({
+        phone: normalizedPhone,
+        content,
+      });
+
+      await prisma.whatsappMessage.update({
+        where: { id: message.id },
+        data: { status: 'SENT', sentAt: new Date(), errorMessage: null },
+      });
+
+      console.log(`WhatsApp enviado para ${normalizedPhone} (evolution)`);
+      return { success: true, messageId: message.id };
+    }
+
+    const config = await getBotConversaConfig();
+    const apiKey = String(config.apiKey || '').trim();
+    const baseCandidates = buildBaseUrlCandidates(config.apiUrl || 'https://backend.botconversa.com.br/api/v1');
+
+    if (!apiKey) {
+      const errorMsg = 'BOTCONVERSA_API_KEY nao configurada no backend.';
+      await prisma.whatsappMessage.update({
+        where: { id: message.id },
+        data: { status: 'FAILED', errorMessage: errorMsg },
+      });
+      return { success: false, messageId: message.id, error: errorMsg };
+    }
+
+    if (!baseCandidates.length) {
+      const errorMsg = 'BOTCONVERSA_API_URL invalida. Exemplo: https://backend.botconversa.com.br/api/v1';
+      await prisma.whatsappMessage.update({
+        where: { id: message.id },
+        data: { status: 'FAILED', errorMessage: errorMsg },
+      });
+      return { success: false, messageId: message.id, error: errorMsg };
+    }
+
     let sent = false;
     let lastErr = null;
 
@@ -423,5 +459,6 @@ module.exports = {
   sendWhatsAppMessage,
   sendWhatsAppMessageWithDedupe,
   wasWhatsAppRecentlySent,
+  getWhatsAppProvider,
 };
 
