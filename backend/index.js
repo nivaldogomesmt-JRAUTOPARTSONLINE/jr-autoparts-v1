@@ -1,4 +1,4 @@
-﻿require('dotenv').config();
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const prisma = require('./src/lib/prisma');
@@ -46,6 +46,7 @@ const routes = {
   tracking: require('./src/routes/trackingRoutes'),
   notifications: require('./src/routes/notificationCenterRoutes'),
   integrations: require('./src/routes/integrationLogRoutes'),
+  efi: require('./src/routes/efiRoutes'),
 };
 
 function mount(path, handler) {
@@ -69,6 +70,7 @@ mount('digital-accounts', routes.digitalAccounts);
 mount('tracking', routes.tracking);
 mount('notifications', routes.notifications);
 mount('integrations', routes.integrations);
+mount('efi', routes.efi);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Rota nao encontrada' });
