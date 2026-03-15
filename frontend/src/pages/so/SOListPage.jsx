@@ -152,10 +152,10 @@ export default function SOListPage() {
                     const s = STATUS_CONFIG[o.status] || { badge: 'badge-gray', label: o.status };
                     const isLate = o.is_late;
                     return (
-                      <tr key={o.id} onClick={() => navigate(`/os/${o.id}`)} style={{ cursor: 'pointer' }}>
+                   <tr key={o.id} onClick={() => navigate(`/os/${o.id}`)} className={isLate ? 'tr-late' : ''} style={{ cursor: 'pointer' }}>
                         <td>
                           <strong style={{ color: 'var(--primary)' }}>#{o.id}</strong>
-                          {isLate && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--danger)', fontWeight: 700 }}>ATRASADA</span>}
+                   {isLate && <span className="badge badge-red" style={{ marginLeft: 6, fontSize: 10, verticalAlign: 'middle' }}>⚠ ATRASADA</span>}
                         </td>
                         <td style={{ fontWeight: 600 }}>{o.clients?.name || o.client_name || '—'}</td>
                         <td><span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 12 }}>{o.vehicles?.plate || o.vehicle_plate || '—'}</span></td>
