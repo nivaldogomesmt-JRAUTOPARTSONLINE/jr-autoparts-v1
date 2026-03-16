@@ -14,15 +14,15 @@
  *   POST /api/bot/tracking-support
  *   POST /api/bot/handoff
  *
- * ⚠️  VERIFY before deploying:
+ * â ï¸  VERIFY before deploying:
  *   - Prisma model names: client, vehicle, trackingContract (adjust casing/name if needed)
  *   - prisma import path in service files: '../lib/prisma' may differ
- *   - Efí listChargesByCpf response fields: charge_id, expire_at, value, payment.banking_billet.link
+ *   - EfÃ­ listChargesByCpf response fields: charge_id, expire_at, value, payment.banking_billet.link
  *   - authenticateBot middleware header name (x-bot-token or similar)
  */
 
-const prisma              = require('../lib/prisma');         // ⚠️ adjust path
-const efiService          = require('../services/efiCobrancasService');  // existing Efí service
+const prisma              = require('../lib/prisma');         // â ï¸ adjust path
+const efiService          = require('../services/efiCobrancasService');  // existing EfÃ­ service
 const botTriageService    = require('../services/botTriageService');
 const botClientResolver   = require('../services/botClientResolverService');
 const botSessionService   = require('../services/botSessionService');
@@ -54,15 +54,15 @@ function serverError(res, err, context = '') {
 
 /**
  * Format a BRL currency value.
- * Assumes Efí returns values in centavos (integer).
- * ⚠️ Verify: if Efí returns decimal reais, change / 100 to a no-op.
+ * Assumes EfÃ­ returns values in centavos (integer).
+ * â ï¸ Verify: if EfÃ­ returns decimal reais, change / 100 to a no-op.
  */
 function formatBRL(centavos) {
   const reais = (centavos || 0) / 100;
   return reais.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-// Statuses Efí considers "open/payable"
+// Statuses EfÃ­ considers "open/payable"
 const OPEN_STATUSES = ['waiting', 'unpaid', 'pending'];
 
 // ---------------------------------------------------------------------------
@@ -73,7 +73,7 @@ async function triage(req, res) {
   try {
     const { waId, messageId, text, mediaType } = req.body;
 
-    if (!waId) return fail(res, 'waId é obrigatório.');
+    if (!waId) return fail(res, 'waId Ã© obrigatÃ³rio.');
 
     // Idempotency guard
     if (messageId && await botSessionService.isMessageDuplicate(messageId)) {
@@ -120,7 +120,7 @@ async function triage(req, res) {
       nextAction,
       extractedEntities: {
         plates,
-        // Never return raw documents — only masked
+        // Never return raw documents â only masked
         documents: documents.map(d => maskDocument(d)),
       },
     });
@@ -137,7 +137,7 @@ async function resolveClientForBoleto(req, res) {
   try {
     const { waId, document, plate, name } = req.body;
 
-    if (!waId) return fail(res, 'waId é obrigatório.');
+    if (!waId) return fail(res, 'waId Ã© obrigatÃ³rio.');
 
     const session = await botSessionService.getOrCreateSession(waId);
 
@@ -206,33 +206,33 @@ async function openBoletos(req, res) {
   try {
     const { waId, sessionId } = req.body;
 
-    if (!waId) return fail(res, 'waId é obrigatório.');
+    if (!waId) return fail(res, 'waId Ã© obrigatÃ³rio.');
 
     // Load session
     const session = sessionId
       ? await prisma.whatsappSession.findUnique({ where: { id: sessionId } })
       : await botSessionService.getOrCreateSession(waId);
 
-    if (!session) return fail(res, 'Sessão não encontrada.', 404);
+    if (!session) return fail(res, 'SessÃ£o nÃ£o encontrada.', 404);
 
     const collectedData = session.collectedData || {};
     const cpfCnpj = collectedData.clientCpfCnpj;
 
     if (!cpfCnpj) {
-      return fail(res, 'CPF/CNPJ do cliente não encontrado na sessão. Identifique o cliente primeiro.', 422);
+      return fail(res, 'CPF/CNPJ do cliente nÃ£o encontrado na sessÃ£o. Identifique o cliente primeiro.', 422);
     }
 
-    // Efí only supports CPF lookup, not CNPJ
+    // EfÃ­ only supports CPF lookup, not CNPJ
     if (cpfCnpj.replace(/\D/g, '').length !== 11) {
       return ok(res, {
         status:   'CNPJ_NOT_SUPPORTED',
-        message:  'Consulta de boletos por CNPJ não está disponível neste canal. Por favor, entre em contato pelo WhatsApp ou ligue para nossa central.',
+        message:  'Consulta de boletos por CNPJ nÃ£o estÃ¡ disponÃ­vel neste canal. Por favor, entre em contato pelo WhatsApp ou ligue para nossa central.',
         sessionId: session.id,
       });
     }
 
-    // Call Efí service
-    // ⚠️ Verify: efiService.listChargesByCpf may be named differently in your project
+    // Call EfÃ­ service
+    // â ï¸ Verify: efiService.listChargesByCpf may be named differently in your project
     const charges = await efiService.listChargesByCpf(cpfCnpj);
 
     // Filter to open/payable statuses
@@ -244,18 +244,21 @@ async function openBoletos(req, res) {
       await botSessionService.updateSession(session.id, { currentStep: 'boleto_none_found' });
       return ok(res, {
         status:    'NO_OPEN_BOLETOS',
-        message:   `Não encontrei cobranças em aberto para ${collectedData.clientNameMasked || 'você'}.`,
+        message:   `NÃ£o encontrei cobranÃ§as em aberto para ${collectedData.clientNameMasked || 'vocÃª'}.`,
         sessionId: session.id,
       });
     }
 
-    // Shape response — ⚠️ verify actual field names from Efí SDK response
+    // Shape response â â ï¸ verify actual field names from EfÃ­ SDK response
     const boletos = openCharges.map(c => ({
       chargeId:  c.charge_id  || c.id,
       dueDate:   c.expire_at  || c.dataVencimento,
       amount:    formatBRL(c.value || c.valor),
-      payLink:   c.payment?.banking_billet?.link
-                 || c.linkBoleto
+      payLink:   c.link                                // campo normalizado pelo service
+                 || c.billet_link                      // variante 1
+                 || c.payment?.banking_billet?.link    // Efí raw v2
+                 || c.data?.payment?.banking_billet?.link // Efí raw v1
+                 || c.linkBoleto                       // fallback legado
                  || null,
     }));
 
@@ -291,8 +294,8 @@ async function serviceIntake(req, res) {
   try {
     const { waId, serviceType, vehiclePlate, preferredDate, preferredTime, notes } = req.body;
 
-    if (!waId)        return fail(res, 'waId é obrigatório.');
-    if (!serviceType) return fail(res, 'Tipo de serviço é obrigatório.');
+    if (!waId)        return fail(res, 'waId Ã© obrigatÃ³rio.');
+    if (!serviceType) return fail(res, 'Tipo de serviÃ§o Ã© obrigatÃ³rio.');
 
     const session = await botSessionService.getOrCreateSession(waId);
 
@@ -322,7 +325,7 @@ async function serviceIntake(req, res) {
 
     return ok(res, {
       status:     'INTAKE_RECEIVED',
-      message:    `Solicitação de ${serviceType} registrada com sucesso! Nossa equipe entrará em contato para confirmar o agendamento.`,
+      message:    `SolicitaÃ§Ã£o de ${serviceType} registrada com sucesso! Nossa equipe entrarÃ¡ em contato para confirmar o agendamento.`,
       sessionId:  session.id,
       intakeData: {
         ...intakeData,
@@ -342,8 +345,8 @@ async function towingIntake(req, res) {
   try {
     const { waId, location, vehiclePlate, problem, contactPhone } = req.body;
 
-    if (!waId)     return fail(res, 'waId é obrigatório.');
-    if (!location) return fail(res, 'Localização é obrigatória para solicitação de guincho.');
+    if (!waId)     return fail(res, 'waId Ã© obrigatÃ³rio.');
+    if (!location) return fail(res, 'LocalizaÃ§Ã£o Ã© obrigatÃ³ria para solicitaÃ§Ã£o de guincho.');
 
     const session = await botSessionService.getOrCreateSession(waId);
 
@@ -376,7 +379,7 @@ async function towingIntake(req, res) {
 
     return ok(res, {
       status:    'TOWING_REQUEST_RECEIVED',
-      message:   'Solicitação de guincho recebida! Um atendente já foi notificado e entrará em contato imediatamente.',
+      message:   'SolicitaÃ§Ã£o de guincho recebida! Um atendente jÃ¡ foi notificado e entrarÃ¡ em contato imediatamente.',
       sessionId: session.id,
       handoffRequired: true,
     });
@@ -393,11 +396,11 @@ async function trackingInstall(req, res) {
   try {
     const { waId, vehiclePlate, vehicleModel, vehicleYear, preferredDate, preferredTime } = req.body;
 
-    if (!waId)         return fail(res, 'waId é obrigatório.');
-    if (!vehiclePlate) return fail(res, 'Placa do veículo é obrigatória.');
+    if (!waId)         return fail(res, 'waId Ã© obrigatÃ³rio.');
+    if (!vehiclePlate) return fail(res, 'Placa do veÃ­culo Ã© obrigatÃ³ria.');
 
     const normPlate = normalizePlate(vehiclePlate);
-    if (!normPlate) return fail(res, 'Placa inválida. Informe no formato ABC1234 ou ABC1D23.');
+    if (!normPlate) return fail(res, 'Placa invÃ¡lida. Informe no formato ABC1234 ou ABC1D23.');
 
     const session = await botSessionService.getOrCreateSession(waId);
 
@@ -427,7 +430,7 @@ async function trackingInstall(req, res) {
 
     return ok(res, {
       status:    'INSTALL_REQUEST_RECEIVED',
-      message:   `Solicitação de instalação de rastreador para o veículo ${normPlate} registrada! Entraremos em contato para confirmar o agendamento.`,
+      message:   `SolicitaÃ§Ã£o de instalaÃ§Ã£o de rastreador para o veÃ­culo ${normPlate} registrada! Entraremos em contato para confirmar o agendamento.`,
       sessionId: session.id,
       intakeData,
     });
@@ -444,25 +447,25 @@ async function trackingSupport(req, res) {
   try {
     const { waId, vehiclePlate, issueDescription } = req.body;
 
-    if (!waId) return fail(res, 'waId é obrigatório.');
+    if (!waId) return fail(res, 'waId Ã© obrigatÃ³rio.');
 
     const session = await botSessionService.getOrCreateSession(waId);
 
     // Optionally look up the tracking contract for this vehicle / phone
-    // ⚠️ Verify prisma model name: trackingContract may differ in your schema
+    // â ï¸ Verify prisma model name: trackingContract may differ in your schema
     let contractInfo = null;
     try {
       const normPhone = normalizePhone(waId);
       const normPlate = vehiclePlate ? normalizePlate(vehiclePlate) : null;
 
       if (normPlate) {
-        contractInfo = await prisma.trackingContract.findFirst({ // ⚠️ model name
+        contractInfo = await prisma.trackingContract.findFirst({ // â ï¸ model name
           where: { vehiclePlate: normPlate },
           select: { id: true, status: true, deviceSerial: true, vehiclePlate: true },
         });
       } else if (normPhone) {
         // Fallback: try to find by client phone via relation
-        contractInfo = await prisma.trackingContract.findFirst({ // ⚠️ model name
+        contractInfo = await prisma.trackingContract.findFirst({ // â ï¸ model name
           where: {
             client: {
               OR: [
@@ -502,11 +505,11 @@ async function trackingSupport(req, res) {
     });
 
     if (!contractInfo) {
-      // No contract found → escalate to human
+      // No contract found â escalate to human
       await botSessionService.transferSession(session.id);
       return ok(res, {
         status:          'NO_CONTRACT_FOUND',
-        message:         'Não encontrei um contrato de rastreamento associado. Vou transferir para nossa equipe especializada.',
+        message:         'NÃ£o encontrei um contrato de rastreamento associado. Vou transferir para nossa equipe especializada.',
         sessionId:       session.id,
         handoffRequired: true,
       });
@@ -514,7 +517,7 @@ async function trackingSupport(req, res) {
 
     return ok(res, {
       status:     'CONTRACT_FOUND',
-      message:    `Contrato de rastreamento localizado (${contractInfo.vehiclePlate}). Um técnico irá verificar o dispositivo ${contractInfo.deviceSerial || ''}.`,
+      message:    `Contrato de rastreamento localizado (${contractInfo.vehiclePlate}). Um tÃ©cnico irÃ¡ verificar o dispositivo ${contractInfo.deviceSerial || ''}.`,
       contractStatus: contractInfo.status,
       sessionId:  session.id,
       handoffRequired: contractInfo.status !== 'active',
@@ -532,7 +535,7 @@ async function handoff(req, res) {
   try {
     const { waId, sessionId, reason, extraData } = req.body;
 
-    if (!waId) return fail(res, 'waId é obrigatório.');
+    if (!waId) return fail(res, 'waId Ã© obrigatÃ³rio.');
 
     // Load or create session
     let session = null;
@@ -547,7 +550,7 @@ async function handoff(req, res) {
     const mergedData = {
       ...(session.collectedData || {}),
       ...(extraData || {}),
-      handoffReason:    reason || 'Solicitação do cliente',
+      handoffReason:    reason || 'SolicitaÃ§Ã£o do cliente',
       handoffRequestedAt: new Date().toISOString(),
     };
 
