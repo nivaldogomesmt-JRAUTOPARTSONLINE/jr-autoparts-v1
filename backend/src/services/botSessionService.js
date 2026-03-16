@@ -3,12 +3,12 @@
 /**
  * botSessionService.js
  * Manages WhatsApp conversation sessions stored in Postgres via Prisma.
- * No Redis — all state lives in the whatsapp_sessions / whatsapp_events tables.
+ * No Redis â all state lives in the whatsapp_sessions / whatsapp_events tables.
  *
- * ⚠️  Verify the prisma client import path matches your project layout.
+ * â ï¸  Verify the prisma client import path matches your project layout.
  *     Common paths: '../lib/prisma'  |  '../../lib/prisma'  |  '../config/prisma'
  */
-const prisma = require('../lib/prisma'); // ⚠️ adjust if needed
+const prisma = require('../lib/prisma'); // â ï¸ adjust if needed
 
 const SESSION_TTL_MINUTES = parseInt(process.env.BOT_SESSION_TTL_MINUTES || '30', 10);
 
@@ -61,7 +61,15 @@ async function getOrCreateSession(waId) {
  * Apply a partial update to a session.
  * Also refreshes the TTL on every meaningful interaction.
  */
+const VALID_STATUSES = ['active', 'completed', 'transferred', 'expired'];
+function assertValidStatus(status) {
+  if (!VALID_STATUSES.includes(status)) {
+    throw new Error(`[botSession] Status inválido: "${status}". Permitidos: ${VALID_STATUSES.join(', ')}`);
+  }
+}
+
 async function updateSession(sessionId, patch) {
+  if (patch.status) assertValidStatus(patch.status);
   return prisma.whatsappSession.update({
     where: { id: sessionId },
     data: {
