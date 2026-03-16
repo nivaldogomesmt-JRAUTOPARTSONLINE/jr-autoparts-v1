@@ -1,8 +1,11 @@
-# BOT / WHATSAPP BLOCK — FROZEN / NÃO ATIVADO
+# BOT / WHATSAPP BLOCK — STAGING PREP / EM DESENVOLVIMENTO ATIVO
 
-> Status: **PARADO — aguardando revisão antes de qualquer uso**
+> Status: **EM STAGING PREP — patches aplicados, aguardando deploy e validação em staging**
 > Data de inserção: 2026-03-15
 > Branch: main
+> Última revisão: 2026-03-15 — patches CP-1 a CP-5 aplicados
+
+> ⚠️ Este bloco permanece **INATIVO em produção**. Ativar apenas após validação completa em staging.
 
 ---
 
