@@ -18,8 +18,14 @@ export default function ClientsPage() {
           fetch(API + '/api/clients', { headers: { Authorization: 'Bearer ' + token() } }),
           fetch(API + '/api/dashboard/ranking-clientes', { headers: { Authorization: 'Bearer ' + token() } }),
         ]);
-        if (rc.ok) setClients(await rc.json());
-        if (rr.ok) setRanking(await rr.json());
+        if (rc.ok) {
+          const raw = await rc.json();
+          setClients(Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : []);
+        }
+        if (rr.ok) {
+          const raw = await rr.json();
+          setRanking(Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : []);
+        }
       } catch (e) { /* silent */ }
       finally { setLoading(false); }
     };
