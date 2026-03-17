@@ -15,6 +15,8 @@ import ProductsPage from './pages/products/ProductsPage';
 import ProductDetail from './pages/products/ProductDetail';
 import ProductForm from './pages/products/ProductForm';
 import ServicesPage from './pages/services/ServicesPage';
+import ServiceForm from './pages/services/ServiceForm';
+import ServiceDetail from './pages/services/ServiceDetail';
 import SOListPage from './pages/so/SOListPage';
 import SOForm from './pages/so/SOForm';
 import SODetail from './pages/so/SODetail';
@@ -90,6 +92,9 @@ function AppRoutes() {
         <Route path="produtos/:id/editar" element={<ActionRoute action="module:products:edit"><ProductForm /></ActionRoute>} />
 
         <Route path="servicos" element={<ActionRoute action="module:services:view"><ServicesPage /></ActionRoute>} />
+        <Route path="servicos/novo" element={<ActionRoute action="module:services:add"><ServiceForm /></ActionRoute>} />
+        <Route path="servicos/:id" element={<ActionRoute action="module:services:view"><ServiceDetail /></ActionRoute>} />
+        <Route path="servicos/:id/editar" element={<ActionRoute action="module:services:edit"><ServiceForm /></ActionRoute>} />
 
         <Route path="os" element={<ActionRoute action="module:serviceOrders:view"><SOListPage /></ActionRoute>} />
         <Route path="os/nova" element={<ActionRoute action="module:serviceOrders:add"><SOForm /></ActionRoute>} />

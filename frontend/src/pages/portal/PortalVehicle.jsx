@@ -61,7 +61,7 @@ export default function PortalVehicle() {
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
       {/* Header */}
       <header style={{ background: 'var(--primary)', padding: '14px 24px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button onClick={() => navigate('/portal/dashboard')}
+        <button onClick={() => navigate('/portal')}
           style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: 8, cursor: 'pointer', fontSize: 16 }}>
           â
         </button>

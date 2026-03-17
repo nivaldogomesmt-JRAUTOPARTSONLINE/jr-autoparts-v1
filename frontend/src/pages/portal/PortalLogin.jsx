@@ -24,7 +24,7 @@ export default function PortalLogin() {
       const data = await r.json();
       if (!r.ok) throw new Error(data.message || 'Credenciais inválidas');
       localStorage.setItem('jr_portal_token', data.token);
-      navigate('/portal/dashboard');
+      navigate('/portal');
     } catch (err) {
       setError(err.message || 'Email ou senha incorretos');
     } finally {
