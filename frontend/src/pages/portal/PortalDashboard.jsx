@@ -66,7 +66,7 @@ export default function PortalDashboard() {
         });
         if (r.status === 401) { navigate('/portal/login'); return; }
         if (r.ok) setData(await r.json());
-      } catch (e) { /* silent */ }
+      } catch (e) { console.error('[PortalDashboard] error:', e); }
       finally { setLoading(false); }
     };
     load();

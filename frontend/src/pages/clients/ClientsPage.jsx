@@ -26,7 +26,7 @@ export default function ClientsPage() {
           const raw = await rr.json();
           setRanking(Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : []);
         }
-      } catch (e) { /* silent */ }
+      } catch (e) { console.error('[ClientsPage] load error:', e); }
       finally { setLoading(false); }
     };
     load();
@@ -42,7 +42,7 @@ export default function ClientsPage() {
 
   return (
     <div>
-      {/* CabeÃ§alho */}
+      {/* Cabeçalho */}
       <div className="page-header-row page-header">
         <div>
           <h1 className="page-title">Clientes</h1>
@@ -69,7 +69,7 @@ export default function ClientsPage() {
                     <span className={`ranking-pos ranking-pos-${i + 1}`} style={{ width: 32, height: 32, fontSize: 13 }}>{i + 1}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</div>
-                      <div className="text-muted text-sm">{c.os_count ?? 0} OS Â· {c.vehicles_count ?? 0} veÃ­c.</div>
+                      <div className="text-muted text-sm">{c.os_count ?? 0} OS · {c.vehicles_count ?? 0} veíc.</div>
                     </div>
                     <div style={{ fontWeight: 800, color: 'var(--success)', fontSize: 14, flexShrink: 0 }}>
                       R$ {Number(c.total_revenue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -83,7 +83,7 @@ export default function ClientsPage() {
           {/* Filtros e busca */}
           <div className="filters-bar">
             <div className="search-bar" style={{ flex: 1, maxWidth: 360 }}>
-              <span className="search-icon">ð</span>
+              <span className="search-icon">🔍</span>
               <input
                 type="text"
                 placeholder="Buscar por nome, CPF/CNPJ, telefone..."
@@ -97,9 +97,9 @@ export default function ClientsPage() {
           {/* Listagem */}
           {filtered.length === 0 ? (
             <div className="empty-state">
-              <div className="empty-state-icon">ð¤</div>
+              <div className="empty-state-icon">👤</div>
               <div className="empty-state-text">{search ? 'Nenhum cliente encontrado' : 'Nenhum cliente cadastrado'}</div>
-              <div className="empty-state-sub">{search ? 'Tente outro termo' : 'Clique em "+ Novo Cliente" para comeÃ§ar'}</div>
+              <div className="empty-state-sub">{search ? 'Tente outro termo' : 'Clique em "+ Novo Cliente" para começar'}</div>
               {!search && <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={() => navigate('/clientes/novo')}>+ Novo Cliente</button>}
             </div>
           ) : (
@@ -122,15 +122,15 @@ export default function ClientsPage() {
                         <div style={{ fontWeight: 600 }}>{c.name}</div>
                         {c.company_name && <div className="text-muted text-sm">{c.company_name}</div>}
                       </td>
-                      <td className="text-sm">{c.cpf_cnpj || 'â'}</td>
-                      <td className="text-sm">{c.phone || 'â'}</td>
-                      <td className="text-sm text-muted">{c.email || 'â'}</td>
+                      <td className="text-sm">{c.cpf_cnpj || '—'}</td>
+                      <td className="text-sm">{c.phone || '—'}</td>
+                      <td className="text-sm text-muted">{c.email || '—'}</td>
                       <td>
                         <span className="badge badge-blue">{c.os_count ?? 0}</span>
                       </td>
                       <td>
                         <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); navigate(`/clientes/${c.id}`); }}>
-                          Ver â
+                          Ver →
                         </button>
                       </td>
                     </tr>

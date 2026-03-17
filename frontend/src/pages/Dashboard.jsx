@@ -61,7 +61,7 @@ export default function Dashboard() {
           headers: { Authorization: 'Bearer ' + localStorage.getItem('jr_token') }
         });
         if (r.ok) setData(await r.json());
-      } catch (e) { /* silent */ }
+      } catch (e) { console.error('[Dashboard] error:', e); }
       finally { setLoading(false); }
     };
     fetchData();

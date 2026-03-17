@@ -8,16 +8,16 @@ const ROW_COLORS = {
 };
 
 const LEVEL_META = {
-  OVERDUE: { label: 'Urgencia', className: 'badge-red' },
-  DUE_SOON: { label: 'Atencao', className: 'badge-yellow' },
+  OVERDUE: { label: 'Urgência', className: 'badge-red' },
+  DUE_SOON: { label: 'Atenção', className: 'badge-yellow' },
   OK: { label: 'OK', className: 'badge-green' },
 };
 
 const PRINT_THEMES = [
   { value: 'resumo', label: 'Resumo' },
   { value: 'todos', label: 'Todos os alertas' },
-  { value: 'urgencia', label: 'Somente urgencias' },
-  { value: 'atencao', label: 'Somente atencoes' },
+  { value: 'urgencia', label: 'Somente urgências' },
+  { value: 'atencao', label: 'Somente atenções' },
 ];
 const PRINT_THEME_STORAGE_KEY = 'jr_print_theme_maintenance';
 
@@ -119,9 +119,9 @@ export default function MaintenancePage() {
 
       <div className="page-header">
         <div>
-          <div className="page-title">Manutencao Preventiva</div>
+          <div className="page-title">Manutenção Preventiva</div>
           <div className="page-subtitle">
-            {counters.overdue} urgencias | {counters.dueSoon} atencoes para os proximos 30 dias
+            {counters.overdue} urgências | {counters.dueSoon} atenções para os próximos 30 dias
           </div>
         </div>
         <div className="no-print" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -136,11 +136,11 @@ export default function MaintenancePage() {
 
       <div className="print-block print-block-resumo print-block-todos print-block-urgencia print-block-atencao" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 14 }}>
         <div className="card" style={{ padding: 12 }}>
-          <div className="text-sm text-muted">Urgencias</div>
+          <div className="text-sm text-muted">Urgências</div>
           <div style={{ fontSize: 20, fontWeight: 800, color: '#b91c1c' }}>{counters.overdue}</div>
         </div>
         <div className="card" style={{ padding: 12 }}>
-          <div className="text-sm text-muted">Atencoes</div>
+          <div className="text-sm text-muted">Atenções</div>
           <div style={{ fontSize: 20, fontWeight: 800, color: '#92400e' }}>{counters.dueSoon}</div>
         </div>
         <div className="card" style={{ padding: 12 }}>
@@ -154,8 +154,8 @@ export default function MaintenancePage() {
       ) : alerts.length === 0 ? (
         <div className="card">
           <div className="empty-state">
-            <div className="empty-state-text">Nenhuma manutencao pendente.</div>
-            <div className="empty-state-sub">Todos os veiculos estao em dia.</div>
+            <div className="empty-state-text">Nenhuma manutenção pendente.</div>
+            <div className="empty-state-sub">Todos os veículos estão em dia.</div>
           </div>
         </div>
       ) : (
@@ -164,12 +164,12 @@ export default function MaintenancePage() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>Nivel</th>
-                  <th>Veiculo</th>
-                  <th>Proprietario</th>
-                  <th>Item de manutencao</th>
-                  <th>Proxima data</th>
-                  <th>Proximo KM</th>
+                  <th>Nível</th>
+                  <th>Veículo</th>
+                  <th>Proprietário</th>
+                  <th>Item de manutenção</th>
+                  <th>Próxima data</th>
+                  <th>Próximo KM</th>
                   <th className="no-print"></th>
                 </tr>
               </thead>

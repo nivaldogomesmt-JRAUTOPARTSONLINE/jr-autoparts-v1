@@ -78,7 +78,7 @@ export default function Layout() {
           </div>
         </div>
 
-        {/* NavegaÃÂ§ÃÂ£o */}
+        {/* Navegação */}
         <nav className="sidebar-nav">
           {NAV.map((item, i) => {
             if (item.section) {
@@ -98,7 +98,7 @@ export default function Layout() {
           })}
         </nav>
 
-        {/* RodapÃÂ© */}
+        {/* Rodapé */}
         <div className="sidebar-footer">
           <div className="sidebar-user">{user?.email || 'Usuário'}</div>
           <button className="btn btn-outline btn-sm w-full" onClick={handleLogout}>
@@ -107,7 +107,7 @@ export default function Layout() {
         </div>
       </aside>
 
-      {/* CONTEÃÂDO PRINCIPAL */}
+      {/* CONTEÚDO PRINCIPAL */}
       <div className="main-content">
         <header className="main-header">
           <button

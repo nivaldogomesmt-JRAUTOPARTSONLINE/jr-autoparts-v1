@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const API = import.meta.env.VITE_API_URL || '';
-const token = () => localStorage.getItem('jr_token');
 
 export default function ProductsPage() {
   const navigate = useNavigate();
@@ -15,13 +14,14 @@ export default function ProductsPage() {
   useEffect(() => {
     const load = async () => {
       try {
+        const token = () => localStorage.getItem('jr_token');
         const r = await fetch(API + '/api/products', { headers: { Authorization: 'Bearer ' + token() } });
         if (r.ok) {
           const data = await r.json();
           setProducts(Array.isArray(data) ? data : data.products || []);
           if (data.stats) setStats(data.stats);
         }
-      } catch (e) { /* silent */ }
+      } catch (e) { console.error('[ProductsPage] load error:', e); }
       finally { setLoading(false); }
     };
     load();

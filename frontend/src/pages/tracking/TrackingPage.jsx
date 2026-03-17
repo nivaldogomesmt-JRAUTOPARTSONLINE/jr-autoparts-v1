@@ -122,7 +122,7 @@ export default function TrackingPage() {
             retiradas:   list.filter(r => r.service_type === 'Retirada').length,
           });
         }
-      } catch (e) { /* silent */ }
+      } catch (e) { console.error('[TrackingPage] error:', e); }
       finally { setLoading(false); }
     };
     load();
@@ -151,7 +151,7 @@ export default function TrackingPage() {
         setRecords(prev => form.id ? prev.map(x => x.id === form.id ? saved : x) : [saved, ...prev]);
         setModal(null);
       }
-    } catch (e) { /* silent */ }
+    } catch (e) { console.error('[TrackingPage] error:', e); }
   };
 
   const handleCopyImei = (imei) => {

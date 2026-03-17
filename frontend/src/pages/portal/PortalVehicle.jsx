@@ -37,7 +37,7 @@ export default function PortalVehicle() {
           setMaintenance(d.maintenance || []);
           setTrackingDevices(d.trackingDevices || []);
         }
-      } catch (e) { /* silent */ }
+      } catch (e) { console.error('[PortalVehicle] error:', e); }
       finally { setLoading(false); }
     };
     load();

@@ -194,7 +194,7 @@ export default function SOForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.clientId || !form.vehicleId) return setError('Selecione cliente e veiculo.');
+    if (!form.clientId || !form.vehicleId) return setError('Selecione cliente e veículo.');
     if (form.entryKm === '' || form.entryKm === null || form.entryKm === undefined) {
       return setError('Informe a quilometragem de entrada.');
     }
@@ -221,7 +221,7 @@ export default function SOForm() {
     <div>
       <div className="page-header">
         <div>
-          <div className="page-title">{isEdit ? 'Editar OS' : 'Nova Ordem de Servico'}</div>
+          <div className="page-title">{isEdit ? 'Editar OS' : 'Nova Ordem de Serviço'}</div>
         </div>
         <button className="btn btn-ghost btn-sm" onClick={() => navigate(-1)}>Voltar</button>
       </div>
@@ -256,7 +256,7 @@ export default function SOForm() {
             </div>
 
             <div className="form-group">
-              <label className="form-label required">Veiculo</label>
+              <label className="form-label required">Veículo</label>
               <select
                 className="form-control"
                 value={form.vehicleId}
@@ -264,7 +264,7 @@ export default function SOForm() {
                 required
                 disabled={!form.clientId}
               >
-                <option value="">Selecione o veiculo...</option>
+                <option value="">Selecione o veículo...</option>
                 {vehicles.map((v) => (
                   <option key={v.id} value={v.id}>{v.plate} - {v.brand} {v.model}</option>
                 ))}
@@ -286,7 +286,7 @@ export default function SOForm() {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Observacoes</label>
+            <label className="form-label">Observações</label>
             <textarea
               className="form-control"
               rows={3}
@@ -298,10 +298,10 @@ export default function SOForm() {
         </div>
 
         <div className="card" style={{ marginBottom: 16 }}>
-          <div className="card-title">Servicos e Pecas</div>
+          <div className="card-title">Serviços e Peças</div>
 
           <div style={{ marginBottom: 12 }}>
-            <label className="form-label">Adicionar Servico</label>
+            <label className="form-label">Adicionar Serviço</label>
             <select
               className="form-control"
               onChange={(e) => {
@@ -310,7 +310,7 @@ export default function SOForm() {
                 e.target.value = '';
               }}
             >
-              <option value="">Selecione um servico...</option>
+              <option value="">Selecione um serviço...</option>
               {services.map((s) => (
                 <option key={s.id} value={s.id}>{s.name} - R$ {parseFloat(s.price).toFixed(2)}</option>
               ))}
@@ -318,11 +318,11 @@ export default function SOForm() {
           </div>
 
           <div style={{ marginBottom: 16, position: 'relative' }}>
-            <label className="form-label">Adicionar Peca / Produto</label>
+            <label className="form-label">Adicionar Peça / Produto</label>
             <input
               ref={productSearchRef}
               className="form-control"
-              placeholder="Buscar por nome ou codigo de barras (setas + Enter)"
+              placeholder="Buscar por nome ou código de barras (setas + Enter)"
               value={productSearch}
               onChange={(e) => {
                 setProductSearch(e.target.value);
@@ -346,14 +346,14 @@ export default function SOForm() {
                       style={{ width: '100%', textAlign: 'left', padding: '10px 12px', border: 'none', background: active ? '#eff6ff' : '#fff', cursor: 'pointer' }}
                     >
                       <div style={{ fontWeight: 600, color: '#0f172a' }}>{p.name}</div>
-                      <div className="text-sm text-muted">Cod barras: {p.barcode || 'Nao informado'} | R$ {parseFloat(p.price || 0).toFixed(2)}</div>
+                      <div className="text-sm text-muted">Cód. barras: {p.barcode || 'Não informado'} | R$ {parseFloat(p.price || 0).toFixed(2)}</div>
                     </button>
                   );
                 })}
               </div>
             ) : null}
             <div className="text-sm text-muted" style={{ marginTop: 6 }}>
-              {products.length} produto(s) carregado(s) para selecao rapida.
+              {products.length} produto(s) carregado(s) para seleção rápida.
             </div>
           </div>
 
@@ -365,7 +365,7 @@ export default function SOForm() {
                     <th>Tipo</th>
                     <th>Item</th>
                     <th>Qtd</th>
-                    <th>Preco Unit.</th>
+                    <th>Preço Unit.</th>
                     <th>Total</th>
                     <th></th>
                   </tr>
@@ -375,7 +375,7 @@ export default function SOForm() {
                     <tr key={idx}>
                       <td>
                         <span className={`badge ${item.type === 'SERVICE' ? 'badge-blue' : 'badge-gray'}`}>
-                          {item.type === 'SERVICE' ? 'Servico' : 'Peca'}
+                          {item.type === 'SERVICE' ? 'Serviço' : 'Peça'}
                         </span>
                       </td>
                       <td>{item.itemName}</td>
@@ -425,7 +425,7 @@ export default function SOForm() {
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
           <button type="button" className="btn btn-ghost" onClick={() => navigate(-1)}>Cancelar</button>
           <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading ? 'Salvando...' : isEdit ? 'Salvar Alteracoes' : 'Criar OS'}
+            {loading ? 'Salvando...' : isEdit ? 'Salvar Alterações' : 'Criar OS'}
           </button>
         </div>
       </form>

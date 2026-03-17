@@ -21,7 +21,7 @@ export default function PortalSODetail() {
         });
         if (r.status === 401) { navigate('/portal/login'); return; }
         if (r.ok) setOs(await r.json());
-      } catch (e) { /* silent */ }
+      } catch (e) { console.error('[PortalSODetail] error:', e); }
       finally { setLoading(false); }
     };
     load();

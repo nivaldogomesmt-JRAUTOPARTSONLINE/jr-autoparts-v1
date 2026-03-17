@@ -118,7 +118,7 @@ export default function TowingPage() {
           const data = await r.json();
           setRecords(Array.isArray(data) ? data : data.records || []);
         }
-      } catch (e) { /* silent */ }
+      } catch (e) { console.error('[TowingPage] error:', e); }
       finally { setLoading(false); }
     };
     load();
@@ -150,7 +150,7 @@ export default function TowingPage() {
         setRecords(prev => form.id ? prev.map(x => x.id === form.id ? saved : x) : [saved, ...prev]);
         setModal(null);
       }
-    } catch (e) { /* silent */ }
+    } catch (e) { console.error('[TowingPage] error:', e); }
   };
 
   return (

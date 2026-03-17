@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const API = import.meta.env.VITE_API_URL || '';
-const token = () => localStorage.getItem('jr_token');
 
 export default function VehiclesPage() {
   const navigate = useNavigate();
@@ -15,6 +14,7 @@ export default function VehiclesPage() {
   useEffect(() => {
     const load = async () => {
       try {
+        const token = () => localStorage.getItem('jr_token');
         const rv = await fetch(API + '/api/vehicles', { headers: { Authorization: 'Bearer ' + token() } });
         if (rv.ok) {
           const data = await rv.json();
@@ -22,7 +22,7 @@ export default function VehiclesPage() {
           if (data.stats) setStats(data.stats);
           if (data.rankings) setRankings(data.rankings);
         }
-      } catch (e) { /* silent */ }
+      } catch (e) { console.error('[VehiclesPage] load error:', e); }
       finally { setLoading(false); }
     };
     load();
