@@ -4,6 +4,7 @@ const cors = require('cors');
 const prisma = require('./src/lib/prisma');
 const { createRateLimit } = require('./src/middleware/rateLimit');
 const { startMaintenanceRecalcSchedulerFromEnv } = require('./src/services/maintenanceSchedulerService');
+const { portalLogin } = require('./src/controllers/portalController');
 
 const app = express();
 let maintenanceScheduler = null;
@@ -33,6 +34,19 @@ app.use(createRateLimit({ windowMs: 60_000, max: 300, keyPrefix: 'api', message:
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString(), app: 'JR Auto Parts API' });
 });
+
+// Compatibilidade com versões antigas do Portal do Cliente:
+// garante login publico antes do router protegido de /portal.
+app.post(
+  ['/api/portal/auth/login', '/portal/auth/login'],
+  createRateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    keyPrefix: 'portal-login',
+    message: 'Muitas tentativas de login. Aguarde alguns minutos e tente novamente.',
+  }),
+  portalLogin
+);
 
 // Compatibilidade: aceita rotas com e sem prefixo /api.
 const routes = {

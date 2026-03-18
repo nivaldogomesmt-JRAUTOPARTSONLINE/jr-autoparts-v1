@@ -7,7 +7,6 @@ const {
   getMaintenanceAlertLevel,
   toIntOrNull,
 } = require('../utils/maintenance');
-const { isValidEmail } = require('../utils/security');
 
 const MAINTENANCE_RULES = [
   {
