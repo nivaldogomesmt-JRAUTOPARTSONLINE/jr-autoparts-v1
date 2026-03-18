@@ -11,11 +11,17 @@ let maintenanceScheduler = null;
 const allowedOrigins = [
   process.env.FRONTEND_URL || 'http://localhost:5173',
   'http://localhost:3000',
+  'http://localhost:5173',
+  // Vercel preview/production deployments
+  'https://jr-autoparts-v1.vercel.app',
 ].filter(Boolean);
 
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    // Allow any *.vercel.app subdomain for preview deployments
+    if (/^https:\/\/[a-zA-Z0-9-]+\.vercel\.app$/.test(origin)) return callback(null, true);
     return callback(new Error('Origem nao permitida pelo CORS.'));
   },
   credentials: true,

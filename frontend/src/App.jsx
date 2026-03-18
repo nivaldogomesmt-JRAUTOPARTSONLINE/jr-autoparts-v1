@@ -48,9 +48,19 @@ function PrivateRoute({ children }) {
 }
 
 function PortalRoute({ children }) {
-  const { user, loading } = useAuth();
-  if (loading) return <div className="loading"><div className="spinner" /></div>;
-  if (!user || user.role !== 'CLIENT') return <Navigate to="/portal/login" replace />;
+  const token = localStorage.getItem('jr_portal_token');
+  if (!token) return <Navigate to="/portal/login" replace />;
+  // Basic JWT expiry check (decode without verify)
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    if (payload.exp && payload.exp * 1000 < Date.now()) {
+      localStorage.removeItem('jr_portal_token');
+      return <Navigate to="/portal/login" replace />;
+    }
+  } catch {
+    localStorage.removeItem('jr_portal_token');
+    return <Navigate to="/portal/login" replace />;
+  }
   return children;
 }
 
