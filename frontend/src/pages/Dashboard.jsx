@@ -27,24 +27,35 @@ function StatCard({ label, value, sub, color, icon }) {
 
 function OSRow({ os, onClick }) {
   const statusBadge = {
-    'Iniciado':  'badge-iniciado',
-    'Em andamento': 'badge-andamento',
-    'Pronto':    'badge-pronto',
-    'Entregue':  'badge-entregue',
-    'Finalizado':'badge-finalizado',
-    'Cancelado': 'badge-cancelado',
+    'QUOTE':        'badge-gray',
+    'APPROVED':     'badge-blue',
+    'STARTED':      'badge-iniciado',
+    'IN_PROGRESS':  'badge-andamento',
+    'WAITING_PART': 'badge-yellow',
+    'FINISHING':    'badge-andamento',
+    'DONE':         'badge-pronto',
+    'DELIVERED':    'badge-entregue',
+  };
+  const STATUS_LABEL = {
+    'QUOTE': 'Orçamento', 'APPROVED': 'Aprovado', 'STARTED': 'Iniciado',
+    'IN_PROGRESS': 'Em Andamento', 'WAITING_PART': 'Aguard. Peça',
+    'FINISHING': 'Finalizando', 'DONE': 'Pronto', 'DELIVERED': 'Entregue',
   };
   const cls = statusBadge[os.status] || 'badge-gray';
+  const clientName = os.client?.name || os.client_name || os.clients?.name || '—';
+  const vehiclePlate = os.vehicle?.plate || os.vehicle_plate || os.vehicles?.plate || '—';
+  const total = os.totalPrice ?? os.total;
+  const updatedAt = os.updatedAt || os.updated_at;
   return (
     <tr onClick={onClick} style={{ cursor: 'pointer' }}>
-      <td><strong style={{ color: 'var(--primary)' }}>#{os.id}</strong></td>
-      <td>{os.client_name || os.clients?.name || '—'}</td>
-      <td><span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 12 }}>{os.vehicle_plate || os.vehicles?.plate}</span></td>
-      <td><span className={`badge ${cls}`}>{os.status}</span></td>
+      <td><strong style={{ color: 'var(--primary)' }}>#{os.number ?? os.id}</strong></td>
+      <td>{clientName}</td>
+      <td><span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 12 }}>{vehiclePlate}</span></td>
+      <td><span className={`badge ${cls}`}>{STATUS_LABEL[os.status] || os.statusLabel || os.status}</span></td>
       <td className="text-right" style={{ fontWeight: 700 }}>
-        {os.total != null ? `R$ ${Number(os.total).toFixed(2)}` : '—'}
+        {total != null ? `R$ ${Number(total).toFixed(2)}` : '—'}
       </td>
-      <td className="text-muted text-sm">{os.updated_at ? new Date(os.updated_at).toLocaleDateString('pt-BR') : '—'}</td>
+      <td className="text-muted text-sm">{updatedAt ? new Date(updatedAt).toLocaleDateString('pt-BR') : '—'}</td>
     </tr>
   );
 }
@@ -68,17 +79,33 @@ export default function Dashboard() {
   }, []);
 
   const d = data || {};
-  const kpis = d.kpis || {};
-  const osAndamento = d.os_em_andamento || [];
-  const osProntas = d.os_prontas || [];
-  const osAtrasadas = d.os_atrasadas || [];
-  const osPendentePeca = d.os_aguardando_peca || [];
+  // API returns: { stats, priorities, operation, recentOS, rankings, campaigns }
+  const kpis = d.stats || d.kpis || {};
+  const operation = d.operation || {};
+  const osAndamento = operation.inProgress || d.os_em_andamento || [];
+  const osProntas = operation.ready || d.os_prontas || [];
+  const osAtrasadas = operation.stalled || d.os_atrasadas || [];
+  const osPendentePeca = operation.waitingPart || d.os_aguardando_peca || [];
   const prioridades = d.prioridades_do_dia || [];
   const rankingClientes = d.ranking_clientes || [];
-  const rankingVeiculos = d.ranking_veiculos || [];
-  const metas = d.metas_campanhas || [];
-  const manutVencidas = d.manutencoes_vencidas || {};
-  const manutAtencao = d.manutencoes_atencao || {};
+  const rankingVeiculos = (d.rankings?.topVehicles || d.ranking_veiculos || []).map(v => ({
+    ...v, total_revenue: v.total_revenue ?? v.revenue,
+    brand: v.brand || '', model: v.model || v.name || '',
+  }));
+  const metas = (d.campaigns || d.metas_campanhas || []).map(m => ({
+    ...m,
+    meta: m.meta ?? m.target,
+    realizado: m.realizado ?? m.achieved,
+    responsible: m.responsible ?? m.owner,
+  }));
+  const manutVencidas = d.manutencoes_vencidas || {
+    total: kpis.maintenanceOverdue ?? 0,
+    detalhe: `Óleo (${kpis.oilOverdue ?? 0}), correia (${kpis.beltOverdue ?? 0})`,
+  };
+  const manutAtencao = d.manutencoes_atencao || {
+    total: kpis.maintenanceDueSoon ?? 0,
+    detalhe: 'Próximos 30 dias',
+  };
 
   return (
     <div>
@@ -106,10 +133,10 @@ export default function Dashboard() {
           <div className="section">
             <div className="section-header"><h2 className="section-title">Indicadores do Mês</h2></div>
             <div className="grid-4">
-              <StatCard label="Faturamento do Mês" value={kpis.faturamento_mes ? `R$ ${Number(kpis.faturamento_mes).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'} sub="Ordens entregues e finalizadas" color="blue" icon="💰" />
-              <StatCard label="OS do Mês" value={kpis.os_mes ?? 0} sub={`Ticket médio: R$ ${Number(kpis.ticket_medio || 0).toFixed(2)}`} color="blue" icon="📋" />
+              <StatCard label="Faturamento do Mês" value={(kpis.faturamento_mes ?? kpis.monthlyRevenue) != null ? `R$ ${Number(kpis.faturamento_mes ?? kpis.monthlyRevenue).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'} sub="Ordens entregues e finalizadas" color="blue" icon="💰" />
+              <StatCard label="OS do Mês" value={kpis.os_mes ?? kpis.monthlyOS ?? 0} sub={`Ticket médio: R$ ${Number(kpis.ticket_medio ?? kpis.avgTicket ?? 0).toFixed(2)}`} color="blue" icon="📋" />
               <StatCard label="OS Atrasadas" value={osAtrasadas.length} sub="Aguardando resolução" color={osAtrasadas.length > 0 ? 'red' : 'green'} icon="⏰" />
-              <StatCard label="Pedidos Pendentes" value={kpis.pedidos_pendentes ?? 0} sub="Aguardando aprovação" color={kpis.pedidos_pendentes > 0 ? 'yellow' : 'green'} icon="📦" />
+              <StatCard label="Pedidos Pendentes" value={kpis.pedidos_pendentes ?? kpis.pendingDeliveries ?? 0} sub="Aguardando aprovação" color={(kpis.pedidos_pendentes ?? kpis.pendingDeliveries ?? 0) > 0 ? 'yellow' : 'green'} icon="📦" />
             </div>
           </div>
 
@@ -119,7 +146,7 @@ export default function Dashboard() {
             <div className="grid-3">
               <StatCard label="Manutenções Vencidas" value={manutVencidas.total ?? 0} sub={manutVencidas.detalhe || 'Óleo e correia'} color={manutVencidas.total > 0 ? 'red' : 'green'} icon="🔴" />
               <StatCard label="Manutenções a Vencer" value={manutAtencao.total ?? 0} sub={manutAtencao.detalhe || 'Próximos 30 dias'} color={manutAtencao.total > 0 ? 'yellow' : 'green'} icon="🟡" />
-              <StatCard label="Em Dia" value={(d.total_veiculos ?? 0) - (manutVencidas.total ?? 0) - (manutAtencao.total ?? 0)} sub="Veículos sem pendência" color="green" icon="✅" />
+              <StatCard label="Em Dia" value={(d.total_veiculos ?? kpis.totalVehicles ?? 0) - (manutVencidas.total ?? 0) - (manutAtencao.total ?? 0)} sub="Veículos sem pendência" color="green" icon="✅" />
             </div>
           </div>
 
@@ -232,14 +259,14 @@ export default function Dashboard() {
                 {rankingVeiculos.length === 0 ? (
                   <div className="text-muted text-sm">Sem dados disponíveis</div>
                 ) : rankingVeiculos.slice(0, 5).map((v, i) => (
-                  <div key={i} className="ranking-item" onClick={() => navigate(`/veiculos/${v.id}`)} style={{ cursor: 'pointer' }}>
+                  <div key={i} className="ranking-item" onClick={v.id || v.vehicleId ? () => navigate(`/veiculos/${v.id || v.vehicleId}`) : undefined} style={{ cursor: v.id || v.vehicleId ? 'pointer' : 'default' }}>
                     <span className={`ranking-pos ranking-pos-${i + 1}`}>{i + 1}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 700, fontSize: 12, fontFamily: 'monospace' }}>{v.plate}</div>
                       <div className="text-muted text-sm">{v.brand} {v.model}</div>
                     </div>
                     <div style={{ fontWeight: 700, color: 'var(--success)', fontSize: 13, flexShrink: 0 }}>
-                      R$ {Number(v.total_revenue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      R$ {Number(v.total_revenue || v.revenue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </div>
                   </div>
                 ))}

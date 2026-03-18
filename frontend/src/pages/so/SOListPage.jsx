@@ -4,13 +4,14 @@ import { useNavigate } from 'react-router-dom';
 const API = import.meta.env.VITE_API_URL || '';
 
 const STATUS_CONFIG = {
-  'Iniciado':     { badge: 'badge-iniciado',  label: 'Iniciado' },
-  'Em andamento': { badge: 'badge-andamento',  label: 'Em Andamento' },
-  'Pronto':       { badge: 'badge-pronto',     label: 'Pronto' },
-  'Aguardando peca': { badge: 'badge-yellow',  label: 'Aguard. Peça' },
-  'Entregue':     { badge: 'badge-entregue',   label: 'Entregue' },
-  'Finalizado':   { badge: 'badge-finalizado', label: 'Finalizado' },
-  'Cancelado':    { badge: 'badge-cancelado',  label: 'Cancelado' },
+  'QUOTE':        { badge: 'badge-gray',       label: 'Orçamento' },
+  'APPROVED':     { badge: 'badge-blue',       label: 'Aprovado' },
+  'STARTED':      { badge: 'badge-iniciado',   label: 'Iniciado' },
+  'IN_PROGRESS':  { badge: 'badge-andamento',  label: 'Em Andamento' },
+  'WAITING_PART': { badge: 'badge-yellow',     label: 'Aguard. Peça' },
+  'FINISHING':    { badge: 'badge-andamento',  label: 'Finalizando' },
+  'DONE':         { badge: 'badge-pronto',     label: 'Pronto' },
+  'DELIVERED':    { badge: 'badge-entregue',   label: 'Entregue' },
 };
 
 const ALL_STATUS = Object.keys(STATUS_CONFIG);
@@ -30,7 +31,7 @@ export default function SOListPage() {
         const r = await fetch(API + '/api/so', { headers: { Authorization: 'Bearer ' + token() } });
         if (r.ok) {
           const data = await r.json();
-          setOrders(Array.isArray(data) ? data : data.orders || []);
+          setOrders(Array.isArray(data) ? data : data.data || []);
           if (data.stats) setStats(data.stats);
         }
       } catch (e) { console.error('[SOListPage] load error:', e); }
@@ -39,15 +40,16 @@ export default function SOListPage() {
     load();
   }, []);
 
-  const activeStatuses = ['Iniciado', 'Em andamento', 'Aguardando peca'];
+  const activeStatuses = ['QUOTE', 'APPROVED', 'STARTED', 'IN_PROGRESS', 'WAITING_PART', 'FINISHING'];
   const filtered = orders.filter(o => {
     const matchSearch = !search ||
       String(o.id).includes(search) ||
-      o.clients?.name?.toLowerCase().includes(search.toLowerCase()) ||
-      o.vehicles?.plate?.toLowerCase().includes(search.toLowerCase());
+      o.client?.name?.toLowerCase().includes(search.toLowerCase()) ||
+      o.vehicle?.plate?.toLowerCase().includes(search.toLowerCase());
     const matchStatus =
       statusFilter === 'active' ? activeStatuses.includes(o.status) :
       statusFilter === 'all' ? true :
+      statusFilter === 'DONE' ? ['DONE', 'FINISHING'].includes(o.status) :
       o.status === statusFilter;
     return matchSearch && matchStatus;
   });
@@ -83,14 +85,14 @@ export default function SOListPage() {
                 <div className="stat-value" style={{ color: 'var(--primary)' }}>{countActive}</div>
                 <div className="stat-sub">Iniciado + Andamento + Aguard.</div>
               </div>
-              <div className="stat-card" style={{ borderLeft: '4px solid var(--success)', cursor:'pointer' }} onClick={() => setStatusFilter('Pronto')}>
+              <div className="stat-card" style={{ borderLeft: '4px solid var(--success)', cursor:'pointer' }} onClick={() => setStatusFilter('DONE')}>
                 <div className="stat-label">Prontas</div>
-                <div className="stat-value" style={{ color: 'var(--success)' }}>{countByStatus('Pronto')}</div>
+                <div className="stat-value" style={{ color: 'var(--success)' }}>{countByStatus('DONE')}</div>
                 <div className="stat-sub">Aguardando retirada</div>
               </div>
-              <div className="stat-card" style={{ borderLeft: '4px solid var(--warning)', cursor:'pointer' }} onClick={() => setStatusFilter('Aguardando peca')}>
+              <div className="stat-card" style={{ borderLeft: '4px solid var(--warning)', cursor:'pointer' }} onClick={() => setStatusFilter('WAITING_PART')}>
                 <div className="stat-label">Aguard. Peça</div>
-                <div className="stat-value" style={{ color: 'var(--warning)' }}>{countByStatus('Aguardando peca')}</div>
+                <div className="stat-value" style={{ color: 'var(--warning)' }}>{countByStatus('WAITING_PART')}</div>
                 <div className="stat-sub">Bloqueadas por peça</div>
               </div>
               <div className="stat-card" style={{ borderLeft: '4px solid var(--gray-300)', cursor:'pointer' }} onClick={() => setStatusFilter('all')}>
@@ -109,11 +111,11 @@ export default function SOListPage() {
               <button className={`btn btn-sm ${statusFilter === 'active' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setStatusFilter('active')}>
                 Ativos ({countActive})
               </button>
-              <button className={`btn btn-sm ${statusFilter === 'Pronto' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setStatusFilter('Pronto')}>
-                Prontos ({countByStatus('Pronto')})
+              <button className={`btn btn-sm ${statusFilter === 'DONE' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setStatusFilter('DONE')}>
+                Prontos ({countByStatus('DONE')})
               </button>
-              <button className={`btn btn-sm ${statusFilter === 'Aguardando peca' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setStatusFilter('Aguardando peca')}>
-                Aguard. Peça ({countByStatus('Aguardando peca')})
+              <button className={`btn btn-sm ${statusFilter === 'WAITING_PART' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setStatusFilter('WAITING_PART')}>
+                Aguard. Peça ({countByStatus('WAITING_PART')})
               </button>
               <button className={`btn btn-sm ${statusFilter === 'all' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setStatusFilter('all')}>
                 Todos ({orders.length})
@@ -157,14 +159,14 @@ export default function SOListPage() {
                           <strong style={{ color: 'var(--primary)' }}>#{o.id}</strong>
                    {isLate && <span className="badge badge-red" style={{ marginLeft: 6, fontSize: 10, verticalAlign: 'middle' }}>⚠ ATRASADA</span>}
                         </td>
-                        <td style={{ fontWeight: 600 }}>{o.clients?.name || o.client_name || '—'}</td>
-                        <td><span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 12 }}>{o.vehicles?.plate || o.vehicle_plate || '—'}</span></td>
+                        <td style={{ fontWeight: 600 }}>{o.client?.name || o.client_name || '—'}</td>
+                        <td><span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 12 }}>{o.vehicle?.plate || o.vehicle_plate || '—'}</span></td>
                         <td><span className={`badge ${s.badge}`}>{s.label}</span></td>
                         <td className="text-right" style={{ fontWeight: 700 }}>
                           {o.total != null ? `R$ ${Number(o.total).toFixed(2)}` : '—'}
                         </td>
                         <td className="text-muted text-sm">
-                          {o.updated_at ? new Date(o.updated_at).toLocaleDateString('pt-BR') : '—'}
+                          {(o.updatedAt || o.updated_at) ? new Date(o.updatedAt || o.updated_at).toLocaleDateString('pt-BR') : '—'}
                         </td>
                         <td>
                           <button className="btn btn-ghost btn-sm" onClick={e=>{e.stopPropagation();navigate(`/os/${o.id}`);}}>Ver →</button>

@@ -18,7 +18,7 @@ export default function VehiclesPage() {
         const rv = await fetch(API + '/api/vehicles', { headers: { Authorization: 'Bearer ' + token() } });
         if (rv.ok) {
           const data = await rv.json();
-          setVehicles(Array.isArray(data) ? data : data.vehicles || []);
+          setVehicles(Array.isArray(data) ? data : data.data || []);
           if (data.stats) setStats(data.stats);
           if (data.rankings) setRankings(data.rankings);
         }
@@ -33,7 +33,7 @@ export default function VehiclesPage() {
     v.plate?.toLowerCase().includes(search.toLowerCase()) ||
     v.brand?.toLowerCase().includes(search.toLowerCase()) ||
     v.model?.toLowerCase().includes(search.toLowerCase()) ||
-    v.clients?.name?.toLowerCase().includes(search.toLowerCase())
+    v.client?.name?.toLowerCase().includes(search.toLowerCase())
   );
 
   const statusColor = { urgencia: 'red', atencao: 'yellow', em_dia: 'green' };
@@ -156,7 +156,7 @@ export default function VehiclesPage() {
                 </thead>
                 <tbody>
                   {filtered.map(v => {
-                    const st = v.maintenance_status;
+                    const st = v.maintenanceStatus;
                     const badge = st === 'urgencia' ? 'badge-red' : st === 'atencao' ? 'badge-yellow' : 'badge-green';
                     const label = st === 'urgencia' ? 'Urgência' : st === 'atencao' ? 'Atenção' : 'Em dia';
                     return (
@@ -166,9 +166,9 @@ export default function VehiclesPage() {
                           <div style={{ fontWeight: 600 }}>{v.brand} {v.model}</div>
                           {v.color && <div className="text-muted text-sm">{v.color}</div>}
                         </td>
-                        <td>{v.clients?.name || '—'}</td>
+                        <td>{v.client?.name || '—'}</td>
                         <td>{v.year || '—'}</td>
-                        <td><span className="badge badge-blue">{v.os_count ?? 0}</span></td>
+                        <td><span className="badge badge-blue">{v._count?.serviceOrders ?? 0}</span></td>
                         <td><span className={`badge ${badge}`}>{label}</span></td>
                         <td><button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); navigate(`/veiculos/${v.id}`); }}>Ver →</button></td>
                       </tr>
