@@ -55,8 +55,18 @@ export default function PortalSODetail() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
+      {/* Print-only header with logo */}
+      <div className="print-only-header">
+        <img src={BRAND.logo || BRAND.logoUrl} alt={BRAND.name} style={{ height: 60 }} />
+        <div style={{ marginLeft: 16 }}>
+          <div style={{ fontSize: 18, fontWeight: 800, color: '#1A3C5E' }}>{BRAND.name}</div>
+          <div style={{ fontSize: 13, color: '#64748b' }}>Ordem de Serviço #{os.id}</div>
+          <div style={{ fontSize: 12, color: '#64748b' }}>{BRAND.phone}</div>
+        </div>
+      </div>
+
       {/* Header */}
-      <header style={{ background: 'var(--primary)', padding: '14px 24px', display: 'flex', alignItems: 'center', gap: 12 }}>
+      <header className="no-print" style={{ background: 'var(--primary)', padding: '14px 24px', display: 'flex', alignItems: 'center', gap: 12 }}>
         <button onClick={() => navigate(-1)}
           style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: 8, cursor: 'pointer', fontSize: 16 }}>
           ←

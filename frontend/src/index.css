@@ -387,4 +387,6 @@ select.form-control { appearance: none; background-image: url("data:image/svg+xm
   .print-block-os ~ .print-block:not(.print-block-os) { display: none !important; }
   .section { margin-bottom: 16px !important; }
   .grid-2, .grid-3, .grid-4 { grid-template-columns: repeat(2, 1fr) !important; gap: 8px !important; }
+  .print-only-header { display: flex !important; align-items: center; padding: 12px 0 16px; border-bottom: 2px solid #1A3C5E; margin-bottom: 20px; }
 }
+.print-only-header { display: none; }

@@ -22,7 +22,7 @@ export default function PortalLogin() {
         body: JSON.stringify({ email, password }),
       });
       const data = await r.json();
-      if (!r.ok) throw new Error(data.message || 'Credenciais inválidas');
+      if (!r.ok) throw new Error(data.error || data.message || 'Credenciais inválidas');
       localStorage.setItem('jr_portal_token', data.token);
       navigate('/portal');
     } catch (err) {
@@ -38,10 +38,9 @@ export default function PortalLogin() {
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
           {BRAND.logo
-            ? <img src={BRAND.logo} alt={BRAND.name} style={{ width: 56, height: 56, borderRadius: 12, marginBottom: 12 }} />
+            ? <img src={BRAND.logo} alt={BRAND.name} className="portal-logo" style={{ width: '100%', maxWidth: 280, height: 'auto', marginBottom: 12, display: 'block', margin: '0 auto 12px' }} />
             : <div style={{ width: 56, height: 56, borderRadius: 12, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, margin: '0 auto 12px' }}>🔧</div>
           }
-          <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a' }}>{BRAND.name}</div>
           <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>Portal do Cliente</div>
         </div>
 

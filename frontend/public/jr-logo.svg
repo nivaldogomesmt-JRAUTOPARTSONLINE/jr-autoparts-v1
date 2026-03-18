@@ -1,7 +1,28 @@
-<svg width="420" height="130" viewBox="0 0 420 130" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect x="1" y="1" width="418" height="128" rx="18" fill="#ffffff" stroke="#1A3C5E" stroke-width="2"/>
-  <path d="M32 33C58 20 90 17 122 20C154 23 190 34 218 43C246 52 282 61 326 58" stroke="#E11D48" stroke-width="4" stroke-linecap="round"/>
-  <text x="28" y="88" font-family="Segoe UI, Arial, sans-serif" font-size="54" font-weight="800" fill="#1A3C5E">JR</text>
-  <text x="120" y="88" font-family="Segoe UI, Arial, sans-serif" font-size="44" font-weight="700" fill="#EAB308">Auto Parts</text>
-  <text x="270" y="113" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#DC2626">65 99281-2000</text>
+<svg width="420" height="140" viewBox="0 0 420 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="420" height="140" rx="16" fill="#1A3C5E"/>
+
+  <!-- Shield icon on the left -->
+  <g transform="translate(22, 18)">
+    <!-- Shield shape -->
+    <path d="M48 4 L88 16 L88 52 C88 72 68 84 48 92 C28 84 8 72 8 52 L8 16 Z" fill="#EAB308" stroke="#F59E0B" stroke-width="2"/>
+    <!-- Wrench inside shield -->
+    <g transform="translate(28, 28)">
+      <path d="M16 2 C9.37 2 4 7.37 4 14 C4 18.5 6.37 22.45 10 24.72 L10 40 L14 44 L18 40 L18 24.72 C21.63 22.45 24 18.5 24 14 C24 7.37 18.63 2 12 2 Z" fill="white" opacity="0.15"/>
+      <path d="M33 10 C33 14.97 29.97 19.22 25.67 21.0 L25.67 38 L22 42 L18.33 38 L18.33 21.0 C14.03 19.22 11 14.97 11 10 C11 8.5 11.3 7.07 11.83 5.75 L16 10 L18.5 10 L18.5 7.5 L14.5 3.17 C15.8 2.43 17.3 2 18.9 2 C26.67 2 33 5.58 33 10 Z" fill="white"/>
+      <circle cx="22" cy="32" r="2.5" fill="#EAB308"/>
+    </g>
+  </g>
+
+  <!-- JR text -->
+  <text x="118" y="72" font-family="'Segoe UI', Arial Black, sans-serif" font-size="56" font-weight="900" fill="#FFFFFF" letter-spacing="-1">JR</text>
+
+  <!-- Auto Parts text -->
+  <text x="118" y="100" font-family="'Segoe UI', Arial, sans-serif" font-size="26" font-weight="700" fill="#EAB308" letter-spacing="1">AUTO PARTS</text>
+
+  <!-- Decorative line -->
+  <line x1="118" y1="108" x2="395" y2="108" stroke="#EAB308" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+
+  <!-- Phone number -->
+  <text x="118" y="128" font-family="'Segoe UI', Arial, sans-serif" font-size="16" font-weight="500" fill="#94a3b8" letter-spacing="0.5">&#x260E; 65 99281-2000</text>
 </svg>
