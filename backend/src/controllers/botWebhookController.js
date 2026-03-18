@@ -233,7 +233,18 @@ async function openBoletos(req, res) {
 
     // Call EfÃ­ service
     // â ï¸ Verify: efiService.listChargesByCpf may be named differently in your project
-    const charges = await efiService.listChargesByCpf(cpfCnpj);
+    // Call Efi service with correct object signature
+    let charges;
+    try {
+      charges = await efiService.listChargesByCpf({ cpf: cpfCnpj });
+    } catch (efiErr) {
+      console.error('[botWebhookController] openBoletos: Efi API error:', efiErr.message);
+      return ok(res, {
+        status:    'EFI_UNAVAILABLE',
+        message:   'Nao foi possivel consultar cobrancas no momento. Tente novamente em instantes ou entre em contato pelo WhatsApp.',
+        sessionId: session.id,
+      });
+    }
 
     // Filter to open/payable statuses
     const openCharges = (charges || []).filter(c =>
