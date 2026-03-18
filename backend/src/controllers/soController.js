@@ -1,5 +1,6 @@
 const prisma = require('../lib/prisma');
 const { sendWhatsAppMessageWithDedupe } = require('../services/whatsappService');
+const botconversa = require('../services/botconversaService');
 const { uploadToCloudinary, deleteFromCloudinary } = require('../services/uploadService');
 const { computeMaintenanceForecast } = require('../utils/maintenance');
 const { normalizeSearchToken, normalizedSqlExpr } = require('../utils/search');
@@ -962,6 +963,23 @@ const updateStatus = async (req, res) => {
           console.error('WhatsApp error:', error.message);
         });
       }
+    }
+
+    // BotConversa: notificacao de status (fire-and-forget, nao bloqueia resposta)
+    botconversa.notifyOSStatusChange({
+      client: current.client,
+      vehicle: current.vehicle,
+      status,
+      soNumber: current.number,
+      portalUrl: `${process.env.FRONTEND_URL || ''}/portal`,
+    }).catch((err) => console.error('[BotConversa] notifyOSStatusChange error:', err.message));
+
+    // BotConversa: pos-servico ao entregar
+    if (status === 'DELIVERED') {
+      botconversa.startPostServiceSequence({
+        client: current.client,
+        vehicle: current.vehicle,
+      }).catch((err) => console.error('[BotConversa] startPostServiceSequence error:', err.message));
     }
 
     return res.json(order);

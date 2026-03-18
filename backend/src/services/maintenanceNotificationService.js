@@ -2,6 +2,7 @@
 const { computeMaintenanceForecast, getMaintenanceAlertLevel } = require('../utils/maintenance');
 const { sendWhatsAppMessageWithDedupe, wasWhatsAppRecentlySent } = require('./whatsappService');
 const { resolveNotificationPayload } = require('./notificationCenterService');
+const botconversa = require('./botconversaService');
 
 const ALERT_LABEL = {
   OVERDUE: 'Urgencia',
@@ -229,6 +230,17 @@ async function sendMaintenanceAlerts({ dryRun = false, limit = 500, now = new Da
     if (result?.success) {
       summary.sent += 1;
       details.push({ ...item, status: 'SENT', eventKey: result.eventKey || eventKey });
+
+      // BotConversa: notifica em paralelo (fire-and-forget)
+      botconversa.notifyMaintenanceAlert({
+        client: { id: item.clientId, name: item.clientName, whatsapp: item.phone, phone: item.phone },
+        plate: item.plate,
+        label: item.label,
+        alertLevel: item.alertLevel,
+        nextDate: item.nextDate,
+        nextKm: item.nextKm,
+      }).catch((err) => console.error('[BotConversa] notifyMaintenanceAlert error:', err.message));
+
       continue;
     }
 

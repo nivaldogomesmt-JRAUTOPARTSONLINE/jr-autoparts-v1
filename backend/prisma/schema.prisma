@@ -61,6 +61,7 @@ model Client {
   city          String?
   type          ClientType    @default(PERSONAL)
   active        Boolean       @default(true)
+  botconversaSubscriberId String? @map("botconversa_subscriber_id")
   user          User?
   vehicles      Vehicle[]
   serviceOrders ServiceOrder[]

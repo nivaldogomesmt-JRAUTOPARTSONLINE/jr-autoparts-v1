@@ -4,6 +4,7 @@ const XLSX = require('xlsx');
 const { normalizeSearchToken, normalizedSqlExpr } = require('../utils/search');
 const { sendWhatsAppMessageWithDedupe } = require('../services/whatsappService');
 const { appendIntegrationLog } = require('../services/integrationLogService');
+const botconversa = require('../services/botconversaService');
 
 function parseSearchTokens(search) {
   return String(search || '')
@@ -219,6 +220,11 @@ const create = async (req, res) => {
       });
     }
 
+    // BotConversa: criar assinante (fire-and-forget)
+    botconversa.syncClientOnCreate({ client }).catch((err) =>
+      console.error('[BotConversa] syncClientOnCreate error:', err.message)
+    );
+
     res.status(201).json(client);
   } catch (err) {
     if (err.code === 'P2002') return res.status(409).json({ error: 'CPF/CNPJ ou email ja cadastrado.' });
@@ -310,7 +316,8 @@ const grantPortalAccess = async (req, res) => {
     const exists = await prisma.user.findFirst({ where: { clientId: client.id } });
     if (exists) return res.status(409).json({ error: 'Cliente ja tem acesso ao portal.' });
 
-    const passwordHash = await bcrypt.hash(password || 'JR@2024', 10);
+    const finalPassword = password || 'JR@2026';
+    const passwordHash = await bcrypt.hash(finalPassword, 10);
     await prisma.user.create({
       data: {
         name: client.name,
@@ -321,7 +328,14 @@ const grantPortalAccess = async (req, res) => {
       },
     });
 
-    res.json({ message: 'Acesso ao portal criado com sucesso.', defaultPassword: !password ? 'JR@2024' : undefined });
+    // BotConversa: notificar cliente com credenciais do portal (fire-and-forget)
+    botconversa.notifyPortalAccessGranted({
+      client,
+      password: finalPassword,
+      portalUrl: `${process.env.FRONTEND_URL || 'https://app.jrautopartsmt.com.br'}/portal/login`,
+    }).catch((err) => console.error('[BotConversa] notifyPortalAccessGranted error:', err.message));
+
+    res.json({ message: 'Acesso ao portal criado com sucesso.', defaultPassword: !password ? 'JR@2026' : undefined });
   } catch (err) {
     res.status(500).json({ error: 'Erro ao criar acesso ao portal.' });
   }

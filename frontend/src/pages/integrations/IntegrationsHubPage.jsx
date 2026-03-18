@@ -382,6 +382,7 @@ export default function IntegrationsHubPage() {
             <Link to="/mensagens" className="btn btn-outline">WhatsApp / Mensagens</Link>
             <Link to="/integracoes/evolution-whatsapp" className="btn btn-outline">WhatsApp - Evolution API (vincular telefone)</Link>
             <Link to="/integracoes/notificacoes" className="btn btn-outline">Central de Notificações</Link>
+            <Link to="/integracoes/botconversa" className="btn btn-outline">BotConversa — Automação WhatsApp</Link>
             <Link to="/integracoes/efi-teste" className="btn btn-outline">Teste Efí - Boleto por CPF</Link>
             <Link to="/rastreamento" className="btn btn-outline">Rastreamento / APIs externas</Link>
             <button type="button" className="btn btn-outline" disabled>XML / NF (via importacao)</button>

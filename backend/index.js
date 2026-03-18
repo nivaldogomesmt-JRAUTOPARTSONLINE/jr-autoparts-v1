@@ -69,6 +69,7 @@ const routes = {
   efi: require('./src/routes/efiRoutes'),
   evolution: require('./src/routes/evolutionRoutes'),
   'webhooks/evolution': require('./src/routes/evolutionWebhookRoutes'),
+  botconversa: require('./src/routes/botconversaRoutes'),
 };
 
 function mount(path, handler) {
@@ -95,6 +96,7 @@ mount('integrations', routes.integrations);
 mount('efi', routes.efi);
 mount('evolution', routes.evolution);
 mount('webhooks/evolution', routes['webhooks/evolution']);
+mount('botconversa', routes.botconversa);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Rota nao encontrada' });

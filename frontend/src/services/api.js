@@ -211,6 +211,14 @@ export const evolutionAPI = {
   logout: () => api.delete('/evolution/logout'),
   disconnectReset: () => api.post('/evolution/disconnect-reset'),
 };
+
+export const botconversaAPI = {
+  getStatus: () => api.get('/botconversa/status'),
+  syncAll: () => api.post('/botconversa/sync-all'),
+  syncClient: (id) => api.post(`/botconversa/sync-client/${id}`),
+  getSubscribersSynced: () => api.get('/botconversa/subscribers-synced'),
+  testMessage: (data) => api.post('/botconversa/test-message', data),
+};
 export const portalAPI = {
   me:            ()         => api.get('/portal/me'),
   updateMe:      (data)     => api.put('/portal/me', data),
