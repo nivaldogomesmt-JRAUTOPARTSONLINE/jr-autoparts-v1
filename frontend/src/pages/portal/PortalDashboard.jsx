@@ -61,7 +61,7 @@ export default function PortalDashboard() {
   useEffect(() => {
     const load = async () => {
       try {
-        const r = await fetch(API + '/api/portal/dashboard', {
+        const r = await fetch(API + '/api/portal/me', {
           headers: { Authorization: 'Bearer ' + ptoken() }
         });
         if (r.status === 401) { navigate('/portal/login'); return; }
@@ -72,9 +72,22 @@ export default function PortalDashboard() {
     load();
   }, []);
 
+  const STATUS_LABELS_MAP = {
+    QUOTE: 'Orçamento', APPROVED: 'Aprovado', STARTED: 'Iniciado',
+    IN_PROGRESS: 'Em Andamento', WAITING_PART: 'Aguard. Peça', FINISHING: 'Finalizando',
+    DONE: 'Pronto', DELIVERED: 'Entregue',
+  };
+
   const client = data?.client || {};
-  const vehicles = data?.vehicles || [];
-  const recentOS = data?.recent_os || [];
+  const vehicles = (data?.vehicles || []).map(v => ({
+    ...v,
+    maintenance_status: (v.overdueCount > 0) ? 'urgencia' : (v.dueSoonCount > 0) ? 'atencao' : 'em_dia',
+    open_os_count: (v.serviceOrders || []).filter(o =>
+      ['APPROVED','STARTED','IN_PROGRESS','WAITING_PART','FINISHING'].includes(o.status)).length,
+    total_os_count: (v.serviceOrders || []).length,
+    last_service: v.serviceOrders?.[0]?.updatedAt,
+  }));
+  const recentOS = data?.recentOrders || [];
 
   const urgencia = vehicles.filter(v => v.maintenance_status === 'urgencia').length;
   const atencao  = vehicles.filter(v => v.maintenance_status === 'atencao').length;
@@ -166,8 +179,10 @@ export default function PortalDashboard() {
               </h2>
               <div style={{ background: '#fff', borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
                 {recentOS.slice(0, 5).map((os, i) => {
-                  const statusColors = { 'Entregue': '#15803d', 'Finalizado': '#475569', 'Pronto': '#16a34a', 'Em andamento': '#c2410c', 'Iniciado': '#1d4ed8' };
+                  const statusColors = { DELIVERED: '#15803d', DONE: '#475569', FINISHING: '#16a34a', IN_PROGRESS: '#c2410c', STARTED: '#1d4ed8', WAITING_PART: '#d97706', APPROVED: '#4f46e5', QUOTE: '#6b7280' };
                   const color = statusColors[os.status] || '#475569';
+                  const statusLabel = STATUS_LABELS_MAP[os.status] || os.status;
+                  const osTotal = os.totalPrice ?? os.total;
                   return (
                     <div key={os.id} onClick={() => navigate(`/portal/os/${os.id}`)}
                       style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 20px', borderBottom: i < recentOS.length - 1 ? '1px solid var(--border)' : 'none', cursor: 'pointer' }}>
@@ -175,14 +190,14 @@ export default function PortalDashboard() {
                         🔧
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>OS #{os.id} · {os.vehicles?.plate}</div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>OS #{os.id} · {os.vehicle?.plate}</div>
                         <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                          {os.updated_at ? new Date(os.updated_at).toLocaleDateString('pt-BR') : '—'}
+                          {(os.updatedAt || os.updated_at) ? new Date(os.updatedAt || os.updated_at).toLocaleDateString('pt-BR') : '—'}
                         </div>
                       </div>
                       <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color, background: color + '15', padding: '2px 8px', borderRadius: 12 }}>{os.status}</div>
-                        {os.total && <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--success)', marginTop: 4 }}>R$ {Number(os.total).toFixed(2)}</div>}
+                        <div style={{ fontSize: 11, fontWeight: 700, color, background: color + '15', padding: '2px 8px', borderRadius: 12 }}>{statusLabel}</div>
+                        {osTotal != null && <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--success)', marginTop: 4 }}>R$ {Number(osTotal).toFixed(2)}</div>}
                       </div>
                     </div>
                   );

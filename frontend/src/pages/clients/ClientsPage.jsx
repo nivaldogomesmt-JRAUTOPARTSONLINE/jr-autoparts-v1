@@ -15,7 +15,7 @@ export default function ClientsPage() {
       try {
         const token = () => localStorage.getItem('jr_token');
         const [rc, rr] = await Promise.all([
-          fetch(API + '/api/clients', { headers: { Authorization: 'Bearer ' + token() } }),
+          fetch(API + '/api/clients?limit=5000', { headers: { Authorization: 'Bearer ' + token() } }),
           fetch(API + '/api/dashboard/ranking-clientes', { headers: { Authorization: 'Bearer ' + token() } }),
         ]);
         if (rc.ok) {

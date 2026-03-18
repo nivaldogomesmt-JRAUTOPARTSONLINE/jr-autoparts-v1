@@ -6,12 +6,14 @@ const API = import.meta.env.VITE_API_URL || '';
 const ptoken = () => localStorage.getItem('jr_portal_token');
 
 const STATUS_BADGE = {
-  'Iniciado':    { bg:'#eff6ff', color:'#1d4ed8' },
-  'Em andamento':{ bg:'#fff7ed', color:'#c2410c' },
-  'Pronto':      { bg:'#f0fdf4', color:'#15803d' },
-  'Entregue':    { bg:'#f1f5f9', color:'#475569' },
-  'Finalizado':  { bg:'#f1f5f9', color:'#475569' },
-  'Cancelado':   { bg:'#fef2f2', color:'#991b1b' },
+  'STARTED':      { bg:'#eff6ff', color:'#1d4ed8' },
+  'IN_PROGRESS':  { bg:'#fff7ed', color:'#c2410c' },
+  'FINISHING':    { bg:'#fff7ed', color:'#c2410c' },
+  'WAITING_PART': { bg:'#fffbeb', color:'#d97706' },
+  'DONE':         { bg:'#f0fdf4', color:'#15803d' },
+  'DELIVERED':    { bg:'#f1f5f9', color:'#475569' },
+  'APPROVED':     { bg:'#eff6ff', color:'#4f46e5' },
+  'QUOTE':        { bg:'#f8fafc', color:'#64748b' },
 };
 
 export default function PortalVehicle() {
@@ -33,8 +35,8 @@ export default function PortalVehicle() {
         if (r.ok) {
           const d = await r.json();
           setVehicle(d.vehicle || d);
-          setOrders(d.orders || []);
-          setMaintenance(d.maintenance || []);
+          setOrders(d.serviceOrders || d.orders || []);
+          setMaintenance(d.maintenances || d.maintenance || []);
           setTrackingDevices(d.trackingDevices || []);
         }
       } catch (e) { console.error('[PortalVehicle] error:', e); }
@@ -43,7 +45,9 @@ export default function PortalVehicle() {
     load();
   }, [id]);
 
-  const st = vehicle?.maintenance_status;
+  const overdueCount = maintenance.filter(m => m.alertLevel === 'OVERDUE').length;
+  const dueSoonCount = maintenance.filter(m => m.alertLevel === 'DUE_SOON').length;
+  const st = overdueCount > 0 ? 'urgencia' : dueSoonCount > 0 ? 'atencao' : 'em_dia';
   const statusConf = {
     urgencia: { color: 'var(--danger)',  bg: '#fef2f2', label: 'ManutenÃ§Ã£o Vencida',  icon: 'ð´' },
     atencao:  { color: 'var(--warning)', bg: '#fffbeb', label: 'PrÃ³xima ManutenÃ§Ã£o',  icon: 'ð¡' },
@@ -51,9 +55,9 @@ export default function PortalVehicle() {
   };
   const sc = statusConf[st] || statusConf.em_dia;
 
-  const alerts = maintenance.filter(m => m.status === 'vencida' || m.status === 'atencao');
-  const totalSpent = orders.reduce((s, o) => s + (o.total || 0), 0);
-  const openOS = orders.filter(o => !['Entregue','Finalizado','Cancelado'].includes(o.status));
+  const alerts = maintenance.filter(m => m.alertLevel === 'OVERDUE' || m.alertLevel === 'DUE_SOON');
+  const totalSpent = orders.reduce((s, o) => s + (Number(o.totalPrice ?? o.total) || 0), 0);
+  const openOS = orders.filter(o => !['DONE','DELIVERED'].includes(o.status));
   const RASTREK_BASE_URL = 'https://painel.rastrek.com.br';
   const activeDevice = trackingDevices.find(d => d.status === 'ACTIVE') || null;
 
@@ -120,19 +124,19 @@ export default function PortalVehicle() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {alerts.map((m, i) => (
                   <div key={i} style={{
-                    background: m.status === 'vencida' ? '#fef2f2' : '#fffbeb',
-                    border: `1px solid ${m.status === 'vencida' ? '#fca5a5' : '#fcd34d'}`,
+                    background: m.alertLevel === 'OVERDUE' ? '#fef2f2' : '#fffbeb',
+                    border: `1px solid ${m.alertLevel === 'OVERDUE' ? '#fca5a5' : '#fcd34d'}`,
                     borderRadius: 10, padding: '12px 16px',
                     display: 'flex', alignItems: 'center', gap: 12
                   }}>
-                    <span style={{ fontSize: 20 }}>{m.status === 'vencida' ? 'ð´' : 'ð¡'}</span>
+                    <span style={{ fontSize: 20 }}>{m.alertLevel === 'OVERDUE' ? '🔴' : '🟡'}</span>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 700, fontSize: 13, color: m.status === 'vencida' ? '#991b1b' : '#92400e' }}>{m.name}</div>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: m.alertLevel === 'OVERDUE' ? '#991b1b' : '#92400e' }}>{m.label || m.name}</div>
                       <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
-                        {m.status === 'vencida' ? `Vencida: ${m.due_date ? new Date(m.due_date).toLocaleDateString('pt-BR') : 'â'}` : `Previsto: ${m.due_date ? new Date(m.due_date).toLocaleDateString('pt-BR') : 'â'}`}
+                        {m.alertLevel === 'OVERDUE' ? `Vencida: ${m.nextDate ? new Date(m.nextDate).toLocaleDateString('pt-BR') : '—'}` : `Previsto: ${m.nextDate ? new Date(m.nextDate).toLocaleDateString('pt-BR') : '—'}`}
                       </div>
                     </div>
-                    <a href={`https://wa.me/55${(BRAND.phone||'').replace(/D/g,'')}?text=OlÃ¡! Preciso agendar manutenÃ§Ã£o do veÃ­culo ${vehicle.plate}: ${m.name}`}
+                    <a href={`https://wa.me/55${(BRAND.phone||'').replace(/D/g,'')}?text=OlÃ¡! Preciso agendar manutenÃ§Ã£o do veÃ­culo ${vehicle.plate}: ${m.label || m.name}`}
                       target="_blank" rel="noreferrer"
                       style={{ background: '#16a34a', color: '#fff', padding: '6px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600, textDecoration: 'none', flexShrink: 0 }}>
                       Agendar
@@ -212,6 +216,7 @@ export default function PortalVehicle() {
               <div style={{ background: '#fff', borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden' }}>
                 {orders.map((o, i) => {
                   const sb = STATUS_BADGE[o.status] || { bg: '#f1f5f9', color: '#475569' };
+                  const osLabel = o.statusLabel || o.status;
                   return (
                     <div key={o.id} onClick={() => navigate(`/portal/os/${o.id}`)}
                       style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderBottom: i < orders.length - 1 ? '1px solid var(--border)' : 'none', cursor: 'pointer' }}>
@@ -221,12 +226,12 @@ export default function PortalVehicle() {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontWeight: 600, fontSize: 13 }}>OS #{o.id}</div>
                         <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 1 }}>
-                          {o.updated_at ? new Date(o.updated_at).toLocaleDateString('pt-BR') : 'â'}
+                          {(o.updatedAt || o.updated_at) ? new Date(o.updatedAt || o.updated_at).toLocaleDateString('pt-BR') : '—'}
                         </div>
                       </div>
                       <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: sb.color, background: sb.bg, padding: '2px 8px', borderRadius: 12, marginBottom: 4 }}>{o.status}</div>
-                        {o.total != null && <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--success)' }}>R$ {Number(o.total).toFixed(2)}</div>}
+                        <div style={{ fontSize: 11, fontWeight: 700, color: sb.color, background: sb.bg, padding: '2px 8px', borderRadius: 12, marginBottom: 4 }}>{osLabel}</div>
+                        {(o.totalPrice ?? o.total) != null && <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--success)' }}>R$ {Number(o.totalPrice ?? o.total).toFixed(2)}</div>}
                       </div>
                     </div>
                   );

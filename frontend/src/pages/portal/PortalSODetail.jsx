@@ -5,7 +5,8 @@ import { BRAND } from '../../config/brand';
 const API = import.meta.env.VITE_API_URL || '';
 const ptoken = () => localStorage.getItem('jr_portal_token');
 
-const STATUS_STEPS = ['Iniciado', 'Em andamento', 'Pronto', 'Entregue'];
+const STATUS_STEPS = ['STARTED', 'IN_PROGRESS', 'DONE', 'DELIVERED'];
+const STATUS_STEP_LABELS = { STARTED: 'Iniciado', IN_PROGRESS: 'Em andamento', FINISHING: 'Finalizando', DONE: 'Pronto', DELIVERED: 'Entregue' };
 
 export default function PortalSODetail() {
   const { id } = useParams();
@@ -30,24 +31,27 @@ export default function PortalSODetail() {
   if (loading) return <div className="loading"><div className="spinner" /></div>;
   if (!os) return <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center' }}><div style={{ fontSize:15, color:'var(--text-secondary)' }}>OS não encontrada</div></div>;
 
-  const services = os.os_services || os.services || [];
-  const products = os.os_products || os.products || [];
-  const totalServices = services.reduce((s, i) => s + (Number(i.price) * (i.qty || 1)), 0);
-  const totalProducts = products.reduce((s, i) => s + (Number(i.price) * (i.qty || 1)), 0);
-  const total = os.total || (totalServices + totalProducts);
+  const services = os.serviceItems || os.os_services || os.services || [];
+  const products = os.productItems || os.os_products || os.products || [];
+  const totalServices = services.reduce((s, i) => s + (Number(i.lineTotal ?? (i.price * (i.qty || 1))) || 0), 0);
+  const totalProducts = products.reduce((s, i) => s + (Number(i.lineTotal ?? (i.price * (i.qty || 1))) || 0), 0);
+  const total = os.displayTotal ?? os.totalPrice ?? os.total ?? (totalServices + totalProducts);
 
   const stepIdx = STATUS_STEPS.indexOf(os.status);
-  const isClosed = ['Entregue', 'Finalizado', 'Cancelado'].includes(os.status);
+  const isClosed = ['DONE', 'DELIVERED', 'FINISHING'].includes(os.status);
 
   const STATUS_COLOR = {
-    'Iniciado':    { bg:'#eff6ff', color:'#1d4ed8' },
-    'Em andamento':{ bg:'#fff7ed', color:'#c2410c' },
-    'Pronto':      { bg:'#f0fdf4', color:'#15803d' },
-    'Entregue':    { bg:'#f1f5f9', color:'#475569' },
-    'Finalizado':  { bg:'#f1f5f9', color:'#475569' },
-    'Cancelado':   { bg:'#fef2f2', color:'#991b1b' },
+    'STARTED':      { bg:'#eff6ff', color:'#1d4ed8' },
+    'IN_PROGRESS':  { bg:'#fff7ed', color:'#c2410c' },
+    'FINISHING':    { bg:'#fff7ed', color:'#c2410c' },
+    'WAITING_PART': { bg:'#fffbeb', color:'#d97706' },
+    'DONE':         { bg:'#f0fdf4', color:'#15803d' },
+    'DELIVERED':    { bg:'#f1f5f9', color:'#475569' },
+    'APPROVED':     { bg:'#eff6ff', color:'#4f46e5' },
+    'QUOTE':        { bg:'#f8fafc', color:'#64748b' },
   };
   const sc = STATUS_COLOR[os.status] || { bg:'#f1f5f9', color:'#475569' };
+  const osStatusLabel = STATUS_STEP_LABELS[os.status] || os.status;
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
@@ -68,11 +72,11 @@ export default function PortalSODetail() {
             <div>
               <div style={{ fontSize: 24, fontWeight: 900, color: 'var(--primary)' }}>OS #{os.id}</div>
               <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>
-                Criada em {os.created_at ? new Date(os.created_at).toLocaleDateString('pt-BR') : '—'}
+                Criada em {(os.createdAt || os.created_at) ? new Date(os.createdAt || os.created_at).toLocaleDateString('pt-BR') : '—'}
               </div>
             </div>
             <div style={{ background: sc.bg, color: sc.color, borderRadius: 10, padding: '8px 14px', fontSize: 13, fontWeight: 700 }}>
-              {os.status}
+              {osStatusLabel}
             </div>
           </div>
 
@@ -89,7 +93,7 @@ export default function PortalSODetail() {
                       marginBottom: 6
                     }} />
                     <div style={{ fontSize: 10, fontWeight: i === stepIdx ? 700 : 400, color: i <= stepIdx ? 'var(--primary)' : 'var(--text-muted)' }}>
-                      {step}
+                      {STATUS_STEP_LABELS[step] || step}
                     </div>
                   </div>
                 ))}
@@ -100,17 +104,17 @@ export default function PortalSODetail() {
           {/* Info grid */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
             <div><div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)' }}>Veículo</div>
-              <div style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 14, marginTop: 2 }}>{os.vehicles?.plate || '—'}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{os.vehicles?.brand} {os.vehicles?.model}</div>
+              <div style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 14, marginTop: 2 }}>{os.vehicle?.plate || os.vehicles?.plate || '—'}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{(os.vehicle?.brand || os.vehicles?.brand)} {(os.vehicle?.model || os.vehicles?.model)}</div>
             </div>
             <div><div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)' }}>Última atualização</div>
-              <div style={{ fontWeight: 600, fontSize: 13, marginTop: 2 }}>{os.updated_at ? new Date(os.updated_at).toLocaleDateString('pt-BR') : '—'}</div>
+              <div style={{ fontWeight: 600, fontSize: 13, marginTop: 2 }}>{(os.updatedAt || os.updated_at) ? new Date(os.updatedAt || os.updated_at).toLocaleDateString('pt-BR') : '—'}</div>
             </div>
           </div>
 
-          {os.observations && (
+          {(os.notes || os.observations) && (
             <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--gray-50)', borderRadius: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
-              <strong>Observações:</strong> {os.observations}
+              <strong>Observações:</strong> {os.notes || os.observations}
             </div>
           )}
         </div>
@@ -125,10 +129,10 @@ export default function PortalSODetail() {
             {services.map((s, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: i < services.length - 1 ? '1px solid var(--gray-100)' : 'none' }}>
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{s.name || s.services?.name}</div>
-                  {s.qty > 1 && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.qty}x</div>}
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{s.itemName || s.name || s.services?.name}</div>
+                  {(s.quantity || s.qty) > 1 && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.quantity || s.qty}x</div>}
                 </div>
-                <div style={{ fontWeight: 700, fontSize: 13 }}>R$ {Number(s.price * (s.qty||1)).toFixed(2)}</div>
+                <div style={{ fontWeight: 700, fontSize: 13 }}>R$ {Number(s.lineTotal ?? (s.price * (s.qty||1))).toFixed(2)}</div>
               </div>
             ))}
             <div style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8, display: 'flex', justifyContent: 'space-between' }}>
@@ -148,10 +152,10 @@ export default function PortalSODetail() {
             {products.map((p, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: i < products.length - 1 ? '1px solid var(--gray-100)' : 'none' }}>
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{p.name || p.products?.name}</div>
-                  {p.qty > 1 && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{p.qty}x un.</div>}
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{p.itemName || p.name || p.products?.name}</div>
+                  {(p.quantity || p.qty) > 1 && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{p.quantity || p.qty}x un.</div>}
                 </div>
-                <div style={{ fontWeight: 700, fontSize: 13 }}>R$ {Number(p.price * (p.qty||1)).toFixed(2)}</div>
+                <div style={{ fontWeight: 700, fontSize: 13 }}>R$ {Number(p.lineTotal ?? (p.price * (p.qty||1))).toFixed(2)}</div>
               </div>
             ))}
             <div style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 8, display: 'flex', justifyContent: 'space-between' }}>
