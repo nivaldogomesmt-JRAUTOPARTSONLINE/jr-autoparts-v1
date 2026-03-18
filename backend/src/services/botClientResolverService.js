@@ -3,7 +3,7 @@
 /**
  * botClientResolverService.js
  * 3-step client identification cascade:
- *   1. WhatsApp number   → prisma.client.findFirst({ mobilePhone })
+ *   1. WhatsApp number   → prisma.client.findFirst({ whatsapp | phone })
  *   2. CPF / CNPJ        → prisma.client.findFirst({ cpfCnpj })
  *   3. Vehicle plate     → prisma.vehicle.findFirst({ plate }) + soft name match
  *
@@ -13,7 +13,7 @@
  *     Adjust if your models are named differently (e.g. Customer, Car, etc.)
  *
  * ⚠️  Field names assumed:
- *     Client:  id, name, cpfCnpj, mobilePhone, phone, email
+ *     Client:  id, name, cpfCnpj, whatsapp, phone, email
  *     Vehicle: id, plate, clientId, client { name }
  */
 
@@ -36,7 +36,7 @@ function _selectFull() {
     id: true,
     name: true,
     cpfCnpj: true,
-    mobilePhone: true,
+    whatsapp: true,
     phone: true,
     email: true,
   };
@@ -47,7 +47,8 @@ function _selectSafe() {
   return {
     id: true,
     name: true,
-    mobilePhone: true,
+    whatsapp: true,
+    phone: true,
   };
 }
 
@@ -59,14 +60,14 @@ async function resolveClientByPhone(phone) {
   const normalised = normalizePhone(phone);
   if (!normalised) return null;
 
-  // Try both mobilePhone and phone fields
+  // Try both whatsapp and phone fields (with and without country code)
   const client = await prisma.client.findFirst({
     where: {
       OR: [
-        { mobilePhone: normalised },
+        { whatsapp: normalised },
         { phone: normalised },
         // Some systems store without country code
-        { mobilePhone: normalised.slice(2) },
+        { whatsapp: normalised.slice(2) },
         { phone: normalised.slice(2) },
       ],
     },
@@ -129,8 +130,8 @@ async function _findCandidatesByPhone(phone) {
   const clients = await prisma.client.findMany({
     where: {
       OR: [
-        { mobilePhone: { contains: normalised.slice(-8) } },
-        { phone:       { contains: normalised.slice(-8) } },
+        { whatsapp: { contains: normalised.slice(-8) } },
+        { phone:    { contains: normalised.slice(-8) } },
       ],
     },
     take: 5,
@@ -140,7 +141,7 @@ async function _findCandidatesByPhone(phone) {
   return clients.map(c => ({
     id: c.id,
     name: maskName(c.name),
-    phone: c.mobilePhone || c.phone,
+    phone: c.whatsapp || c.phone,
   }));
 }
 

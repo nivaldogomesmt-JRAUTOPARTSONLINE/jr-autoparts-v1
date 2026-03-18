@@ -469,7 +469,7 @@ async function trackingSupport(req, res) {
           where: {
             client: {
               OR: [
-                { mobilePhone: normPhone },
+                { whatsapp: normPhone },
                 { phone: normPhone },
               ],
             },
