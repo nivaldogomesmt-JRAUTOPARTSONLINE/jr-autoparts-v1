@@ -1,3 +1,5 @@
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const prisma = require('../lib/prisma');
 const { sendWhatsAppMessageWithDedupe } = require('../services/whatsappService');
 const {
@@ -333,6 +335,66 @@ async function notifyPortalProfileChange({ before, after }) {
     }).catch(() => {});
   }
 }
+const portalLogin = async (req, res) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const password = String(req.body?.password || '');
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email e senha sao obrigatorios.' });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: { email, role: 'CLIENT', active: true },
+      include: { client: true },
+    });
+
+    if (!user || !user.client) {
+      return res.status(401).json({ error: 'Credenciais invalidas.' });
+    }
+
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      return res.status(423).json({ error: 'Conta temporariamente bloqueada por tentativas invalidas. Tente novamente mais tarde.' });
+    }
+
+    const validPassword = await bcrypt.compare(password, user.passwordHash);
+    if (!validPassword) {
+      const MAX_FAILED = parseInt(process.env.MAX_FAILED_LOGINS || '5', 10);
+      const LOCK_MINUTES = parseInt(process.env.LOGIN_LOCK_MINUTES || '15', 10);
+      const failedCount = (user.failedLoginCount || 0) + 1;
+      const updateData = { failedLoginCount: failedCount };
+      if (failedCount >= MAX_FAILED) {
+        updateData.lockedUntil = new Date(Date.now() + LOCK_MINUTES * 60 * 1000);
+      }
+      await prisma.user.update({ where: { id: user.id }, data: updateData });
+      return res.status(401).json({ error: 'Credenciais invalidas.' });
+    }
+
+    const token = jwt.sign(
+      { userId: user.id, role: 'CLIENT' },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || '12h' }
+    );
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { failedLoginCount: 0, lockedUntil: null, lastLoginAt: new Date() },
+    });
+
+    return res.json({
+      token,
+      client: {
+        id: user.client.id,
+        name: user.client.name,
+        email: user.client.email,
+      },
+    });
+  } catch (err) {
+    console.error('[portalLogin] error:', err);
+    return res.status(500).json({ error: 'Erro ao fazer login.' });
+  }
+};
+
 const me = async (req, res) => {
   try {
     const client = await prisma.client.findUnique({
@@ -762,7 +824,7 @@ const soDetail = async (req, res) => {
   }
 };
 
-module.exports = { me, updateMe, vehicleDetail, soDetail };
+module.exports = { portalLogin, me, updateMe, vehicleDetail, soDetail };
 
 
 
