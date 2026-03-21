@@ -274,6 +274,111 @@ const buildProjectedMaintenance = ({ existing, rule, doneDate, doneKm }) => {
   };
 };
 
+const COMPLETED_ORDER_STATUSES = new Set(['DONE', 'DELIVERED']);
+const OPEN_ORDER_STATUSES = new Set(['APPROVED', 'STARTED', 'IN_PROGRESS', 'WAITING_PART', 'FINISHING']);
+
+const getOrderText = (order) => normalizeText(
+  (Array.isArray(order?.items) ? order.items : [])
+    .map((item) => item?.itemName || item?.description || '')
+    .filter(Boolean)
+    .join(' ')
+);
+
+const buildVehicleMaintenanceInsights = ({ maintenances, serviceOrders, currentKm }) => {
+  const rows = Array.isArray(maintenances) ? maintenances : [];
+  const orders = Array.isArray(serviceOrders) ? serviceOrders : [];
+  const normalizedMaintenances = rows.map((m) => {
+    const forecast = computeMaintenanceForecast(m, {
+      baselineDate: m.createdAt,
+      baselineKm: currentKm,
+    });
+    const normalized = { ...m, nextDate: forecast.nextDate, nextKm: forecast.nextKm };
+    const alertLevel = getAlertLevel(normalized, currentKm);
+    const dueMeta = buildDueMeta(normalized, currentKm);
+    return {
+      ...normalized,
+      alertLevel,
+      statusLabel: toStatusLabel(alertLevel),
+      ...dueMeta,
+    };
+  });
+
+  const maintenanceByType = new Map(normalizedMaintenances.map((row) => [row.type, row]));
+  const completedOrders = orders.filter((order) => COMPLETED_ORDER_STATUSES.has(String(order?.status || '').toUpperCase()));
+
+  const getByRule = (rule) => {
+    const existing = maintenanceByType.get(rule.type) || null;
+    if (existing) {
+      return getMaintenanceResponse({
+        maintenance: existing,
+        type: rule.type,
+        label: existing.label || rule.label,
+        currentKm,
+        source: 'CURRENT_PLAN',
+        performedInThisOrder: false,
+      });
+    }
+
+    const matchedOrder = completedOrders.find((order) => rule.match(getOrderText(order)));
+    if (!matchedOrder) {
+      return getMaintenanceResponse({
+        maintenance: null,
+        type: rule.type,
+        label: rule.label,
+        currentKm,
+        source: 'NOT_AVAILABLE',
+        performedInThisOrder: false,
+      });
+    }
+
+    const doneDate = getClosedAtFromStatus(matchedOrder);
+    const doneKm = toIntOrNull(matchedOrder?.entryKm) ?? toIntOrNull(currentKm);
+    const projected = buildProjectedMaintenance({ existing: null, rule, doneDate, doneKm });
+    return getMaintenanceResponse({
+      maintenance: projected,
+      type: rule.type,
+      label: projected.label,
+      currentKm,
+      source: 'ORDER_HISTORY',
+      performedInThisOrder: false,
+    });
+  };
+
+  const nextOilChange = getByRule(MAINTENANCE_RULES[0]);
+  const nextBeltChange = getByRule(MAINTENANCE_RULES[1]);
+
+  const candidates = [
+    ...normalizedMaintenances,
+    ...(nextOilChange?.nextDate || nextOilChange?.nextKm ? [nextOilChange] : []),
+    ...(nextBeltChange?.nextDate || nextBeltChange?.nextKm ? [nextBeltChange] : []),
+  ];
+
+  const dedup = new Map();
+  for (const item of candidates) {
+    const key = `${item.type || 'unknown'}:${item.label || ''}`;
+    if (!dedup.has(key)) dedup.set(key, item);
+  }
+  const ranked = [...dedup.values()].sort((a, b) => {
+    const [pa, da, ka] = getMaintenanceSortWeight(a, currentKm);
+    const [pb, db, kb] = getMaintenanceSortWeight(b, currentKm);
+    if (pa !== pb) return pa - pb;
+    if (da !== db) return da - db;
+    return ka - kb;
+  });
+
+  const overdueCount = normalizedMaintenances.filter((m) => m.alertLevel === 'OVERDUE').length;
+  const dueSoonCount = normalizedMaintenances.filter((m) => m.alertLevel === 'DUE_SOON').length;
+
+  return {
+    maintenances: normalizedMaintenances,
+    nextMaintenance: ranked[0] || null,
+    nextOilChange,
+    nextBeltChange,
+    overdueCount,
+    dueSoonCount,
+  };
+};
+
 
 async function notifyPortalProfileChange({ before, after }) {
   const phone = String(after?.whatsapp || after?.phone || '').trim();
@@ -405,9 +510,24 @@ const me = async (req, res) => {
           include: {
             maintenances: true,
             serviceOrders: {
-              select: { id: true, status: true, createdAt: true, updatedAt: true },
+              where: { status: { not: 'QUOTE' } },
+              select: {
+                id: true,
+                status: true,
+                createdAt: true,
+                updatedAt: true,
+                entryKm: true,
+                totalPrice: true,
+                items: {
+                  select: {
+                    itemName: true,
+                    description: true,
+                    type: true,
+                  },
+                },
+              },
               orderBy: { updatedAt: 'desc' },
-              take: 1,
+              take: 25,
             },
           },
         },
@@ -417,36 +537,13 @@ const me = async (req, res) => {
     if (!client) return res.status(404).json({ error: 'Cliente nao encontrado.' });
 
     const vehicles = client.vehicles.map((v) => {
-      const enrichedMaintenances = v.maintenances.map((m) => {
-        const forecast = computeMaintenanceForecast(m, {
-          baselineDate: m.createdAt,
-          baselineKm: v.currentKm,
-        });
-
-        const normalized = { ...m, nextDate: forecast.nextDate, nextKm: forecast.nextKm };
-        const alertLevel = getAlertLevel(normalized, v.currentKm);
-        const dueMeta = buildDueMeta(normalized, v.currentKm);
-        return {
-          ...normalized,
-          alertLevel,
-          statusLabel: toStatusLabel(alertLevel),
-          ...dueMeta,
-        };
+      const insights = buildVehicleMaintenanceInsights({
+        maintenances: v.maintenances,
+        serviceOrders: v.serviceOrders,
+        currentKm: v.currentKm,
       });
 
-      const sortedMaintenances = [...enrichedMaintenances].sort((a, b) => {
-        const [pa, da, ka] = getMaintenanceSortWeight(a, v.currentKm);
-        const [pb, db, kb] = getMaintenanceSortWeight(b, v.currentKm);
-        if (pa !== pb) return pa - pb;
-        if (da !== db) return da - db;
-        return ka - kb;
-      });
-
-      const nextMaintenance = sortedMaintenances.length ? sortedMaintenances[0] : null;
-      const overdueCount = enrichedMaintenances.filter((m) => m.alertLevel === 'OVERDUE').length;
-      const dueSoonCount = enrichedMaintenances.filter((m) => m.alertLevel === 'DUE_SOON').length;
-
-      const latestMaintenanceUpdate = enrichedMaintenances.reduce((latest, m) => {
+      const latestMaintenanceUpdate = insights.maintenances.reduce((latest, m) => {
         const t = m.updatedAt ? new Date(m.updatedAt).getTime() : 0;
         return t > latest ? t : latest;
       }, 0);
@@ -459,12 +556,21 @@ const me = async (req, res) => {
       const latestVehicleUpdate = v.updatedAt ? new Date(v.updatedAt).getTime() : 0;
       const latestActivityAt = new Date(Math.max(latestVehicleUpdate, latestMaintenanceUpdate, latestOrderUpdate || 0));
 
+      const openOsCount = (v.serviceOrders || []).filter((order) => OPEN_ORDER_STATUSES.has(String(order.status || '').toUpperCase())).length;
+      const completedOrders = (v.serviceOrders || []).filter((order) => COMPLETED_ORDER_STATUSES.has(String(order.status || '').toUpperCase()));
+      const lastServiceOrder = completedOrders[0] || null;
+
       return {
         ...v,
-        maintenances: enrichedMaintenances,
-        nextMaintenance,
-        overdueCount,
-        dueSoonCount,
+        maintenances: insights.maintenances,
+        nextMaintenance: insights.nextMaintenance,
+        nextOilChange: insights.nextOilChange,
+        nextBeltChange: insights.nextBeltChange,
+        overdueCount: insights.overdueCount,
+        dueSoonCount: insights.dueSoonCount,
+        openOsCount,
+        totalOsCount: (v.serviceOrders || []).length,
+        lastServiceOrder,
         latestActivityAt,
       };
     }).sort((a, b) => new Date(b.latestActivityAt).getTime() - new Date(a.latestActivityAt).getTime());
@@ -508,6 +614,21 @@ const me = async (req, res) => {
 
     const pendingTrackingInvoices = trackingInvoices.filter((i) => i.effectiveStatus !== 'PAID');
     const trackingOpenAmount = pendingTrackingInvoices.reduce((sum, i) => sum + Number(i.amount || 0), 0);
+    const recentVehicleServices = vehicles
+      .filter((vehicle) => vehicle.lastServiceOrder)
+      .slice(0, 6)
+      .map((vehicle) => ({
+        id: vehicle.id,
+        plate: vehicle.plate,
+        brand: vehicle.brand,
+        model: vehicle.model,
+        lastServiceOrder: {
+          id: vehicle.lastServiceOrder.id,
+          status: vehicle.lastServiceOrder.status,
+          updatedAt: vehicle.lastServiceOrder.updatedAt,
+          totalPrice: vehicle.lastServiceOrder.totalPrice,
+        },
+      }));
 
     res.json({
       client: {
@@ -520,6 +641,7 @@ const me = async (req, res) => {
       vehicles,
       maintenances,
       recentOrders,
+      recentVehicleServices,
       tracking: {
         contracts: trackingContracts,
         invoices: trackingInvoices,
@@ -605,21 +727,12 @@ const vehicleDetail = async (req, res) => {
       DELIVERED: 'Entregue',
     };
 
-    const maintenances = vehicle.maintenances.map((m) => {
-      const forecast = computeMaintenanceForecast(m, {
-        baselineDate: m.createdAt,
-        baselineKm: vehicle.currentKm,
-      });
-      const normalized = { ...m, nextDate: forecast.nextDate, nextKm: forecast.nextKm };
-      const alertLevel = getAlertLevel(normalized, vehicle.currentKm);
-      const dueMeta = buildDueMeta(normalized, vehicle.currentKm);
-      return {
-        ...normalized,
-        alertLevel,
-        statusLabel: toStatusLabel(alertLevel),
-        ...dueMeta,
-      };
+    const insights = buildVehicleMaintenanceInsights({
+      maintenances: vehicle.maintenances,
+      serviceOrders: vehicle.serviceOrders,
+      currentKm: vehicle.currentKm,
     });
+    const maintenances = insights.maintenances;
 
     const upcomingMaintenances = [...maintenances]
       .sort((a, b) => {
@@ -637,6 +750,19 @@ const vehicleDetail = async (req, res) => {
       })
       .slice(0, 6);
 
+    const serviceOrders = vehicle.serviceOrders.map((order) => {
+      const { enriched: items, calculatedTotal } = buildItemsWithTotals(order.items);
+      const persistedTotal = Number(order.totalPrice);
+      const displayTotal = Number.isFinite(persistedTotal) ? persistedTotal : calculatedTotal;
+      return {
+        ...order,
+        items,
+        calculatedTotal,
+        displayTotal,
+        statusLabel: STATUS_LABELS[order.status] || order.status,
+      };
+    });
+
     res.json({
       vehicle: {
         id: vehicle.id,
@@ -650,6 +776,13 @@ const vehicleDetail = async (req, res) => {
         notes: vehicle.notes,
       },
       maintenances,
+      maintenanceSummary: {
+        nextMaintenance: insights.nextMaintenance,
+        nextOilChange: insights.nextOilChange,
+        nextBeltChange: insights.nextBeltChange,
+        overdueCount: insights.overdueCount,
+        dueSoonCount: insights.dueSoonCount,
+      },
       upcomingMaintenances,
       trackingDevices: vehicle.trackingDevices.map((device) => ({
         id: device.id,
@@ -661,10 +794,7 @@ const vehicleDetail = async (req, res) => {
         installedAt: device.installedAt,
         notes: device.notes,
       })),
-      serviceOrders: vehicle.serviceOrders.map((order) => ({
-        ...order,
-        statusLabel: STATUS_LABELS[order.status] || order.status,
-      })),
+      serviceOrders,
     });
   } catch (err) {
     console.error(err);
