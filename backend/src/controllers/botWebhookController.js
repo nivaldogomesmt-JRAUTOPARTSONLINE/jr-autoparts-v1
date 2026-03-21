@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 /**
  * botWebhookController.js
@@ -14,14 +14,14 @@
  *   POST /api/bot/tracking-support
  *   POST /api/bot/handoff
  *
- * â ï¸  VERIFY before deploying:
+ * âš ï¸  VERIFY before deploying:
  *   - Prisma model names: client, vehicle, trackingContract (adjust casing/name if needed)
  *   - prisma import path in service files: '../lib/prisma' may differ
  *   - EfÃ­ listChargesByCpf response fields: charge_id, expire_at, value, payment.banking_billet.link
  *   - authenticateBot middleware header name (x-bot-token or similar)
  */
 
-const prisma              = require('../lib/prisma');         // â ï¸ adjust path
+const prisma              = require('../lib/prisma');         // âš ï¸ adjust path
 const efiService          = require('../services/efiCobrancasService');  // existing EfÃ­ service
 const botTriageService    = require('../services/botTriageService');
 const botClientResolver   = require('../services/botClientResolverService');
@@ -55,7 +55,7 @@ function serverError(res, err, context = '') {
 /**
  * Format a BRL currency value.
  * Assumes EfÃ­ returns values in centavos (integer).
- * â ï¸ Verify: if EfÃ­ returns decimal reais, change / 100 to a no-op.
+ * âš ï¸ Verify: if EfÃ­ returns decimal reais, change / 100 to a no-op.
  */
 function formatBRL(centavos) {
   const reais = (centavos || 0) / 100;
@@ -120,7 +120,7 @@ async function triage(req, res) {
       nextAction,
       extractedEntities: {
         plates,
-        // Never return raw documents â only masked
+        // Never return raw documents â€” only masked
         documents: documents.map(d => maskDocument(d)),
       },
     });
@@ -204,91 +204,116 @@ async function resolveClientForBoleto(req, res) {
 
 async function openBoletos(req, res) {
   try {
-    const { waId, sessionId } = req.body;
+    const { waId, sessionId, beginDate, endDate, limit, offset } = req.body;
 
-    if (!waId) return fail(res, 'waId Ã© obrigatÃ³rio.');
+    if (!waId) return fail(res, 'waId e obrigatorio.');
 
-    // Load session
     const session = sessionId
       ? await prisma.whatsappSession.findUnique({ where: { id: sessionId } })
       : await botSessionService.getOrCreateSession(waId);
 
-    if (!session) return fail(res, 'SessÃ£o nÃ£o encontrada.', 404);
+    if (!session) return fail(res, 'Sessao nao encontrada.', 404);
+    if (session.waId !== waId) {
+      return fail(res, 'Sessao nao pertence ao waId informado.', 403);
+    }
 
     const collectedData = session.collectedData || {};
-    const cpfCnpj = collectedData.clientCpfCnpj;
+    const clientDocument = String(collectedData.clientCpfCnpj || '').trim();
 
-    if (!cpfCnpj) {
-      return fail(res, 'CPF/CNPJ do cliente nÃ£o encontrado na sessÃ£o. Identifique o cliente primeiro.', 422);
+    if (!clientDocument) {
+      return fail(res, 'CPF/CNPJ do cliente nao encontrado na sessao. Identifique o cliente primeiro.', 422);
     }
 
-    // EfÃ­ only supports CPF lookup, not CNPJ
-    if (cpfCnpj.replace(/\D/g, '').length !== 11) {
-      return ok(res, {
-        status:   'CNPJ_NOT_SUPPORTED',
-        message:  'Consulta de boletos por CNPJ nÃ£o estÃ¡ disponÃ­vel neste canal. Por favor, entre em contato pelo WhatsApp ou ligue para nossa central.',
-        sessionId: session.id,
-      });
-    }
+    const now = new Date();
+    const begin = new Date(now);
+    begin.setDate(begin.getDate() - 365);
+    const end = new Date(now);
+    end.setDate(end.getDate() + 30);
+    const defaults = {
+      beginDate: begin.toISOString().slice(0, 10),
+      endDate: end.toISOString().slice(0, 10),
+    };
 
-    // Call EfÃ­ service
-    // â ï¸ Verify: efiService.listChargesByCpf may be named differently in your project
-    // Call Efi service with correct object signature
-    let charges;
+    let response;
     try {
-      charges = await efiService.listChargesByCpf({ cpf: cpfCnpj });
-    } catch (efiErr) {
-      console.error('[botWebhookController] openBoletos: Efi API error:', efiErr.message);
-      return ok(res, {
-        status:    'EFI_UNAVAILABLE',
-        message:   'Nao foi possivel consultar cobrancas no momento. Tente novamente em instantes ou entre em contato pelo WhatsApp.',
-        sessionId: session.id,
+      response = await efiService.listChargesByDocument({
+        document: clientDocument,
+        beginDate: beginDate || defaults.beginDate,
+        endDate: endDate || defaults.endDate,
+        limit: Math.min(Number(limit) || 50, 100),
+        offset: Math.max(0, Number(offset) || 0),
       });
+    } catch (err) {
+      if (typeof efiService.isEfiUnavailableError === 'function' && efiService.isEfiUnavailableError(err)) {
+        await botSessionService.logEvent({
+          sessionId: session.id,
+          waId,
+          direction: 'OUTBOUND',
+          payloadSummary: { status: 'EFI_UNAVAILABLE' },
+          endpointHit: '/api/bot/boleto/open',
+          status: 'efi_unavailable',
+        });
+
+        return ok(res, {
+          status: 'EFI_UNAVAILABLE',
+          message: 'No momento o sistema de cobrancas esta instavel. Tente novamente em instantes.',
+          sessionId: session.id,
+        });
+      }
+      throw err;
     }
 
-    // Filter to open/payable statuses
-    const openCharges = (charges || []).filter(c =>
+    const charges = Array.isArray(response)
+      ? response
+      : Array.isArray(response?.items)
+        ? response.items
+        : Array.isArray(response?.data)
+          ? response.data
+          : Array.isArray(response?.charges)
+            ? response.charges
+            : [];
+
+    const openCharges = charges.filter((c) =>
       OPEN_STATUSES.includes((c.status || c.situacao || '').toLowerCase())
     );
 
     if (openCharges.length === 0) {
       await botSessionService.updateSession(session.id, { currentStep: 'boleto_none_found' });
       return ok(res, {
-        status:    'NO_OPEN_BOLETOS',
-        message:   `NÃ£o encontrei cobranÃ§as em aberto para ${collectedData.clientNameMasked || 'vocÃª'}.`,
+        status: 'NO_OPEN_BOLETOS',
+        message: `Nao encontrei cobrancas em aberto para ${collectedData.clientNameMasked || 'voce'}.`,
         sessionId: session.id,
       });
     }
 
-    // Shape response â â ï¸ verify actual field names from EfÃ­ SDK response
-    const boletos = openCharges.map(c => ({
-      chargeId:  c.charge_id  || c.id,
-      dueDate:   c.expire_at  || c.dataVencimento,
-      amount:    formatBRL(c.value || c.valor),
-      payLink:   c.link                                // campo normalizado pelo service
-                 || c.billet_link                      // variante 1
-                 || c.payment?.banking_billet?.link    // Efí raw v2
-                 || c.data?.payment?.banking_billet?.link // Efí raw v1
-                 || c.linkBoleto                       // fallback legado
-                 || null,
+    const boletos = openCharges.map((c) => ({
+      chargeId: c.charge_id || c.id,
+      dueDate: c.expire_at || c.dataVencimento,
+      amount: formatBRL(c.value || c.valor),
+      payLink: c.link
+        || c.billet_link
+        || c.payment?.banking_billet?.link
+        || c.data?.payment?.banking_billet?.link
+        || c.linkBoleto
+        || null,
     }));
 
     await botSessionService.updateSession(session.id, {
-      currentStep:   'boleto_presented',
+      currentStep: 'boleto_presented',
       collectedData: { ...collectedData, boletosCount: boletos.length },
     });
 
     await botSessionService.logEvent({
-      sessionId:      session.id,
+      sessionId: session.id,
       waId,
-      direction:      'OUTBOUND',
+      direction: 'OUTBOUND',
       payloadSummary: { boletosCount: boletos.length },
-      endpointHit:    '/api/bot/boleto/open',
+      endpointHit: '/api/bot/boleto/open',
     });
 
     return ok(res, {
-      status:    'FOUND',
-      count:     boletos.length,
+      status: 'FOUND',
+      count: boletos.length,
       boletos,
       sessionId: session.id,
     });
@@ -296,7 +321,6 @@ async function openBoletos(req, res) {
     return serverError(res, err, 'openBoletos');
   }
 }
-
 // ---------------------------------------------------------------------------
 // 4. POST /api/bot/service-intake
 // ---------------------------------------------------------------------------
@@ -463,20 +487,20 @@ async function trackingSupport(req, res) {
     const session = await botSessionService.getOrCreateSession(waId);
 
     // Optionally look up the tracking contract for this vehicle / phone
-    // â ï¸ Verify prisma model name: trackingContract may differ in your schema
+    // âš ï¸ Verify prisma model name: trackingContract may differ in your schema
     let contractInfo = null;
     try {
       const normPhone = normalizePhone(waId);
       const normPlate = vehiclePlate ? normalizePlate(vehiclePlate) : null;
 
       if (normPlate) {
-        contractInfo = await prisma.trackingContract.findFirst({ // â ï¸ model name
+        contractInfo = await prisma.trackingContract.findFirst({ // âš ï¸ model name
           where: { vehiclePlate: normPlate },
           select: { id: true, status: true, deviceSerial: true, vehiclePlate: true },
         });
       } else if (normPhone) {
         // Fallback: try to find by client phone via relation
-        contractInfo = await prisma.trackingContract.findFirst({ // â ï¸ model name
+        contractInfo = await prisma.trackingContract.findFirst({ // âš ï¸ model name
           where: {
             client: {
               OR: [
@@ -516,7 +540,7 @@ async function trackingSupport(req, res) {
     });
 
     if (!contractInfo) {
-      // No contract found â escalate to human
+      // No contract found â†’ escalate to human
       await botSessionService.transferSession(session.id);
       return ok(res, {
         status:          'NO_CONTRACT_FOUND',
@@ -614,3 +638,4 @@ module.exports = {
   trackingSupport,
   handoff,
 };
+

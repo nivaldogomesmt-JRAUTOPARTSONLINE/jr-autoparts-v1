@@ -51,7 +51,7 @@ async function getAccessToken() {
   const expiresIn = Number(data.expires_in) || 600;
 
   if (!accessToken) {
-    throw new Error('Resposta da Efí sem access_token.');
+    throw new Error('Resposta da Efi sem access_token.');
   }
 
   tokenCache = {
@@ -62,36 +62,39 @@ async function getAccessToken() {
   return accessToken;
 }
 
-/**
- * Remove caracteres não numéricos do CPF/CNPJ.
- * @param {string} doc - CPF ou CNPJ (pode ter formatação)
- * @returns {string} - Apenas dígitos
- */
 function normalizeDocument(doc) {
   return String(doc || '').replace(/\D/g, '');
 }
 
-/**
- * Lista cobranças (boletos) por CPF e intervalo de datas.
- * @param {Object} params
- * @param {string} params.cpf - CPF (11 dígitos, com ou sem formatação)
- * @param {string} params.beginDate - Data início (YYYY-MM-DD)
- * @param {string} params.endDate - Data fim (YYYY-MM-DD)
- * @param {string} [params.chargeType] - Tipo de cobrança: 'billet' (boleto) ou 'carnet' (default: billet)
- * @param {number} [params.limit] - Limite de resultados
- * @param {number} [params.offset] - Offset para paginação
- * @returns {Promise<Object>} - Resposta da API Efí
- */
-async function listChargesByCpf({ cpf, beginDate, endDate, chargeType = 'billet', limit = 50, offset = 0 }) {
-  const clientDoc = normalizeDocument(cpf);
-  if (clientDoc.length !== 11) {
-    throw new Error('CPF deve conter 11 dígitos.');
+function isValidCpfOrCnpj(docDigits) {
+  return docDigits.length === 11 || docDigits.length === 14;
+}
+
+function isEfiUnavailableError(err) {
+  const status = Number(err?.response?.status || 0);
+  const code = String(err?.code || '').toUpperCase();
+  const unavailableCodes = new Set(['ECONNABORTED', 'ENOTFOUND', 'EAI_AGAIN', 'ECONNRESET', 'ETIMEDOUT']);
+  return unavailableCodes.has(code) || status === 429 || status >= 500;
+}
+
+async function listChargesByDocument({
+  document,
+  cpf,
+  beginDate,
+  endDate,
+  chargeType = 'billet',
+  limit = 50,
+  offset = 0,
+}) {
+  const clientDoc = normalizeDocument(document || cpf);
+  if (!isValidCpfOrCnpj(clientDoc)) {
+    throw new Error('CPF/CNPJ deve conter 11 ou 14 digitos.');
   }
 
   const begin = String(beginDate || '').trim();
   const end = String(endDate || '').trim();
   if (!begin || !end) {
-    throw new Error('beginDate e endDate são obrigatórios.');
+    throw new Error('beginDate e endDate sao obrigatorios.');
   }
 
   const token = await getAccessToken();
@@ -117,8 +120,14 @@ async function listChargesByCpf({ cpf, beginDate, endDate, chargeType = 'billet'
   return response.data;
 }
 
+async function listChargesByCpf({ cpf, ...rest }) {
+  return listChargesByDocument({ document: cpf, ...rest });
+}
+
 module.exports = {
   getAccessToken,
+  listChargesByDocument,
   listChargesByCpf,
   normalizeDocument,
+  isEfiUnavailableError,
 };

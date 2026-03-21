@@ -1,5 +1,6 @@
-﻿const { recalcMaintenanceForecasts } = require('./maintenanceRecalcService');
+const { recalcMaintenanceForecasts } = require('./maintenanceRecalcService');
 const { sendMaintenanceAlerts } = require('./maintenanceNotificationService');
+const { sendBotBoletoProactiveNotifications } = require('./botBoletoNotificationService');
 
 function parsePositiveInt(value, fallback) {
   const parsed = Number.parseInt(String(value ?? ''), 10);
@@ -46,6 +47,7 @@ function createMaintenanceScheduler(config = {}) {
   const intervalMs = Math.max(60_000, parsePositiveInt(config.intervalMs, 5 * 60 * 1000));
   const notifyEnabled = toBoolean(config.notifyEnabled, true);
   const notifyLimit = Math.max(1, parsePositiveInt(config.notifyLimit, 500));
+  const botBoletoNotifyEnabled = toBoolean(config.botBoletoNotifyEnabled, false);
 
   const state = {
     timer: null,
@@ -64,6 +66,11 @@ function createMaintenanceScheduler(config = {}) {
       if (notifyEnabled) {
         const notify = await sendMaintenanceAlerts({ dryRun: false, limit: notifyLimit });
         console.log(`[maintenance-notify] ${reason}: enviados=${notify.summary.sent}, duplicados=${notify.summary.duplicates}, falhas=${notify.summary.failed}, candidatos=${notify.summary.candidates}`);
+      }
+
+      if (botBoletoNotifyEnabled) {
+        const billing = await sendBotBoletoProactiveNotifications({ dryRun: false });
+        console.log(`[bot-boleto-notify] ${reason}: enviados=${billing.summary.notified}, duplicados=${billing.summary.duplicates}, falhas=${billing.summary.failed}, candidatos=${billing.summary.candidates}`);
       }
     } catch (err) {
       console.error('[maintenance-scheduler] erro ao executar rotina diaria:', err.message);
@@ -126,6 +133,7 @@ function startMaintenanceRecalcSchedulerFromEnv() {
     intervalMs: process.env.MAINTENANCE_RECALC_CHECK_INTERVAL_MS,
     notifyEnabled: process.env.MAINTENANCE_NOTIFY_ENABLED,
     notifyLimit: process.env.MAINTENANCE_NOTIFY_LIMIT,
+    botBoletoNotifyEnabled: process.env.BOT_BOLETO_NOTIFY_ENABLED,
   });
 
   scheduler.start();

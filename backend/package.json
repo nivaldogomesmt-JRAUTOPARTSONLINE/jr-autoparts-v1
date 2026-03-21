@@ -14,6 +14,7 @@
                     "db:seed:assets":  "node scripts/seed_company_assets.js",
                     "tracking:jobs":  "node scripts/run_tracking_jobs.js",
                     "tracking:generate":  "node scripts/run_tracking_jobs.js",
+                    "bot:boleto:notify":  "node scripts/run_bot_boleto_notifications.js",
                     "products:import:csv":  "node scripts/import_products_csv.js",
                     "vehicles:enrich:plate":  "node scripts/enrich_vehicles_by_plate.js"
                 },

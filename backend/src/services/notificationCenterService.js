@@ -167,6 +167,24 @@ const DEFAULT_EVENTS = [
     template: 'Olá, {clientName}! Atenção: a manutenção *{maintenanceLabel}* do {plate} está vencida.\nPrevisão: {nextDate} ou {nextKm}.\nAgende agora: {portalUrl}',
   },
   {
+    key: 'BOT_BOLETO_DUE_SOON',
+    module: 'BOT',
+    title: 'Boleto a vencer',
+    channel: 'WHATSAPP',
+    active: true,
+    dedupeHours: 24,
+    template: 'Ola, {clientName}! Encontramos boleto(s) para {documentType} final {documentLast4} vencendo em breve.\nProximo vencimento: {dueDate}.\nValor: R$ {amount}.',
+  },
+  {
+    key: 'BOT_BOLETO_OVERDUE',
+    module: 'BOT',
+    title: 'Boleto vencido',
+    channel: 'WHATSAPP',
+    active: true,
+    dedupeHours: 24,
+    template: 'Ola, {clientName}! Existem boleto(s) em atraso para {documentType} final {documentLast4}.\nMais antigo: {dueDate}.\nValor: R$ {amount}.',
+  },
+  {
     key: 'PROFILE_WHATSAPP_UPDATED',
     module: 'CADASTRO',
     title: 'WhatsApp atualizado',
@@ -241,7 +259,7 @@ const DEFAULT_EVENTS = [
   {
     key: 'TRACKING_INSTALL_DONE',
     module: 'RASTREAMENTO',
-    title: 'InstalaÃ§Ã£o concluÃ­da',
+    title: 'Instalacao concluida',
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 1,
@@ -250,7 +268,7 @@ const DEFAULT_EVENTS = [
   {
     key: 'TRACKING_MAINTENANCE_DONE',
     module: 'RASTREAMENTO',
-    title: 'ManutenÃ§Ã£o concluÃ­da',
+    title: 'Manutencao concluida',
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 1,
@@ -259,7 +277,7 @@ const DEFAULT_EVENTS = [
   {
     key: 'TRACKING_REMOVAL_DONE',
     module: 'RASTREAMENTO',
-    title: 'Retirada concluÃ­da',
+    title: 'Retirada concluida',
     channel: 'WHATSAPP',
     active: true,
     dedupeHours: 1,
