@@ -521,7 +521,6 @@ const me = async (req, res) => {
                 items: {
                   select: {
                     itemName: true,
-                    description: true,
                     type: true,
                   },
                 },
