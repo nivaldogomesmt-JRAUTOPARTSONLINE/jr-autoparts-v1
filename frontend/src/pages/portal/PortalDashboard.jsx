@@ -180,6 +180,8 @@ export default function PortalDashboard() {
 
   const recentOrders = data?.recentOrders || [];
   const recentVehicleServices = data?.recentVehicleServices || [];
+        const pendingInvoices = data?.tracking?.pendingInvoices || [];
+        const openAmount = data?.tracking?.openAmount || 0;
   const urgentVehicles = vehicles.filter((vehicle) => vehicle.maintenanceStatus === 'urgencia');
   const warningVehicles = vehicles.filter((vehicle) => vehicle.maintenanceStatus === 'atencao');
   const healthyVehicles = vehicles.filter((vehicle) => vehicle.maintenanceStatus === 'em_dia');
@@ -335,6 +337,97 @@ export default function PortalDashboard() {
                   </div>
                 ))}
               </div>
+            </div>
+          ) : null}
+
+          {/* Boletos de Rastreamento Veicular */}
+          {pendingInvoices.length > 0 ? (
+            <div style={{ marginBottom: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#1e293b', margin: 0 }}>
+                  🔔 Boletos de Rastreamento
+                </h3>
+                {openAmount > 0 && (
+                  <span style={{ fontSize: '14px', fontWeight: '600', color: '#dc2626' }}>
+                    Total em aberto: {formatCurrency(openAmount)}
+                  </span>
+                )}
+              </div>
+              {pendingInvoices.map((invoice, index) => (
+                <div key={invoice.id || index} style={{
+                  background: '#fff',
+                  border: `1px solid ${invoice.effectiveStatus === 'OVERDUE' ? '#fecaca' : '#bfdbfe'}`,
+                  borderRadius: '8px',
+                  padding: '16px',
+                  marginBottom: '10px',
+                  borderLeft: `4px solid ${invoice.effectiveStatus === 'OVERDUE' ? '#dc2626' : '#3b82f6'}`
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                    <div>
+                      <p style={{ margin: 0, fontWeight: '600', fontSize: '14px', color: '#1e293b' }}>
+                        {invoice.contract?.vehicle
+                          ? `${invoice.contract.vehicle.brand} ${invoice.contract.vehicle.model} – ${invoice.contract.vehicle.plate}`
+                          : 'Veículo não informado'}
+                      </p>
+                      <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#64748b' }}>
+                        Vencimento: {formatDate(invoice.dueDate)}
+                        {invoice.effectiveStatus === 'OVERDUE' && invoice.daysOverdue > 0 && (
+                          <span style={{ color: '#dc2626', marginLeft: '8px' }}>({invoice.daysOverdue} dia{invoice.daysOverdue > 1 ? 's' : ''} em atraso)</span>
+                        )}
+                      </p>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <p style={{ margin: 0, fontWeight: '700', fontSize: '16px', color: '#1e293b' }}>
+                        {formatCurrency(invoice.amount)}
+                      </p>
+                      <span style={{
+                        display: 'inline-block',
+                        marginTop: '4px',
+                        padding: '2px 8px',
+                        borderRadius: '12px',
+                        fontSize: '11px',
+                        fontWeight: '600',
+                        background: invoice.effectiveStatus === 'OVERDUE' ? '#fef2f2' : '#eff6ff',
+                        color: invoice.effectiveStatus === 'OVERDUE' ? '#dc2626' : '#2563eb'
+                      }}>
+                        {invoice.effectiveStatus === 'OVERDUE' ? 'VENCIDO' : 'A VENCER'}
+                      </span>
+                    </div>
+                  </div>
+                  {(invoice.barCode || invoice.pixCode) && (
+                    <div style={{ marginTop: '10px', padding: '10px', background: '#f8fafc', borderRadius: '6px' }}>
+                      <p style={{ margin: '0 0 6px', fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        {invoice.barCode ? 'Código de Barras' : 'Código PIX'}
+                      </p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <p style={{ margin: 0, fontSize: '11px', color: '#334155', fontFamily: 'monospace', flex: 1, wordBreak: 'break-all' }}>
+                          {invoice.barCode || invoice.pixCode}
+                        </p>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(invoice.barCode || invoice.pixCode);
+                            alert('Código copiado!');
+                          }}
+                          style={{
+                            padding: '6px 14px',
+                            background: invoice.barCode ? '#3b82f6' : '#10b981',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            flexShrink: 0
+                          }}
+                        >
+                          Copiar {invoice.barCode ? 'Boleto' : 'PIX'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           ) : null}
 
