@@ -1,154 +1,147 @@
-/**
- * JR Auto Peças — Bot de Atendimento WhatsApp com IA (GPT-4o-mini)
- *
- * Fluxo:
- *   1. Webhook Evolution API recebe mensagem do cliente
- *   2. Carrega histórico da sessão (memória com TTL configurável)
- *   3. Busca contexto do cliente e peças relevantes no banco
- *   4. Chama OpenAI via axios com prompt personalizado JR Auto Peças
- *   5. Retorna resposta para envio via Evolution API
- *
- * Requer: OPENAI_API_KEY no .env do backend
- */
-
 const axios = require('axios');
 const prisma = require('../lib/prisma');
 
-// ── Sessões em memória (histórico por telefone) ────────────────────────
+// ── Sessões em memória ──────────────────────────────────────────────────────
 const sessions = new Map();
 const SESSION_TTL_MS = parseInt(process.env.BOT_SESSION_TTL_MINUTES || '30') * 60_000;
 
 function getSession(phone) {
   const now = Date.now();
-  let s = sessions.get(phone);
-  if (!s || now - s.lastActivity > SESSION_TTL_MS) {
-    s = { messages: [], lastActivity: now, handoff: false };
-    sessions.set(phone, s);
+  if (!sessions.has(phone) || now - sessions.get(phone).lastAt > SESSION_TTL_MS) {
+    sessions.set(phone, { messages: [], handoff: false, lastAt: now });
   }
-  s.lastActivity = now;
+  const s = sessions.get(phone);
+  s.lastAt = now;
   return s;
 }
 
-// ── Busca cliente no banco ────────────────────────────────────
+// ── Contexto do cliente (opcional — enriquece se ele já for cadastrado) ──────
 async function loadClientContext(phone) {
   try {
-    return await prisma.client.findFirst({
-      where: {
-        OR: [{ phone: { contains: phone } }, { whatsapp: { contains: phone } }],
-        active: true,
-      },
-      select: {
-        id: true, name: true,
-        vehicles: { take: 3, select: { brand: true, model: true, year: true, plate: true } },
-        serviceOrders: {
-          take: 3, orderBy: { createdAt: 'desc' },
-          select: { status: true, description: true, totalPrice: true },
-        },
-      },
+    const digits = phone.replace(/\D/g, '').slice(-11);
+    const client = await prisma.client.findFirst({
+      where: { phone: { contains: digits } },
+      include: {
+        vehicles: true,
+        serviceOrders: { orderBy: { createdAt: 'desc' }, take: 3 }
+      }
     });
+    return client;
   } catch { return null; }
 }
 
-// ── Busca peças no catálogo ───────────────────────────────────
+// ── Busca de peças no catálogo ───────────────────────────────────────────────
+const PARTS_RE = /\b(filtro|vela|pastilha|disco|correia|amortecedor|radiador|bomba|rolamento|óleo|bateria|pneu|freio|embreagem|alternador|injetor|bobina|cubo|pivô|terminal|bieleta|barra|coxim)\b/i;
+
 async function searchParts(keyword) {
-  if (!keyword) return [];
   try {
     return await prisma.product.findMany({
-      where: {
-        OR: [
-          { name: { contains: keyword, mode: 'insensitive' } },
-          { description: { contains: keyword, mode: 'insensitive' } },
-        ],
-        active: true,
-      },
+      where: { name: { contains: keyword, mode: 'insensitive' } },
       take: 5,
-      select: { name: true, code: true, salePrice: true, price: true, stock: true },
+      select: { name: true, price: true, stock: true, code: true }
     });
   } catch { return []; }
 }
 
-// ── Regex para detectar peças na mensagem ─────────────────────────
-const PARTS_RE = /\b(filtro|oleo|óleo|correia|freio|pastilha|amortecedor|vela|bateria|alternador|tensor|bomba|radiador|rolamento|cubo|pivô|barra|disco|tambor|coxim|embreagem|diferencial|injetor|bobina|sensor|manga|pneu|escapamento|platô|servo|relé|fusível|borracha|braço|pistão|biela|virabrequim)\b/i;
-
-// ── System prompt com contexto dinâmico ───────────────────────────
+// ── System Prompt ─────────────────────────────────────────────────────────────
 function buildSystemPrompt(client, parts) {
+  const now = new Date();
+  const hour = now.getHours();
+  const saudacao = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
+
   let ctx = '';
   if (client) {
-    ctx += '\n\nCLIENTE: ' + client.name;
+    ctx += `\nCLIENTE IDENTIFICADO: ${client.name}`;
     if (client.vehicles?.length) {
-      ctx += '\nVeículos: ' + client.vehicles.map(v => v.brand + ' ' + v.model + ' ' + (v.year || '') + ' - ' + v.plate).join('; ');
+      ctx += `\nVeículos: ${client.vehicles.map(v => v.plate + ' ' + v.model).join(', ')}`;
     }
     if (client.serviceOrders?.length) {
-      ctx += '\nÚltimas OS: ' + client.serviceOrders.map(o => o.status + ': ' + (o.description || '').substring(0, 50)).join('; ');
+      ctx += `\nÚltimas OS: ${client.serviceOrders.map(o => o.status + ' - ' + o.description?.substring(0, 40)).join(' | ')}`;
     }
   }
-  if (parts.length > 0) {
-    const lista = parts.map(p => {
-      const val = p.salePrice || p.price;
-      return '- ' + p.name + ' | Cód: ' + (p.code || '-') + ' | ' + (val ? 'R$ ' + Number(val).toFixed(2) : 'consultar') + ' | Estoque: ' + (p.stock ?? '?');
-    }).join('\n');
-    ctx += '\n\nPEÇAS NO CATÁLOGO:\n' + lista;
+
+  if (parts?.length) {
+    ctx += `\n\nPEÇAS ENCONTRADAS NO CATÁLOGO:\n` +
+      parts.map(p => `- ${p.name} | Cód: ${p.code} | R$ ${p.price?.toFixed(2)} | Estoque: ${p.stock}`).join('\n');
   }
-  return 'Você é o assistente virtual da JR Auto Peças, autopeças e oficina mecânica no Mato Grosso, Brasil. Nome: JR Assistente.\n\nEMPRESA:\n- Veículos leves e pesados\n- Serviços: troca de óleo, correia, suspensão, freios, elétrica, diagnóstico\n- WhatsApp: (65) 99281-2000\n- Horário: Seg-Sex 7h-18h | Sáb 7h-12h\n\nPAPEL:\n1. Saudar e entender a necessidade\n2. Identificar: compra de peça, orçamento, agendamento ou suporte\n3. Informar preço/disponibilidade das peças do catálogo\n4. Para serviços: estimar valor e coletar dados do veículo (marca/modelo/ano)\n5. Para agendamento: coletar nome, veículo e preferência de horário\n6. Se não souber ou cliente pedir humano: responder começando com [HANDOFF]\n\nREGRAS:\n- Português brasileiro informal e profissional\n- Máximo 200 palavras por resposta\n- 1-2 emojis por mensagem\n- NUNCA invente preços fora do catálogo\n- Se a peça não estiver no catálogo, diga que vai verificar com a equipe' + ctx;
+
+  return `Você é o assistente virtual da JR Auto Parts, loja especializada em peças automotivas em Cuiabá-MT.
+Seu nome é JR. Você atende pelo WhatsApp com linguagem amigável, natural e profissional.
+
+REGRAS IMPORTANTES:
+- Sempre comece com "${saudacao}! 😊" quando for a primeira mensagem
+- NUNCA peça CPF ou placa logo de cara — primeiro entenda o que o cliente precisa
+- Converse naturalmente: pergunte o que o cliente está buscando, o problema do veículo, etc
+- Só peça placa ou CPF quando for REALMENTE necessário (ex: cliente quer saber status de pedido específico)
+- Se o cliente perguntar sobre peças, informe disponibilidade e preço se tiver no catálogo
+- Se o cliente quiser agendar, informe que pode marcar via link ou pelo próprio chat
+- Se o cliente pedir orçamento, colete as informações necessárias (modelo do carro, ano, peça) antes de dar valor
+- Seja empático — se o carro quebrou, mostre que entende a situação antes de oferecer solução
+- Se não souber a resposta, diga que vai verificar e um atendente entrará em contato
+- Para atendimento humano, use [HANDOFF] no início da resposta
+
+SOBRE A JR AUTO PARTS:
+- Loja de peças automotivas em Cuiabá-MT
+- Atende todos os tipos de veículos (carros, motos, caminhões)
+- Serviços: venda de peças, troca de óleo, revisão, diagnóstico
+- Formas de pagamento: PIX, cartão, boleto
+- WhatsApp: 65 99281-2000
+${ctx}`;
 }
 
-// ── Chama OpenAI via axios ────────────────────────────────────────
+// ── Chamada OpenAI ─────────────────────────────────────────────────────────────
 async function callOpenAI(systemPrompt, messages) {
-  const res = await axios.post(
+  const resp = await axios.post(
     'https://api.openai.com/v1/chat/completions',
     {
       model: 'gpt-4o-mini',
       messages: [{ role: 'system', content: systemPrompt }, ...messages],
       max_tokens: 400,
-      temperature: 0.65,
+      temperature: 0.7
     },
-    {
-      headers: {
-        Authorization: 'Bearer ' + process.env.OPENAI_API_KEY,
-        'Content-Type': 'application/json',
-      },
-      timeout: 15000,
-    }
+    { headers: { Authorization: 'Bearer ' + process.env.OPENAI_API_KEY, 'Content-Type': 'application/json' }, timeout: 20000 }
   );
-  return res.data.choices[0]?.message?.content?.trim() || null;
+  return resp.data.choices[0].message.content.trim();
 }
 
-// ── Entry point chamado pelo evolutionWebhookController ──────────────
+// ── Handler principal ──────────────────────────────────────────────────────────
 async function handleIncomingMessage(phone, content) {
-  if (!process.env.OPENAI_API_KEY) {
-    console.warn('[ChatbotAI] OPENAI_API_KEY não configurada — chatbot desativado.');
-    return null;
-  }
+  if (!process.env.OPENAI_API_KEY) return null;
 
   const session = getSession(phone);
-  if (session.handoff) return null;  // já aguardando humano
+  if (session.handoff) return null;
 
-  try {
-    const keyword = (content.match(PARTS_RE) || [])[0];
-    const [client, parts] = await Promise.all([
-      loadClientContext(phone),
-      keyword ? searchParts(keyword) : Promise.resolve([]),
-    ]);
+  // Busca peças se palavra-chave detectada
+  const keyword = (content.match(PARTS_RE) || [])[0];
 
-    session.messages.push({ role: 'user', content });
-    if (session.messages.length > 12) session.messages = session.messages.slice(-12);
+  // Carrega contexto do cliente em paralelo com busca de peças
+  const [client, parts] = await Promise.all([
+    loadClientContext(phone),
+    keyword ? searchParts(keyword) : Promise.resolve([])
+  ]);
 
-    let reply = await callOpenAI(buildSystemPrompt(client, parts), session.messages);
-    if (!reply) return null;
-
-    if (reply.startsWith('[HANDOFF]')) {
-      session.handoff = true;
-      reply = reply.replace('[HANDOFF]', '').trim();
-      reply += '\n\n🔔 Um atendente da JR Auto Peças vai continuar em instantes!';
-    }
-
-    session.messages.push({ role: 'assistant', content: reply });
-    return reply;
-
-  } catch (err) {
-    console.error('[ChatbotAI] Erro:', err.message);
-    return '⚠️ Tive um probleminha técnico. Nossa equipe entra em contato pelo (65) 99281-2000!';
+  // Adiciona mensagem do usuário ao histórico
+  session.messages.push({ role: 'user', content });
+  if (session.messages.length > 14) {
+    session.messages = session.messages.slice(-14);
   }
+
+  let reply;
+  try {
+    reply = await callOpenAI(buildSystemPrompt(client, parts), session.messages);
+  } catch (err) {
+    console.error('[Chatbot] OpenAI error:', err.message);
+    return 'Olá! 😊 Tivemos uma instabilidade agora. Um atendente vai te responder em instantes!';
+  }
+
+  // Verifica handoff
+  if (reply.startsWith('[HANDOFF]')) {
+    session.handoff = true;
+    reply = reply.replace('[HANDOFF]', '').trim() + '\n\n🔔 Um de nossos atendentes vai continuar o atendimento em breve!';
+  }
+
+  session.messages.push({ role: 'assistant', content: reply });
+  return reply;
 }
 
 module.exports = { handleIncomingMessage };
