@@ -4,7 +4,7 @@ import { BRAND } from '../config/brand';
 
 const API = import.meta.env.VITE_API_URL || '';
 
-function StatCard({ label, value, sub, color, icon }) {
+function StatCard({ label, value, sub, color, icon, onClick }) {
   const colors = {
     red:   { border: 'var(--danger)',  bg: 'var(--danger-light)',  text: '#991b1b' },
     yellow:{ border: 'var(--warning)', bg: 'var(--warning-light)', text: '#92400e' },
@@ -14,7 +14,7 @@ function StatCard({ label, value, sub, color, icon }) {
   };
   const c = colors[color] || colors.gray;
   return (
-    <div className="stat-card" style={{ borderLeft: `4px solid ${c.border}` }}>
+    <div className="stat-card" style={{ borderLeft: `4px solid ${c.border}`, cursor: onClick ? 'pointer' : 'default' }} onClick={onClick}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <span className="stat-label">{label}</span>
         {icon && <span style={{ fontSize: 20, opacity: 0.6 }}>{icon}</span>}
@@ -133,10 +133,10 @@ export default function Dashboard() {
           <div className="section">
             <div className="section-header"><h2 className="section-title">Indicadores do Mês</h2></div>
             <div className="grid-4">
-              <StatCard label="Faturamento do Mês" value={(kpis.faturamento_mes ?? kpis.monthlyRevenue) != null ? `R$ ${Number(kpis.faturamento_mes ?? kpis.monthlyRevenue).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'} sub="Ordens entregues e finalizadas" color="blue" icon="💰" />
-              <StatCard label="OS do Mês" value={kpis.os_mes ?? kpis.monthlyOS ?? 0} sub={`Ticket médio: R$ ${Number(kpis.ticket_medio ?? kpis.avgTicket ?? 0).toFixed(2)}`} color="blue" icon="📋" />
-              <StatCard label="OS Atrasadas" value={osAtrasadas.length} sub="Aguardando resolução" color={osAtrasadas.length > 0 ? 'red' : 'green'} icon="⏰" />
-              <StatCard label="Pedidos Pendentes" value={kpis.pedidos_pendentes ?? kpis.pendingDeliveries ?? 0} sub="Aguardando aprovação" color={(kpis.pedidos_pendentes ?? kpis.pendingDeliveries ?? 0) > 0 ? 'yellow' : 'green'} icon="📦" />
+              <StatCard label="Faturamento do Mês" onClick={() => navigate('/financeiro')} value={(kpis.faturamento_mes ?? kpis.monthlyRevenue) != null ? `R$ ${Number(kpis.faturamento_mes ?? kpis.monthlyRevenue).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'} sub="Ordens entregues e finalizadas" color="blue" icon="💰" />
+              <StatCard label="OS do Mês" onClick={() => navigate('/so')} value={kpis.os_mes ?? kpis.monthlyOS ?? 0} sub={`Ticket médio: R$ ${Number(kpis.ticket_medio ?? kpis.avgTicket ?? 0).toFixed(2)}`} color="blue" icon="📋" />
+              <StatCard label="OS Atrasadas" onClick={() => navigate('/so')} value={osAtrasadas.length} sub="Aguardando resolução" color={osAtrasadas.length > 0 ? 'red' : 'green'} icon="⏰" />
+              <StatCard label="Pedidos Pendentes" onClick={() => navigate('/pedidos')} value={kpis.pedidos_pendentes ?? kpis.pendingDeliveries ?? 0} sub="Aguardando aprovação" color={(kpis.pedidos_pendentes ?? kpis.pendingDeliveries ?? 0) > 0 ? 'yellow' : 'green'} icon="📦" />
             </div>
           </div>
 
@@ -144,9 +144,9 @@ export default function Dashboard() {
           <div className="section">
             <div className="section-header"><h2 className="section-title">Manutenções Preventivas</h2></div>
             <div className="grid-3">
-              <StatCard label="Manutenções Vencidas" value={manutVencidas.total ?? 0} sub={manutVencidas.detalhe || 'Óleo e correia'} color={manutVencidas.total > 0 ? 'red' : 'green'} icon="🔴" />
-              <StatCard label="Manutenções a Vencer" value={manutAtencao.total ?? 0} sub={manutAtencao.detalhe || 'Próximos 30 dias'} color={manutAtencao.total > 0 ? 'yellow' : 'green'} icon="🟡" />
-              <StatCard label="Em Dia" value={(d.total_veiculos ?? kpis.totalVehicles ?? 0) - (manutVencidas.total ?? 0) - (manutAtencao.total ?? 0)} sub="Veículos sem pendência" color="green" icon="✅" />
+              <StatCard label="Manutenções Vencidas" onClick={() => navigate('/veiculos')} value={manutVencidas.total ?? 0} sub={manutVencidas.detalhe || 'Óleo e correia'} color={manutVencidas.total > 0 ? 'red' : 'green'} icon="🔴" />
+              <StatCard label="Manutenções a Vencer" onClick={() => navigate('/veiculos')} value={manutAtencao.total ?? 0} sub={manutAtencao.detalhe || 'Próximos 30 dias'} color={manutAtencao.total > 0 ? 'yellow' : 'green'} icon="🟡" />
+              <StatCard label="Em Dia" onClick={() => navigate('/veiculos')} value={(d.total_veiculos ?? kpis.totalVehicles ?? 0) - (manutVencidas.total ?? 0) - (manutAtencao.total ?? 0)} sub="Veículos sem pendência" color="green" icon="✅" />
             </div>
           </div>
 
