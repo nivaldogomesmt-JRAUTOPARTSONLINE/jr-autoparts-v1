@@ -181,6 +181,7 @@ export default function PortalDashboard() {
   const recentOrders = data?.recentOrders || [];
   const recentVehicleServices = data?.recentVehicleServices || [];
         const pendingInvoices = data?.tracking?.pendingInvoices || [];
+        const maintenances = data?.maintenances || [];
         const openAmount = data?.tracking?.openAmount || 0;
   const urgentVehicles = vehicles.filter((vehicle) => vehicle.maintenanceStatus === 'urgencia');
   const warningVehicles = vehicles.filter((vehicle) => vehicle.maintenanceStatus === 'atencao');
@@ -309,6 +310,53 @@ export default function PortalDashboard() {
               </div>
             </div>
           ) : null}
+
+
+          {/* Próximas Manutenções por Veículo */}
+          {vehicles.length > 0 && maintenances.length > 0 && (() => {
+            const veiculos = vehicles.map(v => ({
+              ...v,
+              oil: maintenances.find(m => m.vehicleId === v.id && m.type === 'OIL_CHANGE'),
+              belt: maintenances.find(m => m.vehicleId === v.id && m.type === 'BELT_CHANGE')
+            })).filter(v => v.oil || v.belt);
+            if (veiculos.length === 0) return null;
+            const hoje = new Date();
+            const vencida = (d) => d && new Date(d) < hoje;
+            return (
+              <div style={{ marginBottom: '24px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#1e293b', margin: '0 0 12px' }}>
+                  🔧 Próximas Manutenções
+                </h3>
+                {veiculos.map(v => (
+                  <div key={v.id} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '14px', marginBottom: '8px' }}>
+                    <p style={{ margin: '0 0 10px', fontWeight: '600', fontSize: '14px', color: '#1e293b' }}>
+                      {v.brand} {v.model} – {v.plate}
+                    </p>
+                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                      {v.oil && (
+                        <div style={{ background: vencida(v.oil.nextDueDate) ? '#fef2f2' : '#f0fdf4', border: `1px solid ${vencida(v.oil.nextDueDate) ? '#fecaca' : '#bbf7d0'}`, borderRadius: '6px', padding: '8px 12px', minWidth: '150px' }}>
+                          <p style={{ margin: '0 0 2px', fontSize: '11px', color: '#64748b' }}>🛢️ Troca de Óleo</p>
+                          <p style={{ margin: 0, fontWeight: '700', fontSize: '14px', color: vencida(v.oil.nextDueDate) ? '#dc2626' : '#16a34a' }}>
+                            {formatDate(v.oil.nextDueDate)}
+                          </p>
+                          {vencida(v.oil.nextDueDate) && <p style={{ margin: '2px 0 0', fontSize: '10px', color: '#dc2626', fontWeight: '600' }}>VENCIDA</p>}
+                        </div>
+                      )}
+                      {v.belt && (
+                        <div style={{ background: vencida(v.belt.nextDueDate) ? '#fef2f2' : '#f0fdf4', border: `1px solid ${vencida(v.belt.nextDueDate) ? '#fecaca' : '#bbf7d0'}`, borderRadius: '6px', padding: '8px 12px', minWidth: '150px' }}>
+                          <p style={{ margin: '0 0 2px', fontSize: '11px', color: '#64748b' }}>⚙️ Troca de Correia</p>
+                          <p style={{ margin: 0, fontWeight: '700', fontSize: '14px', color: vencida(v.belt.nextDueDate) ? '#dc2626' : '#16a34a' }}>
+                            {formatDate(v.belt.nextDueDate)}
+                          </p>
+                          {vencida(v.belt.nextDueDate) && <p style={{ margin: '2px 0 0', fontSize: '10px', color: '#dc2626', fontWeight: '600' }}>VENCIDA</p>}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
           {recentOrders.length > 0 ? (
             <div style={{ marginBottom: 24 }}>
