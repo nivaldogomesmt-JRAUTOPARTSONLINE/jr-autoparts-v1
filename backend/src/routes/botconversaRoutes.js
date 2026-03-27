@@ -1,4 +1,5 @@
 const router = require('express').Router();
+const { aiChat } = require('../controllers/botWebhookController');
 const { authenticate, requireEmployee } = require('../middleware/auth');
 const bc = require('../services/botconversaService');
 const prisma = require('../lib/prisma');
@@ -121,5 +122,9 @@ router.post('/sync-client/:id', async (req, res) => {
     res.status(500).json({ error: `Erro: ${err.message}` });
   }
 });
+
+
+// Rota IA — BotConversa envia phone+message, recebe reply
+router.post('/ai-chat', aiChat);
 
 module.exports = router;
