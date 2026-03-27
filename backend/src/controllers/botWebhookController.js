@@ -628,7 +628,24 @@ async function handoff(req, res) {
 // Exports
 // ---------------------------------------------------------------------------
 
+// ── AI Chat para BotConversa ────────────────────────────────────────────────
+async function aiChat(req, res) {
+  try {
+    const phone = req.body.phone || req.body.telefone || req.body.contact_phone || '';
+    const message = req.body.message || req.body.mensagem || req.body.text || '';
+    if (!phone || !message) {
+      return res.json({ reply: 'Olá! Como posso te ajudar hoje? 😊' });
+    }
+    const chatbot = require('../services/whatsappChatbotService');
+    const reply = await chatbot.handleIncomingMessage(phone, message);
+    return res.json({ reply: reply || 'Olá! Estou aqui para te ajudar. O que você precisa? 😊' });
+  } catch (err) {
+    console.error('[aiChat] erro:', err.message);
+    return res.json({ reply: 'Olá! Tivemos uma instabilidade. Um atendente vai te responder em breve! 🔔' });
+  }
+}
 module.exports = {
+  aiChat,
   triage,
   resolveClientForBoleto,
   openBoletos,
