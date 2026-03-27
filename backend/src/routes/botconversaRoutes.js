@@ -4,7 +4,14 @@ const { authenticate, requireEmployee } = require('../middleware/auth');
 const bc = require('../services/botconversaService');
 const prisma = require('../lib/prisma');
 
-// Todas as rotas exigem autenticacao de funcionario/admin
+// ---------------------------------------------------------------------------
+// PUBLIC webhook endpoint — no auth required (called by BotConversa)
+// POST /api/botconversa/ai-chat
+// Body: { phone, message }
+// ---------------------------------------------------------------------------
+router.post('/ai-chat', aiChat);
+
+// Todas as rotas abaixo exigem autenticacao de funcionario/admin
 router.use(authenticate, requireEmployee);
 
 /**
@@ -122,9 +129,5 @@ router.post('/sync-client/:id', async (req, res) => {
     res.status(500).json({ error: `Erro: ${err.message}` });
   }
 });
-
-
-// Rota IA — BotConversa envia phone+message, recebe reply
-router.post('/ai-chat', aiChat);
 
 module.exports = router;
