@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { clientsAPI, integrationLogsAPI, productsAPI, soAPI, vehiclesAPI } from '../../services/api';
+import { botconversaAPI, clientsAPI, integrationLogsAPI, productsAPI, soAPI, vehiclesAPI } from '../../services/api';
 import useDebouncedValue from '../../hooks/useDebouncedValue';
 
 const HUB_TABS = [
@@ -85,6 +85,7 @@ export default function IntegrationsHubPage() {
   const [logs, setLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [logsError, setLogsError] = useState('');
+  const [botStatus, setBotStatus] = useState({ loading: true, enabled: true });
 
   const loadLogs = useCallback(async () => {
     setLogsLoading(true);
@@ -107,6 +108,27 @@ export default function IntegrationsHubPage() {
   useEffect(() => {
     loadLogs();
   }, [loadLogs]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    botconversaAPI.getStatus()
+      .then((res) => {
+        if (!mounted) return;
+        setBotStatus({
+          loading: false,
+          enabled: !!res.data?.config?.enabled,
+        });
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setBotStatus({ loading: false, enabled: true });
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     const sectionId = SECTION_ID_BY_TAB[currentTab];
@@ -360,6 +382,12 @@ export default function IntegrationsHubPage() {
         </div>
       </div>
 
+      {!botStatus.loading && !botStatus.enabled ? (
+        <div className="alert alert-warning" style={{ marginBottom: 16 }}>
+          BotConversa sem chave configurada. Os envios de WhatsApp ficam pausados ate a integracao ser concluida.
+        </div>
+      ) : null}
+
       <div className="card" style={{ marginBottom: 16, padding: 10 }}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {HUB_TABS.map((tab) => (
@@ -382,7 +410,17 @@ export default function IntegrationsHubPage() {
             <Link to="/mensagens" className="btn btn-outline">WhatsApp / Mensagens</Link>
             <Link to="/integracoes/evolution-whatsapp" className="btn btn-outline">WhatsApp - Evolution API (vincular telefone)</Link>
             <Link to="/integracoes/notificacoes" className="btn btn-outline">Central de Notificações</Link>
-            <Link to="/integracoes/botconversa" className="btn btn-outline">BotConversa — Automação WhatsApp</Link>
+            <Link
+              to={botStatus.enabled ? '/integracoes/botconversa' : '#'}
+              className="btn btn-outline"
+              onClick={(event) => {
+                if (!botStatus.enabled) event.preventDefault();
+              }}
+              aria-disabled={!botStatus.enabled}
+              style={!botStatus.enabled ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
+            >
+              BotConversa - Automacao WhatsApp
+            </Link>
             <Link to="/integracoes/efi-teste" className="btn btn-outline">Teste Efí - Boleto por CPF</Link>
             <Link to="/rastreamento" className="btn btn-outline">Rastreamento / APIs externas</Link>
             <button type="button" className="btn btn-outline" disabled>XML / NF (via importacao)</button>

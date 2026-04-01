@@ -4,16 +4,16 @@ import { dashboardAPI, soAPI } from '../../services/api';
 import useDebouncedValue from '../../hooks/useDebouncedValue';
 
 const DELIVERY_LABELS = {
-  AWAITING_DISPATCH: 'Pendente',
-  OUT_FOR_DELIVERY: 'Em transporte',
+  AWAITING_DISPATCH: 'Confirmado',
+  OUT_FOR_DELIVERY: 'Enviado',
   DELIVERED: 'Entregue',
-  DELIVERY_FAILED: 'Atraso/Problema',
+  DELIVERY_FAILED: 'Falha na entrega',
 };
 
 const ORDER_PHASE_LABELS = {
-  CONFIRMED: 'Pedido confirmado',
-  PAYMENT_APPROVED: 'Pagamento aprovado',
-  IN_SEPARATION: 'Em separacao',
+  CONFIRMED: 'Confirmado',
+  PAYMENT_APPROVED: 'Confirmado',
+  IN_SEPARATION: 'Separacao',
   SHIPPED: 'Enviado',
   DELIVERED: 'Entregue',
   CANCELED: 'Cancelado',
@@ -314,11 +314,9 @@ export default function DeliveriesPage() {
     const delayLimit = 2 * 24 * 60 * 60 * 1000;
 
     const acc = {
-      pending: 0,
-      paymentApproved: 0,
+      confirmed: 0,
       separation: 0,
       sent: 0,
-      transport: 0,
       delivered: 0,
       delayed: 0,
       canceled: 0,
@@ -334,11 +332,9 @@ export default function DeliveriesPage() {
         continue;
       }
 
-      if (phase === 'CONFIRMED') acc.pending += 1;
-      if (phase === 'PAYMENT_APPROVED') acc.paymentApproved += 1;
+      if (phase === 'CONFIRMED' || phase === 'PAYMENT_APPROVED') acc.confirmed += 1;
       if (phase === 'IN_SEPARATION') acc.separation += 1;
-      if (phase === 'SHIPPED') acc.sent += 1;
-      if (deliveryStatus === 'OUT_FOR_DELIVERY') acc.transport += 1;
+      if (phase === 'SHIPPED' || deliveryStatus === 'OUT_FOR_DELIVERY') acc.sent += 1;
       if (phase === 'DELIVERED' || deliveryStatus === 'DELIVERED') acc.delivered += 1;
 
       const isFailed = deliveryStatus === 'DELIVERY_FAILED';
@@ -398,11 +394,9 @@ export default function DeliveriesPage() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 16 }}>
-        <div className="card" style={{ padding: 12 }}><div className="text-sm text-muted">Pedido confirmado</div><div style={{ fontSize: 22, fontWeight: 800 }}>{summary.pending}</div></div>
-        <div className="card" style={{ padding: 12 }}><div className="text-sm text-muted">Pagamento aprovado</div><div style={{ fontSize: 22, fontWeight: 800 }}>{summary.paymentApproved}</div></div>
-        <div className="card" style={{ padding: 12 }}><div className="text-sm text-muted">Em separacao</div><div style={{ fontSize: 22, fontWeight: 800 }}>{summary.separation}</div></div>
-        <div className="card" style={{ padding: 12 }}><div className="text-sm text-muted">Enviados</div><div style={{ fontSize: 22, fontWeight: 800 }}>{summary.sent}</div></div>
-        <div className="card" style={{ padding: 12 }}><div className="text-sm text-muted">Em transporte</div><div style={{ fontSize: 22, fontWeight: 800 }}>{summary.transport}</div></div>
+        <div className="card" style={{ padding: 12 }}><div className="text-sm text-muted">Confirmado</div><div style={{ fontSize: 22, fontWeight: 800 }}>{summary.confirmed}</div></div>
+        <div className="card" style={{ padding: 12 }}><div className="text-sm text-muted">Separacao</div><div style={{ fontSize: 22, fontWeight: 800 }}>{summary.separation}</div></div>
+        <div className="card" style={{ padding: 12 }}><div className="text-sm text-muted">Enviado</div><div style={{ fontSize: 22, fontWeight: 800 }}>{summary.sent}</div></div>
         <div className="card" style={{ padding: 12 }}><div className="text-sm text-muted">Entregues</div><div style={{ fontSize: 22, fontWeight: 800 }}>{summary.delivered}</div></div>
         <div className="card" style={{ padding: 12 }}><div className="text-sm text-muted">Atrasados</div><div style={{ fontSize: 22, fontWeight: 800, color: '#b91c1c' }}>{summary.delayed}</div></div>
         <div className="card" style={{ padding: 12 }}><div className="text-sm text-muted">Cancelados</div><div style={{ fontSize: 22, fontWeight: 800 }}>{summary.canceled}</div></div>

@@ -101,6 +101,8 @@ model Vehicle {
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @updatedAt @map("updated_at")
 
+  @@index([clientId])
+  @@index([active, plate])
   @@map("vehicles")
 }
 
@@ -158,6 +160,11 @@ model ServiceOrder {
   createdAt   DateTime   @default(now()) @map("created_at")
   updatedAt   DateTime   @updatedAt @map("updated_at")
 
+  @@index([status])
+  @@index([clientId])
+  @@index([vehicleId])
+  @@index([createdAt])
+  @@index([updatedAt])
   @@map("service_orders")
 }
 
@@ -208,6 +215,9 @@ model SoItem {
   service      Service?     @relation(fields: [serviceId], references: [id])
   createdAt    DateTime     @default(now()) @map("created_at")
 
+  @@index([soId])
+  @@index([productId])
+  @@index([serviceId])
   @@map("so_items")
 }
 
@@ -227,6 +237,8 @@ model SoStatusLog {
   user         User?     @relation(fields: [userId], references: [id])
   createdAt    DateTime  @default(now()) @map("created_at")
 
+  @@index([soId])
+  @@index([createdAt])
   @@map("so_status_logs")
 }
 
@@ -265,6 +277,10 @@ model WhatsappMessage {
   serviceOrder ServiceOrder? @relation(fields: [soId], references: [id])
   createdAt    DateTime      @default(now()) @map("created_at")
 
+  @@index([status])
+  @@index([clientId])
+  @@index([soId])
+  @@index([createdAt])
   @@map("whatsapp_messages")
 }
 

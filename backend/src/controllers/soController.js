@@ -1,5 +1,5 @@
 const prisma = require('../lib/prisma');
-const { sendWhatsAppMessageWithDedupe } = require('../services/whatsappService');
+const { isWhatsAppConfigured, sendWhatsAppMessageWithDedupe } = require('../services/whatsappService');
 const botconversa = require('../services/botconversaService');
 const { uploadToCloudinary, deleteFromCloudinary } = require('../services/uploadService');
 const { computeMaintenanceForecast } = require('../utils/maintenance');
@@ -22,20 +22,24 @@ const NOTIFY_ON_STATUS = ['STARTED', 'IN_PROGRESS', 'WAITING_PART', 'FINISHING',
 const STATUS_CLOSE_FLOW = ['DONE', 'DELIVERED'];
 const DELIVERY_META_PREFIX = '[DELIVERY_META]';
 const DELIVERY_STATUS_LABELS = {
-  AWAITING_DISPATCH: 'Aguardando envio',
-  OUT_FOR_DELIVERY: 'Saiu para entrega',
+  AWAITING_DISPATCH: 'Confirmado',
+  OUT_FOR_DELIVERY: 'Enviado',
   DELIVERED: 'Entregue',
-  DELIVERY_FAILED: 'Tentativa sem sucesso',
+  DELIVERY_FAILED: 'Falha na entrega',
 };
 const ORDER_PHASE_LABELS = {
-  CONFIRMED: 'Pedido confirmado',
-  PAYMENT_APPROVED: 'Pagamento aprovado',
-  IN_SEPARATION: 'Em separacao',
+  CONFIRMED: 'Confirmado',
+  PAYMENT_APPROVED: 'Confirmado',
+  IN_SEPARATION: 'Separacao',
   SHIPPED: 'Enviado',
   DELIVERED: 'Entregue',
   CANCELED: 'Cancelado',
 };
 const DELIVERY_HISTORY_LIMIT = 40;
+const MULTI_STATUS_GROUPS = {
+  active: ['QUOTE', 'APPROVED', 'STARTED', 'IN_PROGRESS', 'WAITING_PART', 'FINISHING'],
+  ready: ['DONE', 'DELIVERED'],
+};
 
 const MAINTENANCE_RULES = [
   {
@@ -79,6 +83,19 @@ function parseSearchTokens(search) {
     .map((v) => v.trim())
     .filter(Boolean)
     .slice(0, 6);
+}
+
+function normalizeStatusFilter(status) {
+  const raw = String(status || '').trim();
+  if (!raw) return [];
+
+  const lower = raw.toLowerCase();
+  if (MULTI_STATUS_GROUPS[lower]) return MULTI_STATUS_GROUPS[lower];
+
+  return raw
+    .split(',')
+    .map((item) => item.trim().toUpperCase())
+    .filter((item) => item && STATUS_LABELS[item]);
 }
 
 function buildSoSearchWhere(search) {
@@ -396,8 +413,11 @@ const list = async (req, res) => {
       return res.json({ data: [], total: 0, page: pageNum, pages: 0 });
     }
 
+    const normalizedStatuses = normalizeStatusFilter(status);
+
     const where = {
-      ...(status && { status }),
+      ...(normalizedStatuses.length === 1 ? { status: normalizedStatuses[0] } : {}),
+      ...(normalizedStatuses.length > 1 ? { status: { in: normalizedStatuses } } : {}),
       ...(clientId && { clientId }),
       ...(vehicleId && { vehicleId }),
       ...(createdAt && Object.keys(createdAt).length ? { createdAt } : {}),
@@ -524,8 +544,10 @@ const exportOrders = async (req, res) => {
       return res.send(buffer);
     }
 
+    const normalizedStatuses = normalizeStatusFilter(status);
     const where = {
-      ...(status && { status }),
+      ...(normalizedStatuses.length === 1 ? { status: normalizedStatuses[0] } : {}),
+      ...(normalizedStatuses.length > 1 ? { status: { in: normalizedStatuses } } : {}),
       ...(clientId && { clientId }),
       ...(vehicleId && { vehicleId }),
       ...(createdAt && Object.keys(createdAt).length ? { createdAt } : {}),
@@ -770,7 +792,15 @@ const get = async (req, res) => {
     });
     if (!order) return res.status(404).json({ error: 'OS nao encontrada.' });
     const deliveryMeta = normalizeDeliveryMeta(parseDeliveryMetaFromNotes(order.notes));
-    return res.json({ ...order, total: order.totalPrice, deliveryMeta, deliveryHistory: deliveryMeta.history });
+    return res.json({
+      ...order,
+      total: order.totalPrice,
+      deliveryMeta,
+      deliveryHistory: deliveryMeta.history,
+      integrationStatus: {
+        whatsappConfigured: isWhatsAppConfigured(),
+      },
+    });
   } catch (err) {
     return res.status(500).json({ error: 'Erro ao buscar OS.' });
   }
@@ -938,7 +968,9 @@ const updateStatus = async (req, res) => {
       return updatedOrder;
     });
 
-    if (NOTIFY_ON_STATUS.includes(status)) {
+    const whatsappConfigured = isWhatsAppConfigured();
+
+    if (whatsappConfigured && NOTIFY_ON_STATUS.includes(status)) {
       const phone = current.client.whatsapp || current.client.phone;
       if (phone) {
         const msg = buildWhatsAppMessage(current.client.name, current.vehicle.plate, current.vehicle.brand, current.vehicle.model, status, current.number);
@@ -966,16 +998,18 @@ const updateStatus = async (req, res) => {
     }
 
     // BotConversa: notificacao de status (fire-and-forget, nao bloqueia resposta)
-    botconversa.notifyOSStatusChange({
-      client: current.client,
-      vehicle: current.vehicle,
-      status,
-      soNumber: current.number,
-      portalUrl: `${process.env.FRONTEND_URL || ''}/portal`,
-    }).catch((err) => console.error('[BotConversa] notifyOSStatusChange error:', err.message));
+    if (whatsappConfigured) {
+      botconversa.notifyOSStatusChange({
+        client: current.client,
+        vehicle: current.vehicle,
+        status,
+        soNumber: current.number,
+        portalUrl: `${process.env.FRONTEND_URL || ''}/portal`,
+      }).catch((err) => console.error('[BotConversa] notifyOSStatusChange error:', err.message));
+    }
 
     // BotConversa: pos-servico ao entregar
-    if (status === 'DELIVERED') {
+    if (whatsappConfigured && status === 'DELIVERED') {
       botconversa.startPostServiceSequence({
         client: current.client,
         vehicle: current.vehicle,
@@ -1191,8 +1225,9 @@ const sendDeliveryUpdate = async (req, res) => {
       data: { notes: nextNotes },
     });
 
+    const whatsappConfigured = isWhatsAppConfigured();
     const phone = order.client.whatsapp || order.client.phone;
-    if (phone) {
+    if (whatsappConfigured && phone) {
       const locationText = deliveryMeta.locationUrl ? ('\nLocalizacao da entrega: ' + deliveryMeta.locationUrl) : '';
       const noteText = deliveryMeta.note ? ('\nObs: ' + deliveryMeta.note) : '';
 

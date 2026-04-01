@@ -1,8 +1,26 @@
-import { useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import PaginationControls from '../../components/PaginationControls';
 import { messagesAPI } from '../../services/api';
+import { getFriendlyWhatsAppError } from '../../utils/whatsappMessages';
 
+const PAGE_SIZE = 20;
 const STATUS_BADGE = { SENT: 'badge-green', FAILED: 'badge-red', PENDING: 'badge-yellow' };
-const STATUS_LABEL = { SENT: 'Enviada', FAILED: 'Falhou', PENDING: 'Pendente' };
+const STATUS_LABEL = { SENT: 'Enviada', FAILED: 'Falha ao enviar', PENDING: 'Pendente' };
+
+const MessageRow = memo(function MessageRow({ message, onResend }) {
+  return (
+    <tr>
+      <td><span className={`badge ${STATUS_BADGE[message.status] || 'badge-gray'}`}>{STATUS_LABEL[message.status] || message.status}</span></td>
+      <td className="text-sm">{message.client?.name || '-'}</td>
+      <td className="text-sm">{message.phone}</td>
+      <td className="text-sm">{message.serviceOrder ? `#${message.serviceOrder.number}` : '-'}</td>
+      <td className="text-sm" style={{ maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={message.content}>{message.content}</td>
+      <td className="text-sm" style={{ maxWidth: 220, color: '#b91c1c' }}>{message.errorMessage ? getFriendlyWhatsAppError(message.errorMessage) : '-'}</td>
+      <td className="text-sm text-muted">{new Date(message.createdAt).toLocaleDateString('pt-BR')} {new Date(message.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</td>
+      <td>{message.status === 'FAILED' ? <button className="btn btn-ghost btn-sm" onClick={() => onResend(message.id)}>Reenviar</button> : null}</td>
+    </tr>
+  );
+});
 
 export default function MessagesPage() {
   const [msgs, setMsgs] = useState([]);
@@ -11,23 +29,25 @@ export default function MessagesPage() {
   const [filter, setFilter] = useState('');
   const [page, setPage] = useState(1);
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true);
     messagesAPI
-      .list({ status: filter, page, limit: 30 })
-      .then((r) => {
-        setMsgs(r.data.data);
-        setTotal(r.data.total);
+      .list({ status: filter || undefined, page, limit: PAGE_SIZE })
+      .then((response) => {
+        setMsgs(response.data?.data || []);
+        setTotal(Number(response.data?.total || 0));
       })
       .finally(() => setLoading(false));
-  };
+  }, [filter, page]);
 
   useEffect(() => {
     load();
-  }, [filter, page]);
+  }, [load]);
+
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(total / PAGE_SIZE)), [total]);
 
   const resend = async (id) => {
-    if (!confirm('Reenviar esta mensagem?')) return;
+    if (!window.confirm('Reenviar esta mensagem?')) return;
     await messagesAPI.resend(id);
     load();
   };
@@ -42,17 +62,17 @@ export default function MessagesPage() {
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {['', 'SENT', 'FAILED', 'PENDING'].map((s) => (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {['', 'SENT', 'FAILED', 'PENDING'].map((status) => (
             <button
-              key={s}
-              className={`btn btn-sm ${filter === s ? 'btn-primary' : 'btn-ghost'}`}
+              key={status}
+              className={`btn btn-sm ${filter === status ? 'btn-primary' : 'btn-ghost'}`}
               onClick={() => {
-                setFilter(s);
+                setFilter(status);
                 setPage(1);
               }}
             >
-              {s === '' ? 'Todas' : STATUS_LABEL[s]}
+              {status === '' ? 'Todas' : STATUS_LABEL[status]}
             </button>
           ))}
         </div>
@@ -62,42 +82,28 @@ export default function MessagesPage() {
         {loading ? (
           <div className="loading"><div className="spinner" /></div>
         ) : msgs.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-state-text">Nenhuma mensagem encontrada</div>
-          </div>
+          <div className="empty-state"><div className="empty-state-text">Nenhuma mensagem encontrada</div></div>
         ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Status</th>
-                <th>Cliente</th>
-                <th>Telefone</th>
-                <th>OS</th>
-                <th>Mensagem</th>
-                <th>Erro</th>
-                <th>Data</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {msgs.map((m) => (
-                <tr key={m.id}>
-                  <td><span className={`badge ${STATUS_BADGE[m.status] || 'badge-gray'}`}>{STATUS_LABEL[m.status] || m.status}</span></td>
-                  <td className="text-sm">{m.client?.name}</td>
-                  <td className="text-sm">{m.phone}</td>
-                  <td className="text-sm">{m.serviceOrder ? `#${m.serviceOrder.number}` : '-'}</td>
-                  <td className="text-sm" style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.content}</td>
-                  <td className="text-sm" style={{ maxWidth: 220, color: '#b91c1c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={m.errorMessage || ''}>
-                    {m.errorMessage || '-'}
-                  </td>
-                  <td className="text-sm text-muted">
-                    {new Date(m.createdAt).toLocaleDateString('pt-BR')} {new Date(m.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                  </td>
-                  <td>{m.status === 'FAILED' && <button className="btn btn-ghost btn-sm" onClick={() => resend(m.id)}>Reenviar</button>}</td>
+          <>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Cliente</th>
+                  <th>Telefone</th>
+                  <th>OS</th>
+                  <th>Mensagem</th>
+                  <th>Erro</th>
+                  <th>Data</th>
+                  <th></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {msgs.map((message) => <MessageRow key={message.id} message={message} onResend={resend} />)}
+              </tbody>
+            </table>
+            <PaginationControls currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+          </>
         )}
       </div>
     </div>

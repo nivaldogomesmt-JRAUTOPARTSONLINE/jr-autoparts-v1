@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { BRAND } from '../../config/brand';
 
@@ -267,91 +267,97 @@ export default function PortalVehicle() {
                 <div style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Nenhuma OS encontrada</div>
               </div>
             ) : (
-
-              {/* Histórico de Manutenções */}
-              {maintenance && maintenance.length > 0 && (
-                <div style={{ background: '#fff', borderRadius: '10px', padding: '18px', marginBottom: '16px', border: '1px solid #e2e8f0' }}>
-                  <h3 style={{ fontSize: '15px', fontWeight: '700', color: '#1e293b', margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    🔧 Histórico de Manutenções
-                  </h3>
-                  {maintenance.map((m, idx) => {
-                    const hoje = new Date();
-                    const prox = m.nextDueDate ? new Date(m.nextDueDate) : null;
-                    const vencida = prox && prox < hoje;
-                    const proximaBreve = prox && !vencida && (prox - hoje) / 86400000 <= 30;
-                    const tipoLabel = m.type === 'OIL_CHANGE' ? '🛢️ Troca de Óleo' : m.type === 'BELT_CHANGE' ? '⚙️ Troca de Correia' : m.type === 'GENERAL' ? '🔧 Manutenção Geral' : (m.type || 'Manutenção');
-                    return (
-                      <div key={m.id || idx} style={{
-                        padding: '12px',
-                        borderRadius: '8px',
-                        marginBottom: '8px',
-                        background: vencida ? '#fef2f2' : proximaBreve ? '#fffbeb' : '#f8fafc',
-                        border: `1px solid ${vencida ? '#fecaca' : proximaBreve ? '#fde68a' : '#e2e8f0'}`,
-                        borderLeft: `4px solid ${vencida ? '#dc2626' : proximaBreve ? '#f59e0b' : '#10b981'}`
-                      }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                          <div style={{ flex: 1 }}>
-                            <p style={{ margin: '0 0 4px', fontWeight: '600', fontSize: '14px', color: '#1e293b' }}>{tipoLabel}</p>
-                            {m.lastMaintenanceDate && (
-                              <p style={{ margin: '0 0 2px', fontSize: '12px', color: '#64748b' }}>
-                                Última: {formatDate(m.lastMaintenanceDate)}{m.lastMaintenanceKm ? ` · ${Number(m.lastMaintenanceKm).toLocaleString('pt-BR')} km` : ''}
-                              </p>
-                            )}
-                            {m.nextDueDate && (
-                              <p style={{ margin: 0, fontSize: '12px', color: vencida ? '#dc2626' : '#64748b', fontWeight: vencida ? '600' : '400' }}>
-                                Próxima: {formatDate(m.nextDueDate)}{m.nextDueKm ? ` · ${Number(m.nextDueKm).toLocaleString('pt-BR')} km` : ''}
-                              </p>
-                            )}
+              <>
+                {maintenance && maintenance.length > 0 && (
+                  <div style={{ background: '#fff', borderRadius: '10px', padding: '18px', marginBottom: '16px', border: '1px solid #e2e8f0' }}>
+                    <h3 style={{ fontSize: '15px', fontWeight: '700', color: '#1e293b', margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      Historico de manutencoes
+                    </h3>
+                    {maintenance.map((m, idx) => {
+                      const hoje = new Date();
+                      const prox = m.nextDueDate ? new Date(m.nextDueDate) : null;
+                      const vencida = prox && prox < hoje;
+                      const proximaBreve = prox && !vencida && (prox - hoje) / 86400000 <= 30;
+                      const tipoLabel = m.type === 'OIL_CHANGE'
+                        ? 'Troca de oleo'
+                        : m.type === 'BELT_CHANGE'
+                          ? 'Troca de correia'
+                          : m.type === 'GENERAL'
+                            ? 'Manutencao geral'
+                            : (m.type || 'Manutencao');
+                      return (
+                        <div key={m.id || idx} style={{
+                          padding: '12px',
+                          borderRadius: '8px',
+                          marginBottom: '8px',
+                          background: vencida ? '#fef2f2' : proximaBreve ? '#fffbeb' : '#f8fafc',
+                          border: `1px solid ${vencida ? '#fecaca' : proximaBreve ? '#fde68a' : '#e2e8f0'}`,
+                          borderLeft: `4px solid ${vencida ? '#dc2626' : proximaBreve ? '#f59e0b' : '#10b981'}`
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div style={{ flex: 1 }}>
+                              <p style={{ margin: '0 0 4px', fontWeight: '600', fontSize: '14px', color: '#1e293b' }}>{tipoLabel}</p>
+                              {m.lastMaintenanceDate && (
+                                <p style={{ margin: '0 0 2px', fontSize: '12px', color: '#64748b' }}>
+                                  Ultima: {formatDate(m.lastMaintenanceDate)}{m.lastMaintenanceKm ? ` · ${Number(m.lastMaintenanceKm).toLocaleString('pt-BR')} km` : ''}
+                                </p>
+                              )}
+                              {m.nextDueDate && (
+                                <p style={{ margin: 0, fontSize: '12px', color: vencida ? '#dc2626' : '#64748b', fontWeight: vencida ? '600' : '400' }}>
+                                  Proxima: {formatDate(m.nextDueDate)}{m.nextDueKm ? ` · ${Number(m.nextDueKm).toLocaleString('pt-BR')} km` : ''}
+                                </p>
+                              )}
+                            </div>
+                            <span style={{
+                              padding: '3px 10px',
+                              borderRadius: '12px',
+                              fontSize: '11px',
+                              fontWeight: '700',
+                              flexShrink: 0,
+                              marginLeft: '10px',
+                              background: vencida ? '#fef2f2' : proximaBreve ? '#fffbeb' : '#f0fdf4',
+                              color: vencida ? '#dc2626' : proximaBreve ? '#d97706' : '#16a34a',
+                              border: `1px solid ${vencida ? '#fecaca' : proximaBreve ? '#fde68a' : '#bbf7d0'}`
+                            }}>
+                              {vencida ? 'VENCIDA' : proximaBreve ? 'A VENCER' : 'EM DIA'}
+                            </span>
                           </div>
-                          <span style={{
-                            padding: '3px 10px',
-                            borderRadius: '12px',
-                            fontSize: '11px',
-                            fontWeight: '700',
-                            flexShrink: 0,
-                            marginLeft: '10px',
-                            background: vencida ? '#fef2f2' : proximaBreve ? '#fffbeb' : '#f0fdf4',
-                            color: vencida ? '#dc2626' : proximaBreve ? '#d97706' : '#16a34a',
-                            border: `1px solid ${vencida ? '#fecaca' : proximaBreve ? '#fde68a' : '#bbf7d0'}`
-                          }}>
-                            {vencida ? 'VENCIDA' : proximaBreve ? 'A VENCER' : 'EM DIA'}
-                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <div style={{ background: '#fff', borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden' }}>
+                  {orders.map((order, index) => {
+                    const badge = STATUS_BADGE[order.status] || { bg: '#f1f5f9', color: '#475569', label: order.status };
+                    return (
+                      <div
+                        key={order.id}
+                        onClick={() => navigate(`/portal/os/${order.id}`)}
+                        style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: index < orders.length - 1 ? '1px solid var(--border)' : 'none', cursor: 'pointer' }}
+                      >
+                        <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 12, color: 'var(--primary)' }}>
+                          #{order.id}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: 13 }}>OS #{order.id}</div>
+                          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                            Atualizada em {formatDate(order.updatedAt || order.updated_at)}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: badge.color, background: badge.bg, padding: '2px 8px', borderRadius: 12, marginBottom: 4 }}>
+                            {order.statusLabel || badge.label}
+                          </div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--success)' }}>
+                            {formatCurrency(order.displayTotal ?? order.totalPrice ?? order.total)}
+                          </div>
                         </div>
                       </div>
                     );
                   })}
                 </div>
-              )}
-              <div style={{ background: '#fff', borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden' }}>
-                {orders.map((order, index) => {
-                  const badge = STATUS_BADGE[order.status] || { bg: '#f1f5f9', color: '#475569', label: order.status };
-                  return (
-                    <div
-                      key={order.id}
-                      onClick={() => navigate(`/portal/os/${order.id}`)}
-                      style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: index < orders.length - 1 ? '1px solid var(--border)' : 'none', cursor: 'pointer' }}
-                    >
-                      <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 12, color: 'var(--primary)' }}>
-                        #{order.id}
-                      </div>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: 13 }}>OS #{order.id}</div>
-                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                          Atualizada em {formatDate(order.updatedAt || order.updated_at)}
-                        </div>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: badge.color, background: badge.bg, padding: '2px 8px', borderRadius: 12, marginBottom: 4 }}>
-                          {order.statusLabel || badge.label}
-                        </div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--success)' }}>
-                          {formatCurrency(order.displayTotal ?? order.totalPrice ?? order.total)}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              </>
             )}
           </div>
         </div>
