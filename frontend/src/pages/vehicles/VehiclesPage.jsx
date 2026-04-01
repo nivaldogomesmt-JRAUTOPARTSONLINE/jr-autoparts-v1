@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const API = import.meta.env.VITE_API_URL || '';
@@ -10,12 +10,16 @@ export default function VehiclesPage() {
   const [rankings, setRankings] = useState({ veiculos: [], servicos: [], pecas: [] });
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [searchLoading, setSearchLoading] = useState(false);
 
+  // Carga inicial: todos os veículos sem filtro de busca
   useEffect(() => {
     const load = async () => {
       try {
-        const token = () => localStorage.getItem('jr_token');
-        const rv = await fetch(API + '/api/vehicles', { headers: { Authorization: 'Bearer ' + token() } });
+        const token = localStorage.getItem('jr_token');
+        const rv = await fetch(API + '/api/vehicles?limit=500', {
+          headers: { Authorization: 'Bearer ' + token },
+        });
         if (rv.ok) {
           const data = await rv.json();
           setVehicles(Array.isArray(data) ? data : data.data || []);
@@ -28,12 +32,47 @@ export default function VehiclesPage() {
     load();
   }, []);
 
+  // Busca server-side com debounce de 350 ms — garante que nomes de clientes
+  // em páginas além da 1ª também sejam encontrados
+  const fetchSearch = useCallback(async (term) => {
+    if (!term.trim()) return;
+    setSearchLoading(true);
+    try {
+      const token = localStorage.getItem('jr_token');
+      const params = new URLSearchParams({ search: term, limit: 200 });
+      const rv = await fetch(API + '/api/vehicles?' + params, {
+        headers: { Authorization: 'Bearer ' + token },
+      });
+      if (rv.ok) {
+        const data = await rv.json();
+        setVehicles(Array.isArray(data) ? data : data.data || []);
+      }
+    } catch (e) { console.error('[VehiclesPage] search error:', e); }
+    finally { setSearchLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    if (!search.trim()) {
+      // Ao limpar a busca, recarrega lista completa
+      const token = localStorage.getItem('jr_token');
+      fetch(API + '/api/vehicles?limit=500', { headers: { Authorization: 'Bearer ' + token } })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => { if (data) setVehicles(Array.isArray(data) ? data : data.data || []); })
+        .catch(() => {});
+      return;
+    }
+    const timer = setTimeout(() => fetchSearch(search), 350);
+    return () => clearTimeout(timer);
+  }, [search, fetchSearch]);
+
+  // Filtro local como segurança adicional (cobre campos que o servidor pode não indexar)
   const filtered = vehicles.filter(v =>
     !search ||
     v.plate?.toLowerCase().includes(search.toLowerCase()) ||
     v.brand?.toLowerCase().includes(search.toLowerCase()) ||
     v.model?.toLowerCase().includes(search.toLowerCase()) ||
-    v.client?.name?.toLowerCase().includes(search.toLowerCase())
+    v.client?.name?.toLowerCase().includes(search.toLowerCase()) ||
+    v.client?.phone?.toLowerCase().includes(search.toLowerCase())
   );
 
   const statusColor = { urgencia: 'red', atencao: 'yellow', em_dia: 'green' };
@@ -136,9 +175,17 @@ export default function VehiclesPage() {
           <div className="filters-bar">
             <div className="search-bar" style={{ flex: 1, maxWidth: 360 }}>
               <span className="search-icon">🔍</span>
-              <input type="text" placeholder="Buscar por placa, modelo, cliente..." value={search} onChange={e => setSearch(e.target.value)} />
+              <input
+                type="text"
+                placeholder="Placa, modelo, marca ou nome do cliente..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
             </div>
-            <span className="text-muted text-sm">{filtered.length} veículo{filtered.length !== 1 ? 's' : ''}</span>
+            {searchLoading
+              ? <span className="text-muted text-sm">Buscando...</span>
+              : <span className="text-muted text-sm">{filtered.length} veículo{filtered.length !== 1 ? 's' : ''}</span>
+            }
           </div>
 
           {/* Listagem */}
