@@ -33,6 +33,7 @@ export default function VehicleDetail() {
   const [forms, setForms] = useState({});
   const [deleting, setDeleting] = useState(false);
   const [trackingDevices, setTrackingDevices] = useState([]);
+  const [maintExpanded, setMaintExpanded] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -207,100 +208,89 @@ export default function VehicleDetail() {
       {error ? <div className="alert alert-error" style={{ marginBottom: 12 }}>{error}</div> : null}
       {info ? <div className="alert alert-success" style={{ marginBottom: 12 }}>{info}</div> : null}
 
+      {/* ── Painel de resumo rápido ──────────────────────────────────────── */}
+      {(() => {
+        const urgentCount = maintenanceList.filter(m => m.alertLevel === 'OVERDUE').length;
+        const dueSoonCount = maintenanceList.filter(m => m.alertLevel === 'DUE_SOON').length;
+        const nextMaint = maintenanceList
+          .filter(m => m.nextDate)
+          .sort((a, b) => new Date(a.nextDate) - new Date(b.nextDate))[0];
+        const doneOS = vehicle.serviceOrders.filter(o => ['DONE', 'DELIVERED'].includes(o.status));
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, marginBottom: 18 }}>
+            <div className="card" style={{ padding: '12px 16px', marginBottom: 0 }}>
+              <div className="text-sm text-muted" style={{ marginBottom: 2 }}>Próxima manutenção</div>
+              {nextMaint ? (
+                <>
+                  <div style={{ fontWeight: 700, fontSize: 14, lineHeight: 1.3 }}>{nextMaint.label}</div>
+                  <div className="text-sm" style={{ color: ALERT_COLOR[nextMaint.alertLevel || 'OK'], fontWeight: 600 }}>
+                    {new Date(nextMaint.nextDate).toLocaleDateString('pt-BR')}
+                  </div>
+                </>
+              ) : (
+                <div className="text-sm text-muted">Sem data prevista</div>
+              )}
+            </div>
+            <div className="card" style={{ padding: '12px 16px', marginBottom: 0 }}>
+              <div className="text-sm text-muted" style={{ marginBottom: 2 }}>Alertas de manutenção</div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 2 }}>
+                {urgentCount > 0 && <span className="badge badge-red">{urgentCount} urgente{urgentCount > 1 ? 's' : ''}</span>}
+                {dueSoonCount > 0 && <span className="badge badge-yellow">{dueSoonCount} próximo{dueSoonCount > 1 ? 's' : ''}</span>}
+                {urgentCount === 0 && dueSoonCount === 0 && <span className="badge badge-green">Tudo em dia</span>}
+              </div>
+            </div>
+            <div className="card" style={{ padding: '12px 16px', marginBottom: 0 }}>
+              <div className="text-sm text-muted" style={{ marginBottom: 2 }}>OS finalizadas</div>
+              <div style={{ fontWeight: 700, fontSize: 20, color: '#1A3C5E' }}>{doneOS.length}</div>
+              <div className="text-sm text-muted">{vehicle.serviceOrders.length} no total</div>
+            </div>
+            <div className="card" style={{ padding: '12px 16px', marginBottom: 0 }}>
+              <div className="text-sm text-muted" style={{ marginBottom: 4 }}>Ações rápidas</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <Link to={`/os/nova?vehicleId=${id}`} className="btn btn-primary btn-sm" style={{ width: '100%', justifyContent: 'center' }}>+ Nova OS</Link>
+                <Link to={`/os?vehicleId=${id}`} className="btn btn-outline btn-sm" style={{ width: '100%', justifyContent: 'center' }}>Ver histórico</Link>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Layout principal: coluna esquerda (dados + histórico) | coluna direita (manutenção) ── */}
       <div className="grid-2">
+        {/* Coluna esquerda: Dados do Veículo → Histórico de OS → Rastreamento */}
         <div>
           <div className="card" style={{ marginBottom: 16 }}>
-            <div className="card-title">Manutencao Preventiva (configuravel por cliente/veiculo)</div>
-
-            {maintenanceList.length === 0 ? (
-              <div className="text-sm text-muted">Nenhum item cadastrado. Clique em "Criar Itens Padrao".</div>
-            ) : (
-              <div style={{ display: 'grid', gap: 12 }}>
-                {maintenanceList.map((m) => {
-                  const values = forms[m.id] || {};
-                  return (
-                    <div key={m.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 10 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                        <div style={{ fontWeight: 700 }}>{m.label}</div>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: ALERT_COLOR[m.alertLevel || 'OK'] }}>
-                          {ALERT_LABEL[m.alertLevel || 'OK']}
-                        </span>
-                      </div>
-
-                      <div className="form-row" style={{ marginBottom: 8 }}>
-                        <div className="form-group">
-                          <label className="form-label">Nome do item</label>
-                          <input
-                            className="form-control"
-                            value={values.label || ''}
-                            onChange={(e) => setField(m.id, 'label', e.target.value)}
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label className="form-label">Intervalo KM</label>
-                          <input
-                            type="number"
-                            className="form-control"
-                            value={values.intervalKm || ''}
-                            onChange={(e) => setField(m.id, 'intervalKm', e.target.value)}
-                            placeholder="Ex: 7000"
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label className="form-label">Intervalo meses</label>
-                          <input
-                            type="number"
-                            className="form-control"
-                            value={values.intervalMonths || ''}
-                            onChange={(e) => setField(m.id, 'intervalMonths', e.target.value)}
-                            placeholder="Ex: 6"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="form-row" style={{ marginBottom: 8 }}>
-                        <div className="form-group">
-                          <label className="form-label">Ultima troca (data)</label>
-                          <input
-                            type="date"
-                            className="form-control"
-                            value={values.lastDate || ''}
-                            onChange={(e) => setField(m.id, 'lastDate', e.target.value)}
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label className="form-label">Ultima troca (km)</label>
-                          <input
-                            type="number"
-                            className="form-control"
-                            value={values.lastKm || ''}
-                            onChange={(e) => setField(m.id, 'lastKm', e.target.value)}
-                            placeholder="Ex: 163000"
-                          />
-                        </div>
-                        <div className="form-group" style={{ alignSelf: 'flex-end' }}>
-                          <button className="btn btn-primary btn-sm" onClick={() => saveMaintenance(m)} disabled={!!savingMap[m.id]}>
-                            {savingMap[m.id] ? 'Salvando...' : 'Salvar Item'}
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="text-sm text-muted">
-                        Proxima prevista: {m.nextDate ? new Date(m.nextDate).toLocaleDateString('pt-BR') : '-'}
-                        {' | '}
-                        {m.nextKm ? `${Number(m.nextKm).toLocaleString('pt-BR')} km` : '-'}
-                      </div>
-                    </div>
-                  );
-                })}
+            <div className="card-title">Dados do Veículo</div>
+            {vehicle.photoUrl ? (
+              <div style={{ marginBottom: 12 }}>
+                <img src={vehicle.photoUrl} alt={`Veiculo ${vehicle.plate}`} style={{ width: '100%', borderRadius: 8, border: '1px solid #e2e8f0' }} />
               </div>
-            )}
+            ) : null}
+            {[
+              ['Placa', vehicle.plate],
+              ['Marca', vehicle.brand],
+              ['Modelo', vehicle.model],
+              ['Ano', vehicle.year],
+              ['Cor', vehicle.color],
+              ['Combustível', vehicle.fuel],
+              ['KM Atual', vehicle.currentKm ? `${Number(vehicle.currentKm).toLocaleString('pt-BR')} km` : '-'],
+            ].map(([l, v]) => (
+              <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #f8fafc', fontSize: 14 }}>
+                <span style={{ color: '#64748b' }}>{l}</span>
+                <span style={{ fontWeight: 600 }}>{v || '-'}</span>
+              </div>
+            ))}
+            {vehicle.notes ? (
+              <div style={{ marginTop: 12, padding: '10px 12px', background: '#f8fafc', borderRadius: 6, fontSize: 13 }}>
+                {vehicle.notes}
+              </div>
+            ) : null}
           </div>
 
-          <div className="card">
-            <div className="card-title">Historico de OS</div>
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card-title">Histórico de OS</div>
             {vehicle.serviceOrders.length === 0 ? (
-              <div className="text-muted text-sm">Sem OS finalizadas.</div>
+              <div className="text-muted text-sm">Sem OS cadastradas.</div>
             ) : (
               vehicle.serviceOrders.map((os) => (
                 <Link
@@ -312,14 +302,13 @@ export default function VehicleDetail() {
                     <span style={{ fontWeight: 600 }}>OS #{os.number}</span>
                     <span className="text-sm text-muted">{new Date(os.createdAt).toLocaleDateString('pt-BR')}</span>
                   </div>
-                  <div className="text-sm text-muted">{os.items?.length} itens - R$ {parseFloat(os.totalPrice || 0).toFixed(2).replace('.', ',')}</div>
+                  <div className="text-sm text-muted">{os.items?.length} itens · R$ {parseFloat(os.totalPrice || 0).toFixed(2).replace('.', ',')}</div>
                 </Link>
               ))
             )}
           </div>
 
-
-          <div className="card" style={{ marginTop: 16 }}>
+          <div className="card">
             <div className="card-title">Rastreamento</div>
             {!activeDevice ? (
               <div className="text-sm text-muted">Nenhum rastreador vinculado a este veículo.</div>
@@ -355,33 +344,150 @@ export default function VehicleDetail() {
           </div>
         </div>
 
-        <div className="card">
-          <div className="card-title">Dados do Veiculo</div>
-          {vehicle.photoUrl ? (
-            <div style={{ marginBottom: 12 }}>
-              <img src={vehicle.photoUrl} alt={`Veiculo ${vehicle.plate}`} style={{ width: '100%', borderRadius: 8, border: '1px solid #e2e8f0' }} />
-            </div>
-          ) : null}
-          {[
-            ['Placa', vehicle.plate],
-            ['Marca', vehicle.brand],
-            ['Modelo', vehicle.model],
-            ['Ano', vehicle.year],
-            ['Cor', vehicle.color],
-            ['Combustivel', vehicle.fuel],
-            ['KM Atual', vehicle.currentKm ? `${Number(vehicle.currentKm).toLocaleString('pt-BR')} km` : '-'],
-          ].map(([l, v]) => (
-            <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #f8fafc', fontSize: 14 }}>
-              <span style={{ color: '#64748b' }}>{l}</span>
-              <span style={{ fontWeight: 600 }}>{v || '-'}</span>
-            </div>
-          ))}
+        {/* Coluna direita: Manutenção Preventiva (acordeão) */}
+        <div>
+          <div className="card">
+            {/* Cabeçalho do acordeão */}
+            <button
+              type="button"
+              onClick={() => setMaintExpanded(v => !v)}
+              style={{ width: '100%', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="card-title" style={{ marginBottom: 0 }}>Manutenção Preventiva</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {maintenanceList.filter(m => m.alertLevel === 'OVERDUE').length > 0 && (
+                    <span className="badge badge-red">{maintenanceList.filter(m => m.alertLevel === 'OVERDUE').length} urgente</span>
+                  )}
+                  {maintenanceList.filter(m => m.alertLevel === 'DUE_SOON').length > 0 && (
+                    <span className="badge badge-yellow">{maintenanceList.filter(m => m.alertLevel === 'DUE_SOON').length} próximo</span>
+                  )}
+                  <span style={{ fontSize: 18, color: '#64748b', lineHeight: 1 }}>{maintExpanded ? '▲' : '▼'}</span>
+                </div>
+              </div>
+            </button>
 
-          {vehicle.notes ? (
-            <div style={{ marginTop: 12, padding: '10px 12px', background: '#f8fafc', borderRadius: 6, fontSize: 13 }}>
-              {vehicle.notes}
-            </div>
-          ) : null}
+            {maintenanceList.length === 0 ? (
+              <div className="text-sm text-muted" style={{ marginTop: 12 }}>Nenhum item cadastrado. Clique em "Criar Itens Padrão".</div>
+            ) : (
+              <>
+                {/* Itens em destaque: sempre visíveis (vencidos + próximos) */}
+                {maintenanceList.filter(m => m.alertLevel === 'OVERDUE' || m.alertLevel === 'DUE_SOON').length > 0 && (
+                  <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#94a3b8' }}>
+                      Requer atenção
+                    </div>
+                    {maintenanceList
+                      .filter(m => m.alertLevel === 'OVERDUE' || m.alertLevel === 'DUE_SOON')
+                      .map((m) => {
+                        const values = forms[m.id] || {};
+                        return (
+                          <div key={m.id} style={{ border: `1px solid ${m.alertLevel === 'OVERDUE' ? '#fee2e2' : '#fef3c7'}`, borderRadius: 8, padding: 10, background: m.alertLevel === 'OVERDUE' ? '#fff7f7' : '#fffbeb' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                              <div style={{ fontWeight: 700, fontSize: 14 }}>{m.label}</div>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: ALERT_COLOR[m.alertLevel] }}>
+                                {ALERT_LABEL[m.alertLevel]}
+                              </span>
+                            </div>
+                            <div className="text-sm text-muted" style={{ marginBottom: 8 }}>
+                              Próxima: {m.nextDate ? new Date(m.nextDate).toLocaleDateString('pt-BR') : '-'}
+                              {m.nextKm ? ` · ${Number(m.nextKm).toLocaleString('pt-BR')} km` : ''}
+                            </div>
+                            <div className="form-row" style={{ marginBottom: 6 }}>
+                              <div className="form-group">
+                                <label className="form-label">Última troca (data)</label>
+                                <input type="date" className="form-control" value={values.lastDate || ''} onChange={(e) => setField(m.id, 'lastDate', e.target.value)} />
+                              </div>
+                              <div className="form-group">
+                                <label className="form-label">Última troca (km)</label>
+                                <input type="number" className="form-control" value={values.lastKm || ''} onChange={(e) => setField(m.id, 'lastKm', e.target.value)} placeholder="Ex: 163000" />
+                              </div>
+                              <div className="form-group" style={{ alignSelf: 'flex-end' }}>
+                                <button className="btn btn-primary btn-sm" onClick={() => saveMaintenance(m)} disabled={!!savingMap[m.id]}>
+                                  {savingMap[m.id] ? 'Salvando...' : 'Salvar'}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+
+                {/* Itens em dia: expandir/recolher */}
+                {maintExpanded && (
+                  <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
+                    {maintenanceList.filter(m => m.alertLevel === 'OVERDUE' || m.alertLevel === 'DUE_SOON').length > 0 && (
+                      <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#94a3b8' }}>
+                        Em dia
+                      </div>
+                    )}
+                    {maintenanceList
+                      .filter(m => !m.alertLevel || m.alertLevel === 'OK')
+                      .map((m) => {
+                        const values = forms[m.id] || {};
+                        return (
+                          <div key={m.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 10 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                              <div style={{ fontWeight: 700 }}>{m.label}</div>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: ALERT_COLOR.OK }}>{ALERT_LABEL.OK}</span>
+                            </div>
+                            <div className="form-row" style={{ marginBottom: 8 }}>
+                              <div className="form-group">
+                                <label className="form-label">Nome</label>
+                                <input className="form-control" value={values.label || ''} onChange={(e) => setField(m.id, 'label', e.target.value)} />
+                              </div>
+                              <div className="form-group">
+                                <label className="form-label">Intervalo KM</label>
+                                <input type="number" className="form-control" value={values.intervalKm || ''} onChange={(e) => setField(m.id, 'intervalKm', e.target.value)} placeholder="Ex: 7000" />
+                              </div>
+                              <div className="form-group">
+                                <label className="form-label">Intervalo meses</label>
+                                <input type="number" className="form-control" value={values.intervalMonths || ''} onChange={(e) => setField(m.id, 'intervalMonths', e.target.value)} placeholder="Ex: 6" />
+                              </div>
+                            </div>
+                            <div className="form-row" style={{ marginBottom: 8 }}>
+                              <div className="form-group">
+                                <label className="form-label">Última troca (data)</label>
+                                <input type="date" className="form-control" value={values.lastDate || ''} onChange={(e) => setField(m.id, 'lastDate', e.target.value)} />
+                              </div>
+                              <div className="form-group">
+                                <label className="form-label">Última troca (km)</label>
+                                <input type="number" className="form-control" value={values.lastKm || ''} onChange={(e) => setField(m.id, 'lastKm', e.target.value)} placeholder="Ex: 163000" />
+                              </div>
+                              <div className="form-group" style={{ alignSelf: 'flex-end' }}>
+                                <button className="btn btn-primary btn-sm" onClick={() => saveMaintenance(m)} disabled={!!savingMap[m.id]}>
+                                  {savingMap[m.id] ? 'Salvando...' : 'Salvar Item'}
+                                </button>
+                              </div>
+                            </div>
+                            <div className="text-sm text-muted">
+                              Próxima prevista: {m.nextDate ? new Date(m.nextDate).toLocaleDateString('pt-BR') : '-'}
+                              {' · '}
+                              {m.nextKm ? `${Number(m.nextKm).toLocaleString('pt-BR')} km` : '-'}
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+
+                {/* Botão para expandir/recolher itens em dia */}
+                {maintenanceList.filter(m => !m.alertLevel || m.alertLevel === 'OK').length > 0 && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setMaintExpanded(v => !v)}
+                    style={{ marginTop: 12, width: '100%' }}
+                  >
+                    {maintExpanded
+                      ? '▲ Ocultar itens em dia'
+                      : `▼ Ver todos os itens em dia (${maintenanceList.filter(m => !m.alertLevel || m.alertLevel === 'OK').length})`}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>

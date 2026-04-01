@@ -50,6 +50,13 @@ function formatDate(value) {
   return new Date(value).toLocaleDateString('pt-BR');
 }
 
+/** Remove metadados internos [DELIVERY_META] e qualquer JSON que venha após */
+function stripDeliveryMeta(notes) {
+  if (!notes) return '';
+  const idx = notes.indexOf('[DELIVERY_META]');
+  return idx !== -1 ? notes.slice(0, idx).trim() : notes;
+}
+
 function formatQty(value) {
   const qty = Number(value);
   if (!Number.isFinite(qty)) return '0';
@@ -275,6 +282,32 @@ export default function SODetail() {
         </div>
       </div>
 
+      {/* Painel de resumo rápido — visível apenas na tela */}
+      <div className="no-print" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10, marginBottom: 18 }}>
+        <div className="card" style={{ padding: '12px 16px', marginBottom: 0 }}>
+          <div className="text-sm text-muted" style={{ marginBottom: 2 }}>Cliente</div>
+          <div style={{ fontWeight: 700, fontSize: 14, lineHeight: 1.3 }}>{os.client?.name || '-'}</div>
+          <div className="text-sm text-muted">{os.client?.phone || '-'}</div>
+        </div>
+        <div className="card" style={{ padding: '12px 16px', marginBottom: 0 }}>
+          <div className="text-sm text-muted" style={{ marginBottom: 2 }}>Veículo</div>
+          <div style={{ fontWeight: 700, fontSize: 14, lineHeight: 1.3 }}>{os.vehicle?.brand} {os.vehicle?.model}</div>
+          <div className="text-sm text-muted">{os.vehicle?.plate}</div>
+        </div>
+        <div className="card" style={{ padding: '12px 16px', marginBottom: 0 }}>
+          <div className="text-sm text-muted" style={{ marginBottom: 2 }}>Total</div>
+          <div style={{ fontWeight: 700, fontSize: 20, color: '#1A3C5E' }}>
+            R$ {parseFloat(os.totalPrice || 0).toFixed(2).replace('.', ',')}
+          </div>
+          <div className="text-sm text-muted">{os.items?.length || 0} {os.items?.length === 1 ? 'item' : 'itens'}</div>
+        </div>
+        <div className="card" style={{ padding: '12px 16px', marginBottom: 0 }}>
+          <div className="text-sm text-muted" style={{ marginBottom: 2 }}>Status</div>
+          <span className={`badge ${currentBadge?.badge}`}>{currentBadge?.label}</span>
+          <div className="text-sm text-muted" style={{ marginTop: 4 }}>Abertura: {formatDate(os.createdAt)}</div>
+        </div>
+      </div>
+
       <div className="print-only card" style={{ marginBottom: 14 }}>
         <div className="card-title">Resumo para Impressao</div>
         <div className="grid-2">
@@ -307,9 +340,9 @@ export default function SODetail() {
                 {os.entryKm ? <div className="text-sm text-muted">KM entrada: {Number(os.entryKm).toLocaleString('pt-BR')}</div> : null}
               </div>
             </div>
-            {os.notes ? (
+            {stripDeliveryMeta(os.notes) ? (
               <div style={{ marginTop: 12, padding: '10px 12px', background: '#f8fafc', borderRadius: 6, fontSize: 13 }}>
-                {os.notes}
+                {stripDeliveryMeta(os.notes)}
               </div>
             ) : null}
           </div>
@@ -417,45 +450,72 @@ export default function SODetail() {
             {timeline.length === 0 ? (
               <div className="text-sm text-muted">Sem eventos ainda.</div>
             ) : (
-              <div style={{ display: 'grid', gap: 10 }}>
-                {timeline.map((event) => (
-                  <div key={event.id} style={{ border: '1px solid #f1f5f9', borderRadius: 8, padding: 10 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
-                      <div style={{ fontWeight: 700, fontSize: 13 }}>{event.title}</div>
-                      <div className="text-sm text-muted">{formatDateTime(event.createdAt)}</div>
+              <>
+                {/* Eventos de mudança de status */}
+                {timeline.filter(e => e.type === 'STATUS').length > 0 && (
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#94a3b8', marginBottom: 6 }}>
+                      Histórico de Status
                     </div>
-
-                    {event.type === 'STATUS' ? (
-                      <div className="text-sm text-muted">{event.subtitle}</div>
-                    ) : (
-                      <>
-                        <div className="text-sm text-muted" style={{ marginBottom: 4 }}>{event.subtitle}</div>
-                        <div style={{ fontSize: 13, marginBottom: 8, whiteSpace: 'pre-wrap' }}>{event.content}</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <span className={`badge ${MESSAGE_STATUS[event.status]?.badge || 'badge-gray'}`}>
-                            {MESSAGE_STATUS[event.status]?.label || event.status}
-                          </span>
-                          {event.status === 'FAILED' && event.errorMessage ? (
-                            <span className="text-sm" style={{ color: '#b91c1c' }} title={event.errorMessage}>
-                              Erro: {event.errorMessage}
-                            </span>
-                          ) : null}
-                          {event.status === 'FAILED' ? (
-                            <button
-                              type="button"
-                              className="btn btn-outline btn-sm"
-                              onClick={() => handleResend(event.messageId)}
-                              disabled={!!resendingMap[event.messageId]}
-                            >
-                              {resendingMap[event.messageId] ? 'Reenviando...' : 'Reenviar'}
-                            </button>
-                          ) : null}
+                    <div style={{ display: 'grid', gap: 6 }}>
+                      {timeline.filter(e => e.type === 'STATUS').map((event) => (
+                        <div key={event.id} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', background: '#f8fafc' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                            <div style={{ fontWeight: 600, fontSize: 13 }}>{event.title}</div>
+                            <div className="text-sm text-muted">{formatDateTime(event.createdAt)}</div>
+                          </div>
+                          {event.subtitle ? <div className="text-sm text-muted">{event.subtitle}</div> : null}
                         </div>
-                      </>
-                    )}
+                      ))}
+                    </div>
                   </div>
-                ))}
-              </div>
+                )}
+
+                {/* Eventos de envio WhatsApp */}
+                {timeline.filter(e => e.type === 'MESSAGE').length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#94a3b8', marginBottom: 6 }}>
+                      Envios WhatsApp
+                    </div>
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      {timeline.filter(e => e.type === 'MESSAGE').map((event) => (
+                        <div key={event.id} style={{ border: `1px solid ${event.status === 'FAILED' ? '#fee2e2' : '#f1f5f9'}`, borderRadius: 8, padding: 10, background: event.status === 'FAILED' ? '#fff7f7' : '#fff' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                            <div style={{ fontWeight: 700, fontSize: 13 }}>{event.title}</div>
+                            <div className="text-sm text-muted">{formatDateTime(event.createdAt)}</div>
+                          </div>
+                          <div className="text-sm text-muted" style={{ marginBottom: 4 }}>{event.subtitle}</div>
+                          <div style={{ fontSize: 13, marginBottom: 8, whiteSpace: 'pre-wrap' }}>{event.content}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <span className={`badge ${MESSAGE_STATUS[event.status]?.badge || 'badge-gray'}`}>
+                              {MESSAGE_STATUS[event.status]?.label || event.status}
+                            </span>
+                            {event.status === 'FAILED' ? (
+                              <span
+                                className="text-sm"
+                                style={{ color: '#b91c1c', cursor: event.errorMessage ? 'help' : 'default' }}
+                                title={event.errorMessage || ''}
+                              >
+                                ⚠ Falha no envio{event.errorMessage ? ' (passe o mouse para detalhes)' : ''}
+                              </span>
+                            ) : null}
+                            {event.status === 'FAILED' ? (
+                              <button
+                                type="button"
+                                className="btn btn-outline btn-sm"
+                                onClick={() => handleResend(event.messageId)}
+                                disabled={!!resendingMap[event.messageId]}
+                              >
+                                {resendingMap[event.messageId] ? 'Reenviando...' : 'Reenviar'}
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -538,9 +598,13 @@ export default function SODetail() {
                       {MESSAGE_STATUS[m.status]?.label || m.status}
                     </span>
                   </div>
-                  {m.status === 'FAILED' && m.errorMessage ? (
-                    <div className="text-sm" style={{ color: '#b91c1c', marginTop: 4 }} title={m.errorMessage}>
-                      {m.errorMessage}
+                  {m.status === 'FAILED' ? (
+                    <div
+                      className="text-sm"
+                      style={{ color: '#b91c1c', marginTop: 4, cursor: m.errorMessage ? 'help' : 'default' }}
+                      title={m.errorMessage || ''}
+                    >
+                      ⚠ Falha no envio
                     </div>
                   ) : null}
                 </div>
