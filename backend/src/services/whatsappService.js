@@ -305,6 +305,19 @@ function getWhatsAppProvider() {
   return provider === 'evolution' ? 'evolution' : 'botconversa';
 }
 
+function isWhatsAppConfigured() {
+  const provider = getWhatsAppProvider();
+  if (provider === 'evolution') {
+    return Boolean(
+      String(process.env.EVOLUTION_API_URL || '').trim()
+      && String(process.env.EVOLUTION_API_KEY || '').trim()
+      && String(process.env.EVOLUTION_INSTANCE_NAME || '').trim()
+    );
+  }
+
+  return Boolean(String(process.env.BOTCONVERSA_API_KEY || '').trim());
+}
+
 /**
  * Envia mensagem via provider configurado (BotConversa ou Evolution API) e registra no banco.
  */
@@ -487,5 +500,6 @@ module.exports = {
   sendWhatsAppMessageWithDedupe,
   wasWhatsAppRecentlySent,
   getWhatsAppProvider,
+  isWhatsAppConfigured,
 };
 

@@ -1,92 +1,165 @@
-import { useState, useEffect, useCallback } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import useDebouncedValue from '../../hooks/useDebouncedValue';
+import PaginationControls from '../../components/PaginationControls';
+import { dashboardAPI, maintenanceAPI, vehiclesAPI } from '../../services/api';
 
-const API = import.meta.env.VITE_API_URL || '';
+const PAGE_SIZE = 12;
+
+function StatCard({ title, value, subtitle, color = 'var(--primary)', onClick }) {
+  return (
+    <button
+      type="button"
+      className="stat-card"
+      onClick={onClick}
+      style={{ borderLeft: `4px solid ${color}`, textAlign: 'left', cursor: onClick ? 'pointer' : 'default' }}
+      disabled={!onClick}
+    >
+      <div className="stat-label">{title}</div>
+      <div className="stat-value" style={{ color }}>{value}</div>
+      <div className="stat-sub">{subtitle}</div>
+    </button>
+  );
+}
+
+const RankingList = memo(function RankingList({ title, items, emptyLabel, onSelect, valueFormatter }) {
+  return (
+    <div className="card">
+      <div className="card-title">{title}</div>
+      {!items.length ? (
+        <div className="text-muted text-sm">{emptyLabel}</div>
+      ) : (
+        <div style={{ display: 'grid', gap: 10 }}>
+          {items.map((item, index) => (
+            <button
+              key={item.id || `${title}-${index}`}
+              type="button"
+              className="ranking-item"
+              onClick={() => onSelect?.(item)}
+              style={{ cursor: onSelect ? 'pointer' : 'default', textAlign: 'left', border: 'none', background: 'transparent' }}
+            >
+              <span className={`ranking-pos ranking-pos-${index + 1}`}>{index + 1}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 12, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{item.name || item.plate || '-'}</div>
+                <div className="text-muted text-sm">{item.subtitle || item.brandModel || '-'}</div>
+              </div>
+              <span style={{ fontWeight: 700, color: 'var(--success)', fontSize: 12 }}>{valueFormatter(item)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+});
+
+const VehicleRow = memo(function VehicleRow({ vehicle, onOpen }) {
+  const badge = vehicle.maintenanceStatus === 'urgencia'
+    ? 'badge-red'
+    : vehicle.maintenanceStatus === 'atencao'
+      ? 'badge-yellow'
+      : 'badge-green';
+
+  const label = vehicle.maintenanceStatus === 'urgencia'
+    ? 'Urgencia'
+    : vehicle.maintenanceStatus === 'atencao'
+      ? 'Atencao'
+      : 'Em dia';
+
+  return (
+    <tr onClick={() => onOpen(vehicle.id)} style={{ cursor: 'pointer' }}>
+      <td><span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 13 }}>{vehicle.plate}</span></td>
+      <td>
+        <div style={{ fontWeight: 700 }}>{vehicle.brand} {vehicle.model}</div>
+        <div className="text-sm text-muted">{vehicle.color || 'Sem cor informada'}</div>
+      </td>
+      <td>{vehicle.client?.name || 'Sem proprietario'}</td>
+      <td>{vehicle.year || '-'}</td>
+      <td><span className="badge badge-blue">{vehicle._count?.serviceOrders ?? 0}</span></td>
+      <td><span className={`badge ${badge}`}>{label}</span></td>
+      <td>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={(event) => { event.stopPropagation(); onOpen(vehicle.id); }}>
+          Ver ?
+        </button>
+      </td>
+    </tr>
+  );
+});
 
 export default function VehiclesPage() {
   const navigate = useNavigate();
   const [vehicles, setVehicles] = useState([]);
-  const [stats, setStats] = useState({ urgencia: 0, atencao: 0, em_dia: 0 });
-  const [rankings, setRankings] = useState({ veiculos: [], servicos: [], pecas: [] });
+  const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [searchLoading, setSearchLoading] = useState(false);
+  const [alerts, setAlerts] = useState([]);
+  const [rankings, setRankings] = useState({ vehicles: [], services: [], parts: [] });
 
-  // Carga inicial: todos os veículos sem filtro de busca
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const token = localStorage.getItem('jr_token');
-        const rv = await fetch(API + '/api/vehicles?limit=500', {
-          headers: { Authorization: 'Bearer ' + token },
-        });
-        if (rv.ok) {
-          const data = await rv.json();
-          setVehicles(Array.isArray(data) ? data : data.data || []);
-          if (data.stats) setStats(data.stats);
-          if (data.rankings) setRankings(data.rankings);
-        }
-      } catch (e) { console.error('[VehiclesPage] load error:', e); }
-      finally { setLoading(false); }
-    };
-    load();
-  }, []);
+  const debouncedSearch = useDebouncedValue(search, 300);
 
-  // Busca server-side com debounce de 350 ms — garante que nomes de clientes
-  // em páginas além da 1ª também sejam encontrados
-  const fetchSearch = useCallback(async (term) => {
-    if (!term.trim()) return;
-    setSearchLoading(true);
+  const load = useCallback(async () => {
+    setLoading(true);
     try {
-      const token = localStorage.getItem('jr_token');
-      const params = new URLSearchParams({ search: term, limit: 200 });
-      const rv = await fetch(API + '/api/vehicles?' + params, {
-        headers: { Authorization: 'Bearer ' + token },
+      const [vehiclesRes, alertsRes, dashboardRes] = await Promise.all([
+        vehiclesAPI.list({ search: debouncedSearch || undefined, page, limit: PAGE_SIZE }),
+        maintenanceAPI.alerts(),
+        dashboardAPI.get(),
+      ]);
+
+      setVehicles(vehiclesRes.data?.data || []);
+      setTotal(Number(vehiclesRes.data?.total || 0));
+      setAlerts(Array.isArray(alertsRes.data) ? alertsRes.data : []);
+      setRankings({
+        vehicles: (dashboardRes.data?.rankings?.topVehicles || []).map((item) => ({
+          ...item,
+          subtitle: `${item.brand || '-'} ${item.model || ''}`.trim(),
+        })),
+        parts: (dashboardRes.data?.rankings?.topProducts || []).map((item) => ({
+          ...item,
+          subtitle: `${item.qty || 0} vendidos`,
+          name: item.name || 'Produto',
+        })),
+        services: (dashboardRes.data?.rankings?.topServices || []).map((item) => ({
+          ...item,
+          subtitle: `${item.qty || 0} execucoes`,
+          name: item.name || 'Servico',
+        })),
       });
-      if (rv.ok) {
-        const data = await rv.json();
-        setVehicles(Array.isArray(data) ? data : data.data || []);
-      }
-    } catch (e) { console.error('[VehiclesPage] search error:', e); }
-    finally { setSearchLoading(false); }
-  }, []);
+    } catch (err) {
+      console.error('[VehiclesPage] load error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [debouncedSearch, page]);
 
   useEffect(() => {
-    if (!search.trim()) {
-      // Ao limpar a busca, recarrega lista completa
-      const token = localStorage.getItem('jr_token');
-      fetch(API + '/api/vehicles?limit=500', { headers: { Authorization: 'Bearer ' + token } })
-        .then(r => r.ok ? r.json() : null)
-        .then(data => { if (data) setVehicles(Array.isArray(data) ? data : data.data || []); })
-        .catch(() => {});
-      return;
-    }
-    const timer = setTimeout(() => fetchSearch(search), 350);
-    return () => clearTimeout(timer);
-  }, [search, fetchSearch]);
+    load();
+  }, [load]);
 
-  // Filtro local como segurança adicional (cobre campos que o servidor pode não indexar)
-  const filtered = vehicles.filter(v =>
-    !search ||
-    v.plate?.toLowerCase().includes(search.toLowerCase()) ||
-    v.brand?.toLowerCase().includes(search.toLowerCase()) ||
-    v.model?.toLowerCase().includes(search.toLowerCase()) ||
-    v.client?.name?.toLowerCase().includes(search.toLowerCase()) ||
-    v.client?.phone?.toLowerCase().includes(search.toLowerCase())
-  );
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch]);
 
-  const statusColor = { urgencia: 'red', atencao: 'yellow', em_dia: 'green' };
+  const summary = useMemo(() => {
+    const overdue = alerts.filter((item) => item.alertLevel === 'OVERDUE').length;
+    const dueSoon = alerts.filter((item) => item.alertLevel === 'DUE_SOON').length;
+    const ok = Math.max(0, total - overdue - dueSoon);
+    return { overdue, dueSoon, ok };
+  }, [alerts, total]);
+
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(total / PAGE_SIZE)), [total]);
+  const openVehicle = useCallback((vehicleId) => navigate(`/veiculos/${vehicleId}`), [navigate]);
 
   return (
     <div>
       <div className="page-header-row page-header">
         <div>
-          <h1 className="page-title">Veículos</h1>
-          <p className="page-subtitle">Frota cadastrada com visão de manutenção e faturamento</p>
+          <h1 className="page-title">Veiculos</h1>
+          <p className="page-subtitle">Busca rapida por placa, modelo e proprietario, com foco em atendimento e manutencao.</p>
         </div>
         <div className="page-actions">
-          <button className="btn btn-primary" onClick={() => navigate('/veiculos/novo')}>+ Novo Veículo</button>
-          <button className="btn btn-outline" onClick={() => navigate('/integracoes')}>Exportar</button>
+          <button className="btn btn-primary" onClick={() => navigate('/veiculos/novo')}>+ Novo Veiculo</button>
+          <button className="btn btn-outline" onClick={() => navigate('/manutencao')}>Ver manutencao</button>
         </div>
       </div>
 
@@ -94,136 +167,81 @@ export default function VehiclesPage() {
         <div className="loading"><div className="spinner" /></div>
       ) : (
         <>
-          {/* Status da frota */}
           <div className="section">
-            <div className="section-header"><h2 className="section-title">Status da Frota</h2></div>
+            <div className="section-header"><h2 className="section-title">Resumo da frota</h2></div>
             <div className="grid-3">
-              <div className="stat-card" style={{ borderLeft: '4px solid var(--danger)' }}>
-                <div className="stat-label">Urgência</div>
-                <div className="stat-value" style={{ color: 'var(--danger)' }}>{stats.urgencia ?? 0}</div>
-                <div className="stat-sub">Manutenção vencida</div>
-              </div>
-              <div className="stat-card" style={{ borderLeft: '4px solid var(--warning)' }}>
-                <div className="stat-label">Atenção</div>
-                <div className="stat-value" style={{ color: 'var(--warning)' }}>{stats.atencao ?? 0}</div>
-                <div className="stat-sub">Próxima manutenção</div>
-              </div>
-              <div className="stat-card" style={{ borderLeft: '4px solid var(--success)' }}>
-                <div className="stat-label">Em Dia</div>
-                <div className="stat-value" style={{ color: 'var(--success)' }}>{stats.em_dia ?? 0}</div>
-                <div className="stat-sub">Sem pendências</div>
-              </div>
+              <StatCard title="Urgencia" value={summary.overdue} subtitle="Manutencoes vencidas" color="var(--danger)" onClick={() => navigate('/manutencao')} />
+              <StatCard title="Atencao" value={summary.dueSoon} subtitle="Vencimento proximo" color="var(--warning)" onClick={() => navigate('/manutencao')} />
+              <StatCard title="Em dia" value={summary.ok} subtitle="Veiculos sem pendencia" color="var(--success)" onClick={() => navigate('/veiculos')} />
             </div>
           </div>
 
-          {/* Rankings */}
           <div className="section">
-            <div className="section-header"><h2 className="section-title">Rankings de Faturamento</h2></div>
+            <div className="section-header"><h2 className="section-title">Rankings de receita e recorrencia</h2></div>
             <div className="grid-3">
-              <div className="card">
-                <div className="card-title">Top Veículos (Receita)</div>
-                {(rankings.veiculos || []).slice(0, 5).map((v, i) => (
-                  <div key={i} className="ranking-item" style={{ cursor: 'pointer' }} onClick={() => navigate(`/veiculos/${v.id}`)}>
-                    <span className={`ranking-pos ranking-pos-${i+1}`}>{i+1}</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, fontSize: 12, fontFamily: 'monospace' }}>{v.plate}</div>
-                      <div className="text-muted text-sm">{v.brand} {v.model}</div>
-                    </div>
-                    <span style={{ fontWeight: 700, color: 'var(--success)', fontSize: 12 }}>
-                      R$ {Number(v.total_revenue||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}
-                    </span>
-                  </div>
-                ))}
-                {!rankings.veiculos?.length && <div className="text-muted text-sm">Sem dados</div>}
-              </div>
-              <div className="card">
-                <div className="card-title">Top Peças Vendidas</div>
-                {(rankings.pecas || []).slice(0, 5).map((p, i) => (
-                  <div key={i} className="ranking-item">
-                    <span className={`ranking-pos ranking-pos-${i+1}`}>{i+1}</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
-                      <div className="text-muted text-sm">{p.qty ?? 0} vendidos</div>
-                    </div>
-                    <span style={{ fontWeight: 700, color: 'var(--success)', fontSize: 12 }}>
-                      R$ {Number(p.revenue||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}
-                    </span>
-                  </div>
-                ))}
-                {!rankings.pecas?.length && <div className="text-muted text-sm">Sem dados</div>}
-              </div>
-              <div className="card">
-                <div className="card-title">Top Serviços</div>
-                {(rankings.servicos || []).slice(0, 5).map((s, i) => (
-                  <div key={i} className="ranking-item">
-                    <span className={`ranking-pos ranking-pos-${i+1}`}>{i+1}</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</div>
-                      <div className="text-muted text-sm">{s.qty ?? 0} execuções</div>
-                    </div>
-                    <span style={{ fontWeight: 700, color: 'var(--success)', fontSize: 12 }}>
-                      R$ {Number(s.revenue||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}
-                    </span>
-                  </div>
-                ))}
-                {!rankings.servicos?.length && <div className="text-muted text-sm">Sem dados</div>}
-              </div>
-            </div>
-          </div>
-
-          {/* Filtros */}
-          <div className="filters-bar">
-            <div className="search-bar" style={{ flex: 1, maxWidth: 360 }}>
-              <span className="search-icon">🔍</span>
-              <input
-                type="text"
-                placeholder="Placa, modelo, marca ou nome do cliente..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
+              <RankingList
+                title="Veiculos com maior receita"
+                items={rankings.vehicles.slice(0, 5)}
+                emptyLabel="Sem dados"
+                onSelect={(item) => item.id && openVehicle(item.id)}
+                valueFormatter={(item) => Number(item.total_revenue || item.revenue || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              />
+              <RankingList
+                title="Pecas com maior giro"
+                items={rankings.parts.slice(0, 5)}
+                emptyLabel="Sem dados"
+                valueFormatter={(item) => Number(item.revenue || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              />
+              <RankingList
+                title="Servicos com maior receita"
+                items={rankings.services.slice(0, 5)}
+                emptyLabel="Sem dados"
+                valueFormatter={(item) => Number(item.revenue || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
               />
             </div>
-            {searchLoading
-              ? <span className="text-muted text-sm">Buscando...</span>
-              : <span className="text-muted text-sm">{filtered.length} veículo{filtered.length !== 1 ? 's' : ''}</span>
-            }
           </div>
 
-          {/* Listagem */}
-          {filtered.length === 0 ? (
+          <div className="filters-bar">
+            <div className="search-bar" style={{ flex: 1, maxWidth: 420 }}>
+              <span className="search-icon">??</span>
+              <input
+                type="text"
+                placeholder="Buscar por placa, marca, modelo ou proprietario..."
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </div>
+            <span className="text-muted text-sm">{total} veiculo{total === 1 ? '' : 's'}</span>
+          </div>
+
+          {!vehicles.length ? (
             <div className="empty-state">
-              <div className="empty-state-icon">🚗</div>
-              <div className="empty-state-text">{search ? 'Nenhum veículo encontrado' : 'Nenhum veículo cadastrado'}</div>
-              {!search && <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={() => navigate('/veiculos/novo')}>+ Novo Veículo</button>}
+              <div className="empty-state-icon">??</div>
+              <div className="empty-state-text">{debouncedSearch ? 'Nenhum veiculo encontrado para esta busca' : 'Nenhum veiculo cadastrado'}</div>
+              {!debouncedSearch ? <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={() => navigate('/veiculos/novo')}>+ Novo Veiculo</button> : null}
             </div>
           ) : (
-            <div className="table-container">
-              <table className="table">
-                <thead>
-                  <tr><th>Placa</th><th>Veículo</th><th>Proprietário</th><th>Ano</th><th>OS</th><th>Status</th><th></th></tr>
-                </thead>
-                <tbody>
-                  {filtered.map(v => {
-                    const st = v.maintenanceStatus;
-                    const badge = st === 'urgencia' ? 'badge-red' : st === 'atencao' ? 'badge-yellow' : 'badge-green';
-                    const label = st === 'urgencia' ? 'Urgência' : st === 'atencao' ? 'Atenção' : 'Em dia';
-                    return (
-                      <tr key={v.id} onClick={() => navigate(`/veiculos/${v.id}`)} style={{ cursor: 'pointer' }}>
-                        <td><span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 13 }}>{v.plate}</span></td>
-                        <td>
-                          <div style={{ fontWeight: 600 }}>{v.brand} {v.model}</div>
-                          {v.color && <div className="text-muted text-sm">{v.color}</div>}
-                        </td>
-                        <td>{v.client?.name || '—'}</td>
-                        <td>{v.year || '—'}</td>
-                        <td><span className="badge badge-blue">{v._count?.serviceOrders ?? 0}</span></td>
-                        <td><span className={`badge ${badge}`}>{label}</span></td>
-                        <td><button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); navigate(`/veiculos/${v.id}`); }}>Ver →</button></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <>
+              <div className="table-container">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Placa</th>
+                      <th>Veiculo</th>
+                      <th>Proprietario</th>
+                      <th>Ano</th>
+                      <th>OS</th>
+                      <th>Status</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {vehicles.map((vehicle) => <VehicleRow key={vehicle.id} vehicle={vehicle} onOpen={openVehicle} />)}
+                  </tbody>
+                </table>
+              </div>
+              <PaginationControls currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+            </>
           )}
         </>
       )}

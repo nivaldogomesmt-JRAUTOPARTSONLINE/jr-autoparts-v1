@@ -4,16 +4,16 @@ import { dashboardAPI, soAPI } from '../../services/api';
 import useDebouncedValue from '../../hooks/useDebouncedValue';
 
 const DELIVERY_LABELS = {
-  AWAITING_DISPATCH: 'Pendente',
-  OUT_FOR_DELIVERY: 'Em transporte',
+  AWAITING_DISPATCH: 'Confirmado',
+  OUT_FOR_DELIVERY: 'Enviado',
   DELIVERED: 'Entregue',
-  DELIVERY_FAILED: 'Atraso/Problema',
+  DELIVERY_FAILED: 'Falha na entrega',
 };
 
 const ORDER_PHASE_LABELS = {
-  CONFIRMED: 'Pedido confirmado',
-  PAYMENT_APPROVED: 'Pagamento aprovado',
-  IN_SEPARATION: 'Em separacao',
+  CONFIRMED: 'Confirmado',
+  PAYMENT_APPROVED: 'Confirmado',
+  IN_SEPARATION: 'Separacao',
   SHIPPED: 'Enviado',
   DELIVERED: 'Entregue',
   CANCELED: 'Cancelado',
@@ -56,11 +56,6 @@ function formatDateTime(value) {
 
 function formatCurrency(value) {
   return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
-
-/** Retorna o valor monetário do pedido (compatível com backend que usa total ou totalPrice) */
-function resolveTotal(os) {
-  return os.total ?? os.totalPrice ?? 0;
 }
 
 function escapeCsv(value) {
@@ -166,7 +161,7 @@ function exportOrdersCsv(orders) {
       formatAddress(os.client),
       phaseLabel,
       deliveryLabel,
-      formatCurrency(resolveTotal(os)),
+      formatCurrency(os.total),
       formatDateTime(os.deliveryMeta?.updatedAt || os.updatedAt),
     ];
   });
@@ -201,7 +196,7 @@ function printOrders(orders) {
         <td>${escapeHtml(getItemsPreview(os))}</td>
         <td>${escapeHtml(phaseLabel)}</td>
         <td>${escapeHtml(deliveryLabel)}</td>
-        <td>${escapeHtml(formatCurrency(resolveTotal(os)))}</td>
+        <td>${escapeHtml(formatCurrency(os.total))}</td>
       </tr>
     `;
   }).join('');
@@ -268,17 +263,15 @@ export default function DeliveriesPage() {
   const [updatingId, setUpdatingId] = useState('');
   const [topProducts, setTopProducts] = useState([]);
   const [drafts, setDrafts] = useState({});
-  const [loadError, setLoadError] = useState(false);
 
   const load = async () => {
     setLoading(true);
     try {
-      // Usa allSettled para que uma falha no dashboard não zere os pedidos
-      const [soResult, dashResult] = await Promise.allSettled([
+      const [soRes, dashRes] = await Promise.all([
         soAPI.list({
           search: debouncedSearch,
           sort: 'updated',
-          limit: 500,
+          limit: 250,
           includeDeliveryDetails: 'true',
           orderPhase: phaseFilter || undefined,
           deliveryStatus: deliveryFilter || undefined,
@@ -288,24 +281,12 @@ export default function DeliveriesPage() {
         dashboardAPI.get(),
       ]);
 
-      if (soResult.status === 'fulfilled') {
-        const raw = soResult.value?.data?.data ?? soResult.value?.data ?? [];
-        const data = (Array.isArray(raw) ? raw : []).filter(
-          (os) => TRACKABLE_OS_STATUS.has(os.status) || os.deliveryMeta
-        );
-        setOrders(data);
-        setTotalFound(Number(soResult.value?.data?.total ?? data.length));
-        setLoadError(false);
-      } else {
-        console.error('[DeliveriesPage] soAPI.list falhou:', soResult.reason);
-        setLoadError(true);
-      }
-
-      if (dashResult.status === 'fulfilled') {
-        setTopProducts(dashResult.value?.data?.rankings?.topProducts || []);
-      }
+      const data = (soRes.data?.data || []).filter((os) => TRACKABLE_OS_STATUS.has(os.status) || os.deliveryMeta);
+      setOrders(data);
+      setTotalFound(Number(soRes.data?.total || data.length));
+      setTopProducts(dashRes.data?.rankings?.topProducts || []);
     } catch (err) {
-      console.error('[DeliveriesPage] load error:', err);
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -333,11 +314,9 @@ export default function DeliveriesPage() {
     const delayLimit = 2 * 24 * 60 * 60 * 1000;
 
     const acc = {
-      pending: 0,
-      paymentApproved: 0,
+      confirmed: 0,
       separation: 0,
       sent: 0,
-      transport: 0,
       delivered: 0,
       delayed: 0,
       canceled: 0,
@@ -353,11 +332,9 @@ export default function DeliveriesPage() {
         continue;
       }
 
-      if (phase === 'CONFIRMED') acc.pending += 1;
-      if (phase === 'PAYMENT_APPROVED') acc.paymentApproved += 1;
+      if (phase === 'CONFIRMED' || phase === 'PAYMENT_APPROVED') acc.confirmed += 1;
       if (phase === 'IN_SEPARATION') acc.separation += 1;
-      if (phase === 'SHIPPED') acc.sent += 1;
-      if (deliveryStatus === 'OUT_FOR_DELIVERY') acc.transport += 1;
+      if (phase === 'SHIPPED' || deliveryStatus === 'OUT_FOR_DELIVERY') acc.sent += 1;
       if (phase === 'DELIVERED' || deliveryStatus === 'DELIVERED') acc.delivered += 1;
 
       const isFailed = deliveryStatus === 'DELIVERY_FAILED';
@@ -416,45 +393,13 @@ export default function DeliveriesPage() {
         </div>
       </div>
 
-      {loadError && (
-        <div className="alert alert-error" style={{ marginBottom: 12 }}>
-          Não foi possível carregar os pedidos. Verifique sua conexão e tente novamente.
-        </div>
-      )}
-
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 16 }}>
-        <div className="card" style={{ padding: 12, borderTop: '3px solid #3b82f6' }}>
-          <div className="text-sm text-muted">Pedido confirmado</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: summary.pending > 0 ? '#1A3C5E' : '#94a3b8' }}>{summary.pending}</div>
-        </div>
-        <div className="card" style={{ padding: 12, borderTop: '3px solid #8b5cf6' }}>
-          <div className="text-sm text-muted">Pgto aprovado</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: summary.paymentApproved > 0 ? '#1A3C5E' : '#94a3b8' }}>{summary.paymentApproved}</div>
-        </div>
-        <div className="card" style={{ padding: 12, borderTop: '3px solid #f59e0b' }}>
-          <div className="text-sm text-muted">Em separação</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: summary.separation > 0 ? '#1A3C5E' : '#94a3b8' }}>{summary.separation}</div>
-        </div>
-        <div className="card" style={{ padding: 12, borderTop: '3px solid #06b6d4' }}>
-          <div className="text-sm text-muted">Enviados</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: summary.sent > 0 ? '#1A3C5E' : '#94a3b8' }}>{summary.sent}</div>
-        </div>
-        <div className="card" style={{ padding: 12, borderTop: '3px solid #10b981' }}>
-          <div className="text-sm text-muted">Em transporte</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: summary.transport > 0 ? '#1A3C5E' : '#94a3b8' }}>{summary.transport}</div>
-        </div>
-        <div className="card" style={{ padding: 12, borderTop: '3px solid #16a34a' }}>
-          <div className="text-sm text-muted">Entregues</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: summary.delivered > 0 ? '#16a34a' : '#94a3b8' }}>{summary.delivered}</div>
-        </div>
-        <div className="card" style={{ padding: 12, borderTop: '3px solid #dc2626' }}>
-          <div className="text-sm text-muted">Atrasados</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: summary.delayed > 0 ? '#dc2626' : '#94a3b8' }}>{summary.delayed}</div>
-        </div>
-        <div className="card" style={{ padding: 12, borderTop: '3px solid #64748b' }}>
-          <div className="text-sm text-muted">Cancelados</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: summary.canceled > 0 ? '#1A3C5E' : '#94a3b8' }}>{summary.canceled}</div>
-        </div>
+        <div className="card" style={{ padding: 12 }}><div className="text-sm text-muted">Confirmado</div><div style={{ fontSize: 22, fontWeight: 800 }}>{summary.confirmed}</div></div>
+        <div className="card" style={{ padding: 12 }}><div className="text-sm text-muted">Separacao</div><div style={{ fontSize: 22, fontWeight: 800 }}>{summary.separation}</div></div>
+        <div className="card" style={{ padding: 12 }}><div className="text-sm text-muted">Enviado</div><div style={{ fontSize: 22, fontWeight: 800 }}>{summary.sent}</div></div>
+        <div className="card" style={{ padding: 12 }}><div className="text-sm text-muted">Entregues</div><div style={{ fontSize: 22, fontWeight: 800 }}>{summary.delivered}</div></div>
+        <div className="card" style={{ padding: 12 }}><div className="text-sm text-muted">Atrasados</div><div style={{ fontSize: 22, fontWeight: 800, color: '#b91c1c' }}>{summary.delayed}</div></div>
+        <div className="card" style={{ padding: 12 }}><div className="text-sm text-muted">Cancelados</div><div style={{ fontSize: 22, fontWeight: 800 }}>{summary.canceled}</div></div>
       </div>
 
       <div className="grid-2" style={{ marginBottom: 16 }}>
@@ -551,7 +496,7 @@ export default function DeliveriesPage() {
                       <td className="text-sm text-muted">{formatAddress(os.client)}</td>
                       <td><span className="badge badge-gray">{phaseLabel}</span></td>
                       <td><span className="badge badge-blue">{deliveryLabel}</span></td>
-                      <td><strong>{formatCurrency(resolveTotal(os))}</strong></td>
+                      <td><strong>{formatCurrency(os.total)}</strong></td>
                       <td>
                         <div style={{ display: 'grid', gap: 4 }}>
                           {historyRows.map((h, idx) => (
