@@ -24,6 +24,31 @@ function sanitizeBaseUrl(url) {
   return String(url || '').trim().replace(/\/+$/, '');
 }
 
+/**
+ * Transforma mensagens de erro técnicas em texto amigável para o usuário.
+ * Detalhes como hostnames, chaves e stack traces ficam apenas nos logs do servidor.
+ */
+function friendlyErrorMessage(rawError) {
+  const msg = String(rawError || '').toLowerCase();
+  if (msg.includes('api_key') || msg.includes('api-key') || msg.includes('nao configurada') || msg.includes('não configurada')) {
+    return 'Integração WhatsApp não configurada.';
+  }
+  if (msg.includes('enotfound') || msg.includes('econnrefused') || msg.includes('etimedout') || msg.includes('socket hang up')) {
+    return 'Falha de conexão com o serviço WhatsApp.';
+  }
+  if (msg.includes('401') || msg.includes('403') || msg.includes('unauthorized') || msg.includes('forbidden')) {
+    return 'Credenciais inválidas para o serviço WhatsApp.';
+  }
+  if (msg.includes('429') || msg.includes('rate limit') || msg.includes('too many')) {
+    return 'Limite de envios atingido. Tente novamente em breve.';
+  }
+  if (msg.includes('invalid') || msg.includes('invalida') || msg.includes('invalido')) {
+    return 'Configuração inválida do serviço WhatsApp.';
+  }
+  // Fallback genérico — não expõe stack trace nem hostname
+  return 'Falha ao enviar mensagem WhatsApp.';
+}
+
 function parseMaybeJson(raw) {
   if (!raw) return null;
   const text = String(raw).trim();
@@ -311,7 +336,7 @@ const sendWhatsAppMessage = async ({ clientId, soId, phone, content, messageId }
       const instanceName = String(process.env.EVOLUTION_INSTANCE_NAME || '').trim();
 
       if (!apiUrl || !apiKey || !instanceName) {
-        const errorMsg = 'EVOLUTION_API_URL, EVOLUTION_API_KEY e EVOLUTION_INSTANCE_NAME devem estar configurados.';
+        const errorMsg = friendlyErrorMessage('api_key nao configurada');
         await prisma.whatsappMessage.update({
           where: { id: message.id },
           data: { status: 'FAILED', errorMessage: errorMsg },
@@ -338,7 +363,7 @@ const sendWhatsAppMessage = async ({ clientId, soId, phone, content, messageId }
     const baseCandidates = buildBaseUrlCandidates(config.apiUrl || 'https://backend.botconversa.com.br/api/v1');
 
     if (!apiKey) {
-      const errorMsg = 'BOTCONVERSA_API_KEY nao configurada no backend.';
+      const errorMsg = friendlyErrorMessage('api_key nao configurada');
       await prisma.whatsappMessage.update({
         where: { id: message.id },
         data: { status: 'FAILED', errorMessage: errorMsg },
@@ -347,7 +372,7 @@ const sendWhatsAppMessage = async ({ clientId, soId, phone, content, messageId }
     }
 
     if (!baseCandidates.length) {
-      const errorMsg = 'BOTCONVERSA_API_URL invalida. Exemplo: https://backend.botconversa.com.br/api/v1';
+      const errorMsg = friendlyErrorMessage('invalida');
       await prisma.whatsappMessage.update({
         where: { id: message.id },
         data: { status: 'FAILED', errorMessage: errorMsg },
@@ -385,14 +410,16 @@ const sendWhatsAppMessage = async ({ clientId, soId, phone, content, messageId }
     console.log(`WhatsApp enviado para ${normalizedPhone} (${config.source})`);
     return { success: true, messageId: message.id };
   } catch (err) {
-    const errorMsg = parseErrorMessage(err);
+    const rawError = parseErrorMessage(err);
+    // Log técnico detalhado fica apenas no servidor
+    console.error(`WhatsApp falhou para ${normalizedPhone}: ${rawError}`);
+    // Usuário vê mensagem amigável
+    const errorMsg = friendlyErrorMessage(rawError);
 
     await prisma.whatsappMessage.update({
       where: { id: message.id },
       data: { status: 'FAILED', errorMessage: errorMsg },
     });
-
-    console.error(`WhatsApp falhou para ${normalizedPhone}: ${errorMsg}`);
     return { success: false, messageId: message.id, error: errorMsg };
   }
 };
