@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { BRAND } from '../../config/brand';
 
@@ -267,19 +267,18 @@ export default function PortalVehicle() {
                 <div style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Nenhuma OS encontrada</div>
               </div>
             ) : (
-
-              {/* Histórico de Manutenções */}
+              <>
               {maintenance && maintenance.length > 0 && (
                 <div style={{ background: '#fff', borderRadius: '10px', padding: '18px', marginBottom: '16px', border: '1px solid #e2e8f0' }}>
                   <h3 style={{ fontSize: '15px', fontWeight: '700', color: '#1e293b', margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    🔧 Histórico de Manutenções
+                    ðŸ”§ HistÃ³rico de ManutenÃ§Ãµes
                   </h3>
                   {maintenance.map((m, idx) => {
                     const hoje = new Date();
                     const prox = m.nextDueDate ? new Date(m.nextDueDate) : null;
                     const vencida = prox && prox < hoje;
                     const proximaBreve = prox && !vencida && (prox - hoje) / 86400000 <= 30;
-                    const tipoLabel = m.type === 'OIL_CHANGE' ? '🛢️ Troca de Óleo' : m.type === 'BELT_CHANGE' ? '⚙️ Troca de Correia' : m.type === 'GENERAL' ? '🔧 Manutenção Geral' : (m.type || 'Manutenção');
+                    const tipoLabel = m.type === 'OIL_CHANGE' ? 'ðŸ›¢ï¸ Troca de Ã“leo' : m.type === 'BELT_CHANGE' ? 'âš™ï¸ Troca de Correia' : m.type === 'GENERAL' ? 'ðŸ”§ ManutenÃ§Ã£o Geral' : (m.type || 'ManutenÃ§Ã£o');
                     return (
                       <div key={m.id || idx} style={{
                         padding: '12px',
@@ -294,12 +293,12 @@ export default function PortalVehicle() {
                             <p style={{ margin: '0 0 4px', fontWeight: '600', fontSize: '14px', color: '#1e293b' }}>{tipoLabel}</p>
                             {m.lastMaintenanceDate && (
                               <p style={{ margin: '0 0 2px', fontSize: '12px', color: '#64748b' }}>
-                                Última: {formatDate(m.lastMaintenanceDate)}{m.lastMaintenanceKm ? ` · ${Number(m.lastMaintenanceKm).toLocaleString('pt-BR')} km` : ''}
+                                Ãšltima: {formatDate(m.lastMaintenanceDate)}{m.lastMaintenanceKm ? ` Â· ${Number(m.lastMaintenanceKm).toLocaleString('pt-BR')} km` : ''}
                               </p>
                             )}
                             {m.nextDueDate && (
                               <p style={{ margin: 0, fontSize: '12px', color: vencida ? '#dc2626' : '#64748b', fontWeight: vencida ? '600' : '400' }}>
-                                Próxima: {formatDate(m.nextDueDate)}{m.nextDueKm ? ` · ${Number(m.nextDueKm).toLocaleString('pt-BR')} km` : ''}
+                                PrÃ³xima: {formatDate(m.nextDueDate)}{m.nextDueKm ? ` Â· ${Number(m.nextDueKm).toLocaleString('pt-BR')} km` : ''}
                               </p>
                             )}
                           </div>
@@ -352,6 +351,7 @@ export default function PortalVehicle() {
                   );
                 })}
               </div>
+              </>
             )}
           </div>
         </div>
@@ -359,3 +359,4 @@ export default function PortalVehicle() {
     </div>
   );
 }
+

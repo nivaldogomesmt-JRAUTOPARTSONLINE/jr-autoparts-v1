@@ -1,0 +1,81 @@
+services:
+  jr-backend:
+    build:
+      context: ../../backend
+    container_name: jr-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      DB_HOST: ${DB_HOST:-}
+      DB_PORT: ${DB_PORT:-}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: ${PORT:-3001}
+      FRONTEND_URL: ${FRONTEND_URL}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      EMAIL_FROM: ${EMAIL_FROM}
+      BOTCONVERSA_API_KEY: ${BOTCONVERSA_API_KEY}
+      BOTCONVERSA_API_URL: ${BOTCONVERSA_API_URL}
+      WHATSAPP_FROM_NUMBER: ${WHATSAPP_FROM_NUMBER}
+      BOT_SECRET_TOKEN: ${BOT_SECRET_TOKEN}
+      BOT_SESSION_TTL_MINUTES: ${BOT_SESSION_TTL_MINUTES:-30}
+      BOT_BOLETO_NOTIFY_ENABLED: ${BOT_BOLETO_NOTIFY_ENABLED:-false}
+      BOT_BOLETO_DUE_SOON_DAYS: ${BOT_BOLETO_DUE_SOON_DAYS:-3}
+      BOT_BOLETO_NOTIFY_MAX_CLIENTS: ${BOT_BOLETO_NOTIFY_MAX_CLIENTS:-300}
+      BOT_BOLETO_NOTIFY_BATCH_SIZE: ${BOT_BOLETO_NOTIFY_BATCH_SIZE:-100}
+      BOT_BOLETO_LOOKBACK_DAYS: ${BOT_BOLETO_LOOKBACK_DAYS:-60}
+      BOT_BOLETO_LOOKAHEAD_DAYS: ${BOT_BOLETO_LOOKAHEAD_DAYS:-15}
+      EFI_CLIENT_ID: ${EFI_CLIENT_ID}
+      EFI_CLIENT_SECRET: ${EFI_CLIENT_SECRET}
+      EFI_ENV: ${EFI_ENV:-production}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      TZ: ${TZ:-America/Cuiaba}
+    expose:
+      - "3001"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - jr-internal
+
+  jr-frontend:
+    build:
+      context: ../../frontend
+    container_name: jr-frontend
+    restart: unless-stopped
+    depends_on:
+      jr-backend:
+        condition: service_healthy
+    expose:
+      - "80"
+    networks:
+      - jr-internal
+
+  jr-nginx:
+    image: nginx:1.27-alpine
+    container_name: jr-nginx
+    restart: unless-stopped
+    depends_on:
+      jr-backend:
+        condition: service_healthy
+      jr-frontend:
+        condition: service_started
+    ports:
+      - "${JR_HTTP_PORT:-8088}:80"
+    volumes:
+      - ./nginx/jr.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - jr-internal
+
+networks:
+  jr-internal:
+    name: jr-internal
