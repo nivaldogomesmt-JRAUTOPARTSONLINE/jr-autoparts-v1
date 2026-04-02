@@ -19,7 +19,10 @@ done
 echo "Banco de dados disponivel."
 
 if [ -d "prisma/migrations" ] && [ "$(ls -A prisma/migrations 2>/dev/null)" ]; then
-  npx prisma migrate deploy
+  if ! npx prisma migrate deploy; then
+    echo "Falha no prisma migrate deploy. Tentando sincronizar schema legado com prisma db push..."
+    npx prisma db push --accept-data-loss
+  fi
 else
   npx prisma db push --accept-data-loss
 fi
