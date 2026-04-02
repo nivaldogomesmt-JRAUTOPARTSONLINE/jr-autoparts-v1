@@ -19,9 +19,23 @@ done
 echo "Banco de dados disponivel."
 
 if [ -d "prisma/migrations" ] && [ "$(ls -A prisma/migrations 2>/dev/null)" ]; then
-  if ! npx prisma migrate deploy; then
-    echo "Falha no prisma migrate deploy. Tentando sincronizar schema legado com prisma db push..."
-    npx prisma db push --accept-data-loss
+  if ! npx prisma migrate deploy 2> /tmp/prisma-migrate.err; then
+    if grep -q "P3005" /tmp/prisma-migrate.err; then
+      BASELINE_MIGRATION=$(find prisma/migrations -mindepth 1 -maxdepth 1 -type d | sort | head -n 1 | xargs -n 1 basename)
+      if [ -n "${BASELINE_MIGRATION:-}" ]; then
+        echo "Banco legado detectado. Marcando migration $BASELINE_MIGRATION como aplicada e repetindo deploy..."
+        npx prisma migrate resolve --applied "$BASELINE_MIGRATION"
+        npx prisma migrate deploy
+      else
+        echo "Nao foi possivel determinar a migration baseline."
+        cat /tmp/prisma-migrate.err
+        exit 1
+      fi
+    else
+      echo "Falha no prisma migrate deploy."
+      cat /tmp/prisma-migrate.err
+      exit 1
+    fi
   fi
 else
   npx prisma db push --accept-data-loss
