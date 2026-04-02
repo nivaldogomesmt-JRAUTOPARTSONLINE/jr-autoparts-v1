@@ -52,6 +52,8 @@ Editar `infra/vps/.env` com:
 - credenciais BotConversa
 - credenciais Efí
 - `OPENAI_API_KEY` se o backend usar IA
+- `MAINTENANCE_RECALC_ENABLED=false` na homologacao paralela
+- `MAINTENANCE_NOTIFY_ENABLED=false` na homologacao paralela
 
 ### 3. Subir em paralelo
 
