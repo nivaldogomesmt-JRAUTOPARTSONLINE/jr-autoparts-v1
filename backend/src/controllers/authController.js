@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const prisma = require('../lib/prisma');
 const { validatePasswordStrength, isValidEmail } = require('../utils/security');
-const { getAccessProfileForUser } = require('../services/accessProfileService');
+const { getAccessProfileForUser, saveAccessProfileForUser } = require('../services/accessProfileService');
 
 const MAX_FAILED_LOGINS = parseInt(process.env.MAX_FAILED_LOGINS || '5', 10);
 const LOCK_MINUTES = parseInt(process.env.LOGIN_LOCK_MINUTES || '15', 10);
@@ -38,7 +38,23 @@ function toPublicPermissions(permissions) {
   };
 }
 
-function publicUser(user) {
+function resolveAccessProfileValue(accessProfile, fallback = 'CUSTOM') {
+  if (typeof accessProfile === 'string') {
+    const value = accessProfile.trim();
+    return value || fallback;
+  }
+
+  if (accessProfile && typeof accessProfile === 'object') {
+    const candidate = typeof accessProfile.accessProfile === 'string'
+      ? accessProfile.accessProfile.trim()
+      : '';
+    return candidate || fallback;
+  }
+
+  return fallback;
+}
+
+function publicUser(user, accessProfile = null) {
   return {
     id: user.id,
     name: user.name,
@@ -49,6 +65,7 @@ function publicUser(user) {
     mustChangePassword: !!user.mustChangePassword,
     lastLoginAt: user.lastLoginAt,
     permissions: toPublicPermissions(user.permissions),
+    accessProfile,
   };
 }
 
@@ -103,8 +120,9 @@ const login = async (req, res) => {
       },
       include: { permissions: true },
     });
+    const accessProfile = await getAccessProfileForUser(updatedUser);
 
-    return res.json({ token, user: publicUser(updatedUser) });
+    return res.json({ token, user: publicUser(updatedUser, accessProfile) });
   } catch (err) {
     return res.status(500).json({ error: 'Erro ao fazer login.' });
   }
@@ -124,8 +142,7 @@ const me = async (req, res) => {
     if (!user) return res.status(404).json({ error: 'Usuario nao encontrado.' });
     const accessProfile = await getAccessProfileForUser(user);
     return res.json({
-      ...publicUser(user),
-      accessProfile,
+      ...publicUser(user, accessProfile),
     });
   } catch (err) {
     return res.status(500).json({ error: 'Erro ao buscar usuario.' });
@@ -169,7 +186,7 @@ const changePassword = async (req, res) => {
 
 const createUser = async (req, res) => {
   try {
-    const { name, email, password, role = 'EMPLOYEE', permissions = {} } = req.body;
+    const { name, email, password, role = 'EMPLOYEE', permissions = {}, accessProfile = {}, jobTitle = '', modules = null, sensitive = null } = req.body;
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'Nome, email e senha sao obrigatorios.' });
     }
@@ -220,7 +237,19 @@ const createUser = async (req, res) => {
       },
     });
 
-    return res.status(201).json(publicUser(user));
+    const profile = await saveAccessProfileForUser(
+      user,
+      {
+        accessProfile: resolveAccessProfileValue(accessProfile || req.body?.accessProfile, 'CUSTOM'),
+        jobTitle,
+        modules,
+        sensitive,
+      },
+      req.user?.name || req.user?.email || 'system',
+      'Criação de colaborador'
+    );
+
+    return res.status(201).json(publicUser(user, profile));
   } catch (err) {
     return res.status(500).json({ error: 'Erro ao criar usuario.' });
   }
@@ -228,7 +257,7 @@ const createUser = async (req, res) => {
 
 const updateUser = async (req, res) => {
   try {
-    const { name, role, active, permissions = {} } = req.body;
+    const { name, role, active, permissions = {}, accessProfile = {}, jobTitle = '', modules = null, sensitive = null } = req.body;
 
     const existing = await prisma.user.findUnique({
       where: { id: req.params.id },
@@ -281,7 +310,19 @@ const updateUser = async (req, res) => {
       },
     });
 
-    return res.json(publicUser(updated));
+    const profile = await saveAccessProfileForUser(
+      updated,
+      {
+        accessProfile: resolveAccessProfileValue(accessProfile || req.body?.accessProfile, 'CUSTOM'),
+        jobTitle,
+        modules,
+        sensitive,
+      },
+      req.user?.name || req.user?.email || 'system',
+      'Atualização de colaborador'
+    );
+
+    return res.json(publicUser(updated, profile));
   } catch (err) {
     return res.status(500).json({ error: 'Erro ao atualizar colaborador.' });
   }
@@ -325,7 +366,14 @@ const listUsers = async (req, res) => {
       orderBy: { name: 'asc' },
     });
 
-    return res.json(users.map(publicUser));
+    const usersWithProfiles = await Promise.all(
+      users.map(async (user) => {
+        const profile = await getAccessProfileForUser(user);
+        return publicUser(user, profile);
+      })
+    );
+
+    return res.json(usersWithProfiles);
   } catch (err) {
     return res.status(500).json({ error: 'Erro ao listar usuarios.' });
   }

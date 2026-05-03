@@ -200,11 +200,11 @@ const get = async (req, res) => {
 // POST /api/clients
 const create = async (req, res) => {
   try {
-    const { name, cpfCnpj, phone, whatsapp, email, address, city, type, createPortalAccess, password } = req.body;
+    const { name, cpfCnpj, phone, whatsapp, email, address, city, type, birthdate, createPortalAccess, password } = req.body;
     if (!name) return res.status(400).json({ error: 'Nome e obrigatorio.' });
 
     const client = await prisma.client.create({
-      data: { name, cpfCnpj, phone, whatsapp, email, address, city, type: type || 'PERSONAL' },
+      data: { name, cpfCnpj, phone, whatsapp, email, address, city, type: type || 'PERSONAL', ...(birthdate ? { birthdate: new Date(birthdate) } : {}) },
     });
 
     if (createPortalAccess && email && password) {
@@ -235,7 +235,7 @@ const create = async (req, res) => {
 // PUT /api/clients/:id
 const update = async (req, res) => {
   try {
-    const { name, cpfCnpj, phone, whatsapp, email, address, city, type } = req.body;
+    const { name, cpfCnpj, phone, whatsapp, email, address, city, type, birthdate } = req.body;
 
     const before = await prisma.client.findUnique({
       where: { id: req.params.id },
@@ -245,7 +245,7 @@ const update = async (req, res) => {
 
     const client = await prisma.client.update({
       where: { id: req.params.id },
-      data: { name, cpfCnpj, phone, whatsapp, email, address, city, type },
+      data: { name, cpfCnpj, phone, whatsapp, email, address, city, type, ...(birthdate !== undefined ? { birthdate: birthdate ? new Date(birthdate) : null } : {}) },
     });
 
     await notifyClientProfileChange({ before, after: client });

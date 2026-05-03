@@ -70,6 +70,23 @@ function isValidCpfOrCnpj(docDigits) {
   return docDigits.length === 11 || docDigits.length === 14;
 }
 
+// Extrai todos os documentos do customer (CPF, CNPJ direto, ou juridical_person.cnpj)
+function extrairDocs(c) {
+  const possiveis = [
+    c?.customer,
+    c?.payment?.banking_billet?.customer,
+    c?.banking_billet?.customer,
+  ];
+  const docs = [];
+  for (const cu of possiveis) {
+    if (!cu) continue;
+    if (cu.cpf) docs.push(normalizeDocument(cu.cpf));
+    if (cu.cnpj) docs.push(normalizeDocument(cu.cnpj));
+    if (cu.juridical_person?.cnpj) docs.push(normalizeDocument(cu.juridical_person.cnpj));
+  }
+  return docs.filter(Boolean);
+}
+
 function isEfiUnavailableError(err) {
   const status = Number(err?.response?.status || 0);
   const code = String(err?.code || '').toUpperCase();
@@ -77,6 +94,8 @@ function isEfiUnavailableError(err) {
   return unavailableCodes.has(code) || status === 429 || status >= 500;
 }
 
+// Pagina em paralelo todas as cobrancas no periodo e filtra localmente.
+// Necessario porque o filtro customer_document da Efi nao acha CNPJ em juridical_person.cnpj (PJ).
 async function listChargesByDocument({
   document,
   cpf,
@@ -100,24 +119,68 @@ async function listChargesByDocument({
   const token = await getAccessToken();
   const baseUrl = getBaseUrl();
 
-  const params = new URLSearchParams({
-    charge_type: chargeType,
-    begin_date: begin,
-    end_date: end,
-    customer_document: clientDoc,
-    limit: String(limit),
-    offset: String(offset),
+  const PAGE_LIMIT = 100;
+  const MAX_PAGES = 30;
+
+  const pagePromises = [];
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const params = new URLSearchParams({
+      charge_type: chargeType,
+      begin_date: begin,
+      end_date: end,
+      limit: String(PAGE_LIMIT),
+      page: String(page),
+    });
+    pagePromises.push(
+      axios.get(`${baseUrl}/v1/charges?${params.toString()}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000,
+      })
+        .then((r) => r.data?.data ?? r.data ?? [])
+        .catch(() => [])
+    );
+  }
+
+  const allPages = await Promise.all(pagePromises);
+  const allCharges = [];
+  for (const p of allPages) {
+    if (Array.isArray(p)) allCharges.push(...p);
+  }
+
+  // Dedupe + filtro local por documento
+  const seen = new Set();
+  const matches = [];
+  for (const c of allCharges) {
+    const id = c?.charge_id ?? c?.id;
+    if (id && seen.has(id)) continue;
+    if (id) seen.add(id);
+    const docs = extrairDocs(c);
+    if (docs.includes(clientDoc)) matches.push(c);
+  }
+
+  // Ordena por created_at desc (mais recentes primeiro)
+  matches.sort((a, b) => {
+    const da = new Date(a?.created_at || 0).getTime();
+    const db = new Date(b?.created_at || 0).getTime();
+    return db - da;
   });
 
-  const response = await axios.get(`${baseUrl}/v1/charges?${params.toString()}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
+  // Aplica paginacao do cliente
+  const sliced = matches.slice(offset, offset + limit);
+
+  return {
+    data: sliced,
+    params: {
+      charge_type: chargeType,
+      begin_date: begin,
+      end_date: end,
+      customer_document: clientDoc,
     },
-    timeout: 20000,
-  });
-
-  return response.data;
+    total_matches: matches.length,
+  };
 }
 
 async function listChargesByCpf({ cpf, ...rest }) {
@@ -130,4 +193,5 @@ module.exports = {
   listChargesByCpf,
   normalizeDocument,
   isEfiUnavailableError,
+  extrairDocs,
 };

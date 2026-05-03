@@ -9,8 +9,16 @@ const { portalLogin } = require('./src/controllers/portalController');
 const app = express();
 let maintenanceScheduler = null;
 
+function parseAllowedOrigins(value) {
+  if (!value) return [];
+  return String(value)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 const allowedOrigins = [
-  process.env.FRONTEND_URL || 'http://localhost:5173',
+  ...parseAllowedOrigins(process.env.FRONTEND_URL || 'http://localhost:5173'),
   'http://localhost:3000',
   'http://localhost:5173',
   // Vercel preview/production deployments
@@ -67,9 +75,25 @@ const routes = {
   notifications: require('./src/routes/notificationCenterRoutes'),
   integrations: require('./src/routes/integrationLogRoutes'),
   efi: require('./src/routes/efiRoutes'),
+  billing: require('./src/routes/cobrancaRoutes'),
+  olx: require('./src/routes/olxRoutes'),
+  systemHealth: require('./src/routes/healthRoutes'),
+  whatsappTemplates: require('./src/routes/whatsappTemplateRoutes'),
+  financeiro: require('./src/routes/financeiroRoutes'),
+  ia: require('./src/routes/iaRoutes'),
+  brand: require('./src/routes/brandRoutes'),
+  adTemplates: require('./src/routes/adTemplateRoutes'),
+  leads: require('./src/routes/leadRoutes'),
+  inventory: require('./src/routes/inventoryRoutes'),
+  messaging: require('./src/routes/messagingRoutes'),
+  personal: require('./src/routes/personalRoutes'),
+  bots: require('./src/routes/botsRoutes'),
+  audit: require('./src/routes/auditRoutes'),
+  atendimento: require('./src/routes/atendimentoRoutes'),
   evolution: require('./src/routes/evolutionRoutes'),
   'webhooks/evolution': require('./src/routes/evolutionWebhookRoutes'),
   botconversa: require('./src/routes/botconversaRoutes'),
+  meta: require('./src/routes/metaRoutes'),
 };
 
 function mount(path, handler) {
@@ -94,9 +118,25 @@ mount('tracking', routes.tracking);
 mount('notifications', routes.notifications);
 mount('integrations', routes.integrations);
 mount('efi', routes.efi);
+mount('billing', routes.billing);
+mount('olx', routes.olx);
+mount('system-health', routes.systemHealth);
+mount('whatsapp-templates', routes.whatsappTemplates);
+mount('financeiro', routes.financeiro);
+mount('ia', routes.ia);
+mount('brand', routes.brand);
+mount('ad-templates', routes.adTemplates);
+mount('leads', routes.leads);
+mount('inventory', routes.inventory);
+mount('messaging', routes.messaging);
+mount('personal', routes.personal);
+mount('', routes.bots);
+mount('audit', routes.audit);
+mount('atendimento', routes.atendimento);
 mount('evolution', routes.evolution);
 mount('webhooks/evolution', routes['webhooks/evolution']);
 mount('botconversa', routes.botconversa);
+mount('meta', routes.meta);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Rota nao encontrada' });
@@ -117,6 +157,27 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3001;
+// Lead followup cron
+try {
+  require('./src/services/leadCronService').startCron();
+} catch (e) {
+  console.error('[lead-cron] failed to start:', e.message);
+}
+
+// Coaching IA cron
+try {
+  require('./src/services/coachingService').startCron();
+} catch (e) {
+  console.error('[coaching] failed to start:', e.message);
+}
+
+// Meta Catalog sync cron
+try {
+  require('./src/services/metaCronService').start();
+} catch (e) {
+  console.error('[meta-cron] failed to start:', e.message);
+}
+
 app.listen(PORT, async () => {
   try {
     await prisma.$connect();
