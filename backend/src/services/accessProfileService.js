@@ -15,6 +15,8 @@ const MODULE_KEYS = [
   'tracking',
   'integrations',
   'collaborators',
+  'billing',
+  'olx',
 ];
 
 const ACTION_KEYS = ['view', 'add', 'edit', 'delete', 'print', 'export', 'approve', 'changeStatus'];
@@ -37,6 +39,20 @@ function toBool(value, fallback = false) {
 function sanitizeText(value, fallback = '') {
   const text = String(value ?? '').trim();
   return text || String(fallback || '');
+}
+
+function resolveProfileKey(value, fallback = 'CUSTOM') {
+  if (typeof value === 'string') {
+    const text = value.trim();
+    return text || fallback;
+  }
+
+  if (value && typeof value === 'object') {
+    const nested = typeof value.accessProfile === 'string' ? value.accessProfile.trim() : '';
+    return nested || fallback;
+  }
+
+  return fallback;
 }
 
 function buildDefaultModulePermissions(basePermissions = {}) {
@@ -123,7 +139,7 @@ function sanitizeProfileInput(input = {}, fallbackProfile = {}, user = {}, actor
 
   const profile = {
     userId: user.id,
-    accessProfile: sanitizeText(input.accessProfile, fallback.accessProfile || 'CUSTOM'),
+    accessProfile: resolveProfileKey(input.accessProfile, fallback.accessProfile || 'CUSTOM'),
     jobTitle: sanitizeText(input.jobTitle, fallback.jobTitle || ''),
     modules: sanitizeModules(input.modules, fallback.modules || base.modules),
     sensitive: sanitizeSensitive(input.sensitive, fallback.sensitive || base.sensitive),

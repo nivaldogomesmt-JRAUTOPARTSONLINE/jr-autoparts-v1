@@ -169,6 +169,8 @@ const requireModuleAction = (moduleKey, action = 'view') => (req, res, next) => 
       tracking: 'rastreamento',
       integrations: 'integracoes',
       collaborators: 'colaboradores',
+      billing: 'cobrancas',
+      olx: 'anuncios olx',
     };
 
     const actionLabel = actionLabelMap[action] || action;
@@ -214,7 +216,17 @@ const authenticateClient = async (req, res, next) => {
 };
 
 const authenticateBot = (req, res, next) => {
-  const provided = String(req.headers['x-bot-token'] || req.query.token || '');
+  const authHeader = String(req.headers.authorization || '');
+  const bearerToken = authHeader.startsWith('Bearer ')
+    ? authHeader.slice('Bearer '.length).trim()
+    : '';
+  const provided = String(
+    req.headers['x-bot-token']
+    || req.headers['x-api-key']
+    || bearerToken
+    || req.query.token
+    || ''
+  );
   const expected = String(process.env.BOT_SECRET_TOKEN || '');
 
   if (!expected || expected.length < 24) {

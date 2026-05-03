@@ -1,17 +1,18 @@
-const { listChargesByCpf, normalizeDocument } = require('../services/efiCobrancasService');
+const { listChargesByDocument, normalizeDocument } = require('../services/efiCobrancasService');
 
 /**
  * GET /api/efi/boletos
- * Query: cpf, beginDate, endDate, limit, offset
+ * Query: cpf | documento, beginDate, endDate, limit, offset
+ * Aceita CPF (11 digitos) ou CNPJ (14 digitos)
  */
 const listBoletos = async (req, res) => {
   try {
-    const { cpf, beginDate, endDate, limit, offset } = req.query;
+    const { cpf, documento, beginDate, endDate, limit, offset } = req.query;
 
-    const cpfDigits = normalizeDocument(cpf);
-    if (cpfDigits.length !== 11) {
+    const docDigits = normalizeDocument(documento || cpf || '');
+    if (docDigits.length !== 11 && docDigits.length !== 14) {
       return res.status(400).json({
-        error: 'CPF inválido. Informe um CPF com 11 dígitos.',
+        error: 'Documento invalido. Informe CPF (11 digitos) ou CNPJ (14 digitos).',
       });
     }
 
@@ -19,12 +20,12 @@ const listBoletos = async (req, res) => {
     const end = String(endDate || '').trim();
     if (!begin || !end) {
       return res.status(400).json({
-        error: 'beginDate e endDate são obrigatórios (formato YYYY-MM-DD).',
+        error: 'beginDate e endDate sao obrigatorios (formato YYYY-MM-DD).',
       });
     }
 
-    const result = await listChargesByCpf({
-      cpf: cpfDigits,
+    const result = await listChargesByDocument({
+      document: docDigits,
       beginDate: begin,
       endDate: end,
       limit: Math.min(Number(limit) || 50, 100),
@@ -35,12 +36,12 @@ const listBoletos = async (req, res) => {
   } catch (err) {
     if (err.response?.status === 401) {
       return res.status(502).json({
-        error: 'Falha na autenticação com a Efí. Verifique EFI_CLIENT_ID e EFI_CLIENT_SECRET.',
+        error: 'Falha na autenticacao com a Efi. Verifique EFI_CLIENT_ID e EFI_CLIENT_SECRET.',
       });
     }
     if (err.response?.status === 429) {
       return res.status(429).json({
-        error: 'Limite de requisições da API Efí excedido. Tente novamente mais tarde.',
+        error: 'Limite de requisicoes da API Efi excedido. Tente novamente mais tarde.',
       });
     }
     if (err.response?.data) {
@@ -48,7 +49,7 @@ const listBoletos = async (req, res) => {
       return res.status(err.response.status >= 400 ? err.response.status : 502).json({ error: msg });
     }
     return res.status(500).json({
-      error: err.message || 'Erro ao consultar boletos na Efí.',
+      error: err.message || 'Erro ao consultar boletos na Efi.',
     });
   }
 };

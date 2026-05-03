@@ -1,5 +1,7 @@
 const prisma = require('../lib/prisma');
 const { sendWhatsAppMessageWithDedupe } = require('../services/whatsappService');
+const olxSync = require('../services/olxSyncService');
+const whatsappTemplate = require('../services/whatsappTemplateService');
 const botconversa = require('../services/botconversaService');
 const { uploadToCloudinary, deleteFromCloudinary } = require('../services/uploadService');
 const { computeMaintenanceForecast } = require('../utils/maintenance');
@@ -18,7 +20,7 @@ const STATUS_LABELS = {
   DELIVERED: 'Entregue',
 };
 
-const NOTIFY_ON_STATUS = ['STARTED', 'IN_PROGRESS', 'WAITING_PART', 'FINISHING', 'DONE', 'DELIVERED'];
+const NOTIFY_ON_STATUS = ['QUOTE', 'APPROVED', 'STARTED', 'IN_PROGRESS', 'WAITING_PART', 'FINISHING', 'DONE', 'DELIVERED'];
 const STATUS_CLOSE_FLOW = ['DONE', 'DELIVERED'];
 const DELIVERY_META_PREFIX = '[DELIVERY_META]';
 const DELIVERY_STATUS_LABELS = {
@@ -938,10 +940,15 @@ const updateStatus = async (req, res) => {
       return updatedOrder;
     });
 
+    // Sincroniza com OLX quando OS fecha (DELIVERED/DONE)
+    olxSync.onOsStatusChanged(current, status).then(r => {
+      if (r.sold && r.sold.length) console.log('[olxSync] OS', current.id, 'fechou:', r.sold.length, 'anuncios OLX marcados SOLD');
+    }).catch(e => console.log('[olxSync] erro:', e.message));
+    
     if (NOTIFY_ON_STATUS.includes(status)) {
       const phone = current.client.whatsapp || current.client.phone;
       if (phone) {
-        const msg = buildWhatsAppMessage(current.client.name, current.vehicle.plate, current.vehicle.brand, current.vehicle.model, status, current.number);
+        const msg = await buildWhatsAppMessage(current.client.name, current.vehicle.plate, current.vehicle.brand, current.vehicle.model, status, current.number, current.totalPrice);
         await sendWhatsAppMessageWithDedupe({
           clientId: current.clientId,
           soId: current.id,
@@ -1102,18 +1109,43 @@ const deletePhoto = async (req, res) => {
   }
 };
 
-function buildWhatsAppMessage(clientName, plate, brand, model, status, number) {
+async function buildWhatsAppMessage(clientName, plate, brand, model, status, number, totalPrice) {
+  // Tenta carregar do DB primeiro (editavel)
+  const firstName = String(clientName || '').trim().split(/\s+/)[0] || 'cliente';
+  const veiculo = [brand, model].filter(Boolean).join(' ').trim() || 'veiculo';
+  const placa = plate ? ` (${plate})` : '';
+  const valorFmt = totalPrice ? `R$ ${Number(totalPrice).toFixed(2).replace('.', ',')}` : null;
+  const valorBlock = valorFmt ? `no valor de *${valorFmt}*` : '';
+  const portalUrl = `${process.env.FRONTEND_URL || ''}/portal`;
+  const fromDb = await whatsappTemplate.buildMessage(`OS_${status}`, {
+    firstName, veiculo, placa, valorBlock, valorFmt: valorFmt || '', portalUrl,
+    number, status, statusLabel: STATUS_LABELS[status] || status,
+  }).catch(() => null);
+  if (fromDb) return fromDb;
+  // Fallback hardcoded (caso DB indisponivel)
+  return _buildWhatsAppMessageFallback(clientName, plate, brand, model, status, number, totalPrice);
+}
+
+function _buildWhatsAppMessageFallback(clientName, plate, brand, model, status, number, totalPrice) {
   const statusLabel = STATUS_LABELS[status];
   const portalUrl = `${process.env.FRONTEND_URL}/portal`;
+  // Pega so primeiro nome pra ficar mais pessoal
+  const firstName = String(clientName || '').trim().split(/\s+/)[0] || 'cliente';
+  const veic = [brand, model].filter(Boolean).join(' ').trim() || 'veiculo';
+  const placa = plate ? ` (${plate})` : '';
+  const valorFmt = totalPrice ? `R$ ${Number(totalPrice).toFixed(2).replace('.', ',')}` : null;
+
   const msgs = {
-    STARTED: `Ola, ${clientName}! A manutencao do seu ${brand} ${model} (${plate}) foi iniciada. OS #${number}. Acompanhe pelo portal: ${portalUrl}`,
-    IN_PROGRESS: `Ola, ${clientName}! Seu ${brand} ${model} (${plate}) esta em manutencao neste momento. OS #${number}. Status: ${statusLabel}.`,
-    WAITING_PART: `Ola, ${clientName}! Seu ${brand} ${model} (${plate}) esta aguardando peca para continuidade do servico. OS #${number}.`,
-    FINISHING: `Ola, ${clientName}! O servico do seu ${brand} ${model} (${plate}) esta em fase final. OS #${number}.`,
-    DONE: `Ola, ${clientName}! O servico do seu ${brand} ${model} (${plate}) foi concluido. OS #${number}. Em breve faremos a liberacao/entrega.`,
-    DELIVERED: `Ola, ${clientName}! Seu ${brand} ${model} (${plate}) foi entregue. Obrigado pela preferencia. Portal: ${portalUrl}`,
+    QUOTE: `Oi ${firstName}! 👋 Aqui é da JR Auto Parts. Seu orçamento da OS *#${number}* (${veic}${placa})${valorFmt ? ` no valor de *${valorFmt}*` : ''} está pronto. Pode dar uma olhada e me confirmar se aprova? 🙌\n\nPortal: ${portalUrl}`,
+    APPROVED: `Show, ${firstName}! ✅ Orçamento aprovado, vamos iniciar o serviço do seu ${veic}${placa}. OS *#${number}*. Te aviso aqui quando for evoluindo. 🛠️`,
+    STARTED: `Oi ${firstName}! 🚗 A manutenção do seu ${veic}${placa} foi *iniciada* agora. OS #${number}. Acompanhe: ${portalUrl}`,
+    IN_PROGRESS: `${firstName}, seu ${veic}${placa} está em *execução* neste momento. OS #${number}.`,
+    WAITING_PART: `Oi ${firstName}, seu ${veic}${placa} está aguardando uma *peça* para continuar. OS #${number}. Te aviso assim que chegar! 📦`,
+    FINISHING: `${firstName}, o serviço do seu ${veic}${placa} está em *fase final*. OS #${number}. Já já te aviso pra retirada! ⏳`,
+    DONE: `🎉 ${firstName}, o serviço do seu ${veic}${placa} foi *concluído*! OS #${number}. Pode vir buscar quando puder. 🚙`,
+    DELIVERED: `✅ ${firstName}, seu ${veic}${placa} foi *entregue*. Muito obrigado pela preferência! 🤝\n\nPortal: ${portalUrl}`,
   };
-  return msgs[status] || `Atualizacao da OS #${number}: status alterado para ${statusLabel}.`;
+  return msgs[status] || `Atualização da OS #${number}: status alterado para ${statusLabel}.`;
 }
 
 

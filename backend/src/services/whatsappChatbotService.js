@@ -104,6 +104,11 @@ async function callOpenAI(systemPrompt, messages) {
   return resp.data.choices[0].message.content.trim();
 }
 
+function isOpenAIQuotaError(err) {
+  return err?.response?.status === 429
+    && String(err?.response?.data?.error?.code || '').toLowerCase() === 'insufficient_quota';
+}
+
 // ── Handler principal ──────────────────────────────────────────────────────────
 async function handleIncomingMessage(phone, content) {
   if (!process.env.OPENAI_API_KEY) return null;
@@ -130,6 +135,11 @@ async function handleIncomingMessage(phone, content) {
   try {
     reply = await callOpenAI(buildSystemPrompt(client, parts), session.messages);
   } catch (err) {
+    if (isOpenAIQuotaError(err)) {
+      console.error('[Chatbot] OpenAI quota exhausted:', err?.response?.data?.error?.message || err.message);
+      return 'Olá! 😊 No momento nosso atendimento automático está temporariamente indisponível. Um atendente vai continuar por aqui em instantes.';
+    }
+
     console.error('[Chatbot] OpenAI error:', err.message);
     return 'Olá! 😊 Tivemos uma instabilidade agora. Um atendente vai te responder em instantes!';
   }
