@@ -1,11 +1,11 @@
 // src/services/personalBotService.js
 // Atendimento IA seletivo no WhatsApp pessoal do Junior (65 99347-1331)
-// Whitelist + auto-detect intimidade + classificação de tópicos
-
+// Whitelist + auto-detect intimidade + classificação de tópicos + consulta de filtros
 const axios = require('axios');
 const prisma = require('../lib/prisma');
 const ia = require('./iaService');
 const router = require('./messageRouterService');
+const filters = require('./filterService');
 
 const EVO_URL = process.env.EVOLUTION_URL || process.env.EVOLUTION_API_URL || 'http://jr-evolution-api:8080';
 const EVO_KEY = process.env.EVOLUTION_API_KEY || '';
@@ -46,8 +46,6 @@ async function autoPromoteIfFrequent(phone, contactName) {
   if (count < INTIMACY_THRESHOLD) return null;
   const exists = await isPersonalContact(phone);
   if (exists) return exists;
-
-  // Adicionar como auto_detected
   const id = require('crypto').randomUUID();
   await prisma.$executeRawUnsafe(`
     INSERT INTO personal_contacts (id, phone, name, category, source, message_count, notes)
@@ -55,24 +53,18 @@ async function autoPromoteIfFrequent(phone, contactName) {
     ON CONFLICT (phone) DO UPDATE SET source='auto_detected', message_count=$5
   `, id, normalizePhone(phone), contactName || null, 'outro', count,
      `Auto-promovido após ${count} mensagens trocadas`);
-
   return { id, name: contactName, source: 'auto_detected' };
 }
 
 /** Classifica intenção da mensagem com Ollama */
 async function classifyIntent(messageText) {
   if (!messageText || messageText.length < 3) return null;
-
   const rules = await prisma.$queryRawUnsafe(
     `SELECT topic, keywords FROM personal_auto_responses WHERE active = true`
   );
-
   const knownTopics = rules.map(r => r.topic).join(', ');
-
   const prompt = `Classifique a mensagem abaixo em UM dos tópicos disponíveis OU "outro" se não for nenhum.
-
 MENSAGEM: "${messageText}"
-
 TÓPICOS POSSÍVEIS:
 - kitnet (perguntar sobre alugar/kitnet/apartamento)
 - comprar_veiculo (querer comprar/vender veículo)
@@ -82,9 +74,7 @@ TÓPICOS POSSÍVEIS:
 - instalacao (instalar/agendar instalação)
 - pessoal (mensagem pessoal: amigo, família, pergunta íntima)
 - outro (qualquer outra coisa)
-
 Retorne APENAS JSON: {"topic": "<um dos acima>", "confidence": 0.0 a 1.0, "reasoning": "breve motivo"}`;
-
   try {
     const r = await ia.generate(prompt, { temperature: 0.2, maxTokens: 150, timeout: 60000 });
     const m = r.text.match(/\{[\s\S]*\}/);
@@ -123,6 +113,29 @@ async function handleMessage({ phone, contactName, messageContent, messageId, me
   if (!phone || !messageContent) return null;
   const p = normalizePhone(phone);
 
+  // 0. ANTES de tudo: se for consulta de filtro automotivo (Wo120, ARL2203, filtro civic, etc) — responde direto
+  try {
+    const filterResult = await filters.handleQuery(messageContent);
+    if (filterResult && filterResult.ok && filterResult.reply) {
+      await sendReply(p, filterResult.reply);
+      const msgIdLog = require('crypto').randomUUID();
+      try {
+        await prisma.$executeRawUnsafe(`
+          INSERT INTO personal_messages (
+            id, phone, contact_name, message_id, message_content, message_type,
+            detected_topic, detected_intent, action_taken, response_sent
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        `, msgIdLog, p, contactName || null, messageId || null,
+           messageContent.slice(0, 4000), messageType,
+           'filter', 'filter', 'filter_replied', filterResult.reply.slice(0, 2000));
+      } catch (e) { console.log('[personal-bot] log err:', e.message); }
+      console.log(`[personal-bot] filter respondido pra ${p}: ${(filterResult.reply || '').slice(0, 80)}...`);
+      return { msgId: msgIdLog, isPersonal: false, intent: 'filter', actionTaken: 'filter_replied', responseSent: filterResult.reply };
+    }
+  } catch (e) {
+    console.log('[personal-bot] filter check err:', e.message);
+  }
+
   // 1. Loga a mensagem (sempre, pra audit)
   const msgId = require('crypto').randomUUID();
 
@@ -150,16 +163,13 @@ async function handleMessage({ phone, contactName, messageContent, messageId, me
   if (isPersonal) {
     // CONTATO PESSOAL — IA NUNCA responde
     actionTaken = 'ignored';
-    // Apenas registra
   } else {
-    // Não pessoal — aplica regras de resposta automática
     const rule = await findRule(intent);
     if (rule && rule.action === 'reply') {
       try {
         await sendReply(p, rule.response_text);
         responseSent = rule.response_text;
         actionTaken = 'auto_replied';
-        // Incrementa match count
         await prisma.$executeRawUnsafe(
           `UPDATE personal_auto_responses SET match_count = match_count + 1 WHERE topic = $1`,
           intent
@@ -180,10 +190,8 @@ async function handleMessage({ phone, contactName, messageContent, messageId, me
         console.log('[personal-bot] erro forward:', e.message);
       }
     } else if (rule && rule.action === 'highlight') {
-      // Destaca pro Junior responder, IA não envia nada
       highlighted = true;
       actionTaken = 'highlighted';
-      // Notifica Junior via system_alert
       try {
         await router.notifyJunior(
           `🔔 *DESTAQUE no seu WhatsApp pessoal*\n\n` +
@@ -195,12 +203,7 @@ async function handleMessage({ phone, contactName, messageContent, messageId, me
         );
       } catch (e) { console.log('[personal-bot] notify err:', e.message); }
     } else {
-      // Sem regra ou outro/pessoal — só notifica que chegou
       actionTaken = 'logged';
-      // Notifica Junior só se for não-pessoal e não-conhecido
-      if (intent === 'outro' || intent === 'pessoal') {
-        // mensagem pessoal/desconhecida — não notifica (fica no log apenas)
-      }
     }
   }
 
@@ -223,27 +226,20 @@ async function handleMessage({ phone, contactName, messageContent, messageId, me
 
 /**
  * Quando Junior responde uma mensagem destacada, IA aprende com a resposta.
- * Chamado pelo webhook quando Junior envia mensagem (saída).
  */
 async function learnFromJuniorResponse({ phone, juniorMessage }) {
   const p = normalizePhone(phone);
-  // Busca última mensagem destacada não respondida desse contato
   const lastMsg = await prisma.$queryRawUnsafe(`
     SELECT * FROM personal_messages
     WHERE phone = $1 AND highlighted = true AND junior_answered = false
     ORDER BY created_at DESC LIMIT 1
   `, p);
-
   if (!lastMsg || !lastMsg.length) return null;
   const m = lastMsg[0];
-
-  // Marca como respondida
   await prisma.$executeRawUnsafe(`
     UPDATE personal_messages SET junior_answered = true, junior_answer = $1
     WHERE id = $2
   `, juniorMessage, m.id);
-
-  // Se foi tópico "destacado" (guincho/rastreador/instalacao), aprende
   if (['guincho', 'rastreador', 'instalacao'].includes(m.detected_intent)) {
     const exId = require('crypto').randomUUID();
     await prisma.$executeRawUnsafe(`
@@ -252,7 +248,6 @@ async function learnFromJuniorResponse({ phone, juniorMessage }) {
     `, exId, m.detected_intent, m.message_content, juniorMessage, m.id);
     console.log('[personal-bot] aprendeu novo exemplo:', m.detected_intent);
   }
-
   return { learned: true, msgId: m.id };
 }
 

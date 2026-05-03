@@ -646,6 +646,19 @@ async function aiChat(req, res) {
     if (!phone || !message) {
       return res.json({ reply: 'Olá! Como posso te ajudar hoje? 😊' });
     }
+
+    // ANTES de tudo: tenta filterService (cross-ref de filtros automotivos)
+    try {
+      const filters = require('../services/filterService');
+      const filterResult = await filters.handleQuery(message);
+      if (filterResult && filterResult.ok && filterResult.reply) {
+        console.log('[aiChat] filter respondido pra ' + phone + ': ' + (filterResult.reply || '').slice(0, 80) + '...');
+        return res.json({ reply: filterResult.reply });
+      }
+    } catch (e) {
+      console.log('[aiChat] filter check err:', e.message);
+    }
+
     const chatbot = require('../services/whatsappChatbotService');
     const reply = await chatbot.handleIncomingMessage(phone, message);
     return res.json({ reply: reply || 'Olá! Estou aqui para te ajudar. O que você precisa? 😊' });
