@@ -116,6 +116,7 @@ mount('dashboard', routes.dashboard);
 mount('company-assets', routes.companyAssets);
 mount('digital-accounts', routes.digitalAccounts);
 mount('tracking', routes.tracking);
+mount('rastreador', routes.rastreador);
 mount('notifications', routes.notifications);
 mount('integrations', routes.integrations);
 mount('efi', routes.efi);
