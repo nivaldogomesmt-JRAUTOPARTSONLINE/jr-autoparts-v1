@@ -1,0 +1,32 @@
+# Exemplo (NAO faz parte do compose principal) para subir um gateway de SMS
+# que recebe POSTs do backend e dispara via celular Android pareado por QR.
+#
+# Recomendado: android-sms-gateway (open-source). Ajuste imagem/versao/credenciais
+# conforme a documentacao do projeto escolhido. O backend so precisa de:
+#   SMS_GATEWAY_URL, e (opcional) SMS_GATEWAY_USER/PASS ou SMS_GATEWAY_TOKEN.
+#
+# Fluxo: backend (jr-backend) --> jr-sms-gateway --> celular pareado --> SMS
+#
+# Uso:
+#   docker compose -f docker-compose.yml -f docker/sms-gateway.compose.example.yml up -d jr-sms-gateway
+services:
+  jr-sms-gateway:
+    image: ghcr.io/android-sms-gateway/server:latest   # confirme a imagem/tag oficial
+    container_name: jr-sms-gateway
+    restart: unless-stopped
+    environment:
+      # Variaveis especificas do gateway (ver doc do projeto):
+      GATEWAY__MODE: "public"
+      # exemplos de credenciais de API que o app do celular usa para parear:
+      # GATEWAY__API_USERNAME: "jrloja"
+      # GATEWAY__API_PASSWORD: "troque-esta-senha"
+    ports:
+      - "127.0.0.1:8089:3000"   # exposto so localmente; backend chama via rede docker
+    networks:
+      - default
+
+# No servico jr-backend (no docker-compose.yml principal), adicione as variaveis:
+#   SMS_GATEWAY_URL=http://jr-sms-gateway:3000/message
+#   SMS_GATEWAY_USER=jrloja
+#   SMS_GATEWAY_PASS=troque-esta-senha
+#   SMS_GATEWAY_FORMAT=android

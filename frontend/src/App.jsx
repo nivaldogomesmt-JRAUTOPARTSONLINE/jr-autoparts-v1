@@ -26,6 +26,7 @@ import CompanyAssetsPage from './pages/admin/CompanyAssetsPage';
 import DigitalAccountsPage from './pages/admin/DigitalAccountsPage';
 import CollaboratorsPage from './pages/admin/CollaboratorsPage';
 import TrackingPage from './pages/tracking/TrackingPage';
+import ComandosRastreadorPage from './pages/rastreador/ComandosRastreadorPage';
 import TowingPage   from './pages/towing/TowingPage';
 import ReportsPage  from './pages/reports/ReportsPage';
 import DeliveriesPage from './pages/deliveries/DeliveriesPage';
@@ -120,6 +121,7 @@ function AppRoutes() {
         <Route path="colaboradores" element={<ActionRoute action="manageUsers"><CollaboratorsPage /></ActionRoute>} />
 
         <Route path="rastreamento" element={<ActionRoute action="module:tracking:view"><TrackingPage /></ActionRoute>} />
+        <Route path="rastreador-comandos" element={<ActionRoute action="module:tracking:view"><ComandosRastreadorPage /></ActionRoute>} />
         <Route path="guincho"      element={<ActionRoute action="module:towing:view"><TowingPage /></ActionRoute>} />
         <Route path="relatorios"   element={<ActionRoute action="module:reports:view"><ReportsPage /></ActionRoute>} />
         <Route path="entregas" element={<ActionRoute action="module:deliveries:view"><DeliveriesPage /></ActionRoute>} />
