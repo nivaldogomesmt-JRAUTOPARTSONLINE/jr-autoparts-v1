@@ -241,6 +241,11 @@ export const trackingAPI = {
   runGenerate: (data) => api.post('/tracking/jobs/generate', data),
   runCollect: () => api.post('/tracking/jobs/collect'),
 };
+export const rastreadorAPI = {
+  status: ()     => api.get('/rastreador/status'),
+  enviar: (data) => api.post('/rastreador/enviar', data),
+};
+
 export default api;
 
 

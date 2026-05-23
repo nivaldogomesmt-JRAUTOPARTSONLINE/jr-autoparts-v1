@@ -72,6 +72,7 @@ const routes = {
   companyAssets: require('./src/routes/companyAssetRoutes'),
   digitalAccounts: require('./src/routes/digitalAccountRoutes'),
   tracking: require('./src/routes/trackingRoutes'),
+  rastreador: require('./src/routes/rastreadorRoutes'),
   notifications: require('./src/routes/notificationCenterRoutes'),
   integrations: require('./src/routes/integrationLogRoutes'),
   efi: require('./src/routes/efiRoutes'),

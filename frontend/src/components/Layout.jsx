@@ -17,6 +17,7 @@ const NAV = [
   { code: '📋', label: 'Ordens de Serviço', path: '/os' },
   { code: '🛠', label: 'Manutenção',  path: '/manutencao' },
   { code: '📍', label: 'Rastreamento',           path: '/rastreamento' },
+  { code: '📡', label: 'Comandos Rastreador',    path: '/rastreador-comandos' },
   { code: '🚛', label: 'Guincho',                path: '/guincho' },
   { code: '🚚', label: 'Entregas',               path: '/entregas' },
   { code: '💬', label: 'Mensagens',              path: '/mensagens' },
