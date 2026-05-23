@@ -1,42 +1,40 @@
 /**
  * smsGatewayService
- * Envia SMS atraves de um gateway configuravel por variaveis de ambiente.
- * Pensado para o android-sms-gateway (celular pareado), mas e generico.
+ * Envia SMS via SMSGate (android-sms-gateway). Compativel com servidor
+ * privado (auto-hospedado) e nuvem publica — muda apenas a SMS_GATEWAY_URL.
  *
  * Variaveis de ambiente:
- *   SMS_GATEWAY_URL    -> endpoint que recebe o POST de envio (ex.: http://jr-sms-gateway:3000/message)
- *   SMS_GATEWAY_USER   -> usuario (basic auth) [opcional]
- *   SMS_GATEWAY_PASS   -> senha (basic auth) [opcional]
- *   SMS_GATEWAY_TOKEN  -> bearer token [opcional, alternativa ao basic auth]
- *   SMS_GATEWAY_FORMAT -> "android" (default) | "simple"
+ *   SMS_GATEWAY_URL   -> endpoint de envio
+ *       privado: https://SEU_DOMINIO/api/3rdparty/v1/messages
+ *       nuvem:   https://api.sms-gate.app/3rdparty/v1/messages
+ *   SMS_GATEWAY_USER  -> usuario (gerado pelo app ao conectar) [basic auth]
+ *   SMS_GATEWAY_PASS  -> senha (gerada pelo app ao conectar)
+ *   SMS_GATEWAY_TOKEN -> bearer token (alternativa ao basic auth) [opcional]
  *
- * Formatos de corpo:
- *   android -> { message: <texto>, phoneNumbers: [<to>] }   (android-sms-gateway)
- *   simple  -> { to: <to>, text: <texto> }                  (gateway generico/proprio)
+ * Corpo (API 3rdparty v1): { phoneNumbers: ["+55..."], textMessage: { text } }
  */
 const axios = require('axios');
 
+function cfg() {
+  return {
+    url: String(process.env.SMS_GATEWAY_URL || '').trim(),
+    user: String(process.env.SMS_GATEWAY_USER || '').trim(),
+    pass: String(process.env.SMS_GATEWAY_PASS || '').trim(),
+    token: String(process.env.SMS_GATEWAY_TOKEN || '').trim(),
+  };
+}
+
+// So considera configurado quando ha URL E credencial (evita "envio real" sem login).
 function isConfigured() {
-  return Boolean(String(process.env.SMS_GATEWAY_URL || '').trim());
+  const c = cfg();
+  return Boolean(c.url && (c.token || c.user));
 }
 
-function buildAuthHeaders() {
-  const token = String(process.env.SMS_GATEWAY_TOKEN || '').trim();
-  if (token) return { Authorization: `Bearer ${token}` };
-  const user = String(process.env.SMS_GATEWAY_USER || '').trim();
-  const pass = String(process.env.SMS_GATEWAY_PASS || '').trim();
-  if (user) {
-    const basic = Buffer.from(`${user}:${pass}`).toString('base64');
-    return { Authorization: `Basic ${basic}` };
-  }
+function authHeaders() {
+  const c = cfg();
+  if (c.token) return { Authorization: `Bearer ${c.token}` };
+  if (c.user) return { Authorization: `Basic ${Buffer.from(`${c.user}:${c.pass}`).toString('base64')}` };
   return {};
-}
-
-function buildBody(to, text) {
-  const format = String(process.env.SMS_GATEWAY_FORMAT || 'android').trim().toLowerCase();
-  if (format === 'simple') return { to, text };
-  // default: android-sms-gateway
-  return { message: text, phoneNumbers: [to] };
 }
 
 function normalizeNumber(raw) {
@@ -44,25 +42,19 @@ function normalizeNumber(raw) {
 }
 
 async function sendSms(to, text) {
+  const c = cfg();
   if (!isConfigured()) {
-    const err = new Error('Gateway de SMS nao configurado (defina SMS_GATEWAY_URL).');
+    const err = new Error('Gateway de SMS nao configurado (defina SMS_GATEWAY_URL e credenciais).');
     err.code = 'GATEWAY_NOT_CONFIGURED';
     throw err;
   }
-  const url = String(process.env.SMS_GATEWAY_URL).trim();
   const number = normalizeNumber(to);
-  if (!number) {
-    const err = new Error('Numero de destino invalido.');
-    err.code = 'INVALID_NUMBER';
-    throw err;
-  }
-  if (!String(text || '').trim()) {
-    const err = new Error('Comando/texto vazio.');
-    err.code = 'EMPTY_TEXT';
-    throw err;
-  }
-  const headers = Object.assign({ 'Content-Type': 'application/json' }, buildAuthHeaders());
-  const res = await axios.post(url, buildBody(number, text), { headers, timeout: 20000 });
+  if (!number) { const e = new Error('Numero de destino invalido.'); e.code = 'INVALID_NUMBER'; throw e; }
+  if (!String(text || '').trim()) { const e = new Error('Comando/texto vazio.'); e.code = 'EMPTY_TEXT'; throw e; }
+
+  const headers = Object.assign({ 'Content-Type': 'application/json' }, authHeaders());
+  const body = { phoneNumbers: [number], textMessage: { text } };
+  const res = await axios.post(c.url, body, { headers, timeout: 20000 });
   return { ok: true, status: res.status, data: res.data };
 }
 
